@@ -54,7 +54,7 @@
 ## `e2e/`
 
 - `e2e/README.md`
-- `e2e/board.spec.ts` — board.spec.ts — 新しいタブの最小スモークE2E(M0の一時的なプレースホルダ。M9で機能テストに置き換える)
+- `e2e/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 
 ## `public/`
