@@ -637,7 +637,8 @@ UI_TESTID_RULES += [(re.compile(r"\.tsx$"),
                      re.compile(r"<(?:button|a|input|select|textarea|[A-Z]\w*)\b[^>]*on(?:Click|Submit|Change)=[^>]*>"),
                      re.compile(r"data-testid\s*="),
                      "React操作要素")]
-ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config")]),
+ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config"),
+                                        re.compile(r"(^|/)background\.ts$")]),
                      (["src/"], ".tsx", [re.compile(r"(^|/)main\.tsx?$")])]
 IMPORT_TARGET_EXTRACTORS[".ts"] = _ts_import_targets
 IMPORT_TARGET_EXTRACTORS[".tsx"] = _ts_import_targets

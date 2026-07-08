@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Board } from "../lib/board";
 import { addCard, addColumn, createEmptyBoard, removeCard, removeColumn } from "../lib/board";
+import { now } from "../lib/clock";
 import { loadBoard, saveBoard } from "../lib/storage";
 
 export function App() {
@@ -36,6 +37,12 @@ export function App() {
               {column.cards.map((card) => (
                 <li key={card.id} data-testid={`card-${card.id}`}>
                   {card.text}
+                  <time
+                    dateTime={new Date(card.createdAt).toISOString()}
+                    data-testid={`card-created-at-${card.id}`}
+                  >
+                    {new Date(card.createdAt).toLocaleDateString()}
+                  </time>
                   <button
                     type="button"
                     data-testid={`remove-card-${card.id}`}
@@ -48,7 +55,7 @@ export function App() {
             </ul>
             <AddCardForm
               columnId={column.id}
-              onAdd={(text) => setBoard(addCard(board, column.id, text))}
+              onAdd={(text) => setBoard(addCard(board, column.id, text, now()))}
             />
             <button
               type="button"

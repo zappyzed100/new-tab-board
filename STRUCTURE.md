@@ -21,8 +21,11 @@
 - `index.html`
 - `package-lock.json`
 - `package.json`
+- `plan.md`
+- `playwright.config.ts` — playwright.config.ts — E2E設定(拡張機能ロードにはheaded実行が必須 — GUARDRAILS.md §11)
 - `tsconfig.json`
-- `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)のビルド設定
+- `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)とbackground service workerのビルド設定
+- `vitest.config.ts` — vitest.config.ts — 単体テスト設定(e2e/はPlaywrightの領域なのでvitestの収集対象から除外)
 
 ## `.claude/`
 
@@ -49,6 +52,8 @@
 ## `e2e/`
 
 - `e2e/README.md`
+- `e2e/board.spec.ts` — board.spec.ts — 新しいタブボードのE2E(拡張機能を実際にロードして検証。GUARDRAILS.md §12.4)
+- `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 
 ## `public/`
 
@@ -62,14 +67,22 @@
 - `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: GUARDRAILS.md §5）
 - `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: GUARDRAILS.md §7.5・§3.3）
 - `scripts/dev.py` — dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: GUARDRAILS.md §12.1）
+- `scripts/dump-storage.mjs`
 - `scripts/generate_structure.py` — generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: GUARDRAILS.md §7.4）
 - `scripts/install_kit.py` — install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.md §1）
+- `scripts/playwright-extension.mjs`
 - `scripts/repo_scan.py` — repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: GUARDRAILS.md §7.3）
+- `scripts/reset-e2e-profile.mjs`
+- `scripts/seed-board.mjs`
+- `scripts/set-time-freeze.mjs`
 
 ## `src/`
 
+- `src/background/background.ts` — background.ts — 最小サービスワーカー(拡張機能IDのE2E解決用・インストール時ログ)
 - `src/lib/board.test.ts` — board.test.ts — board.ts の純粋関数の単体テスト
 - `src/lib/board.ts` — board.ts — ボードの純粋なデータモデルと更新関数(I/Oを持たない)
+- `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
+- `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/storage.ts` — storage.ts — chrome.storage.local ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
@@ -109,6 +122,10 @@
 ### `.claude/hooks/stop_incomplete_guard.py`
 - def resolve_root
 - def main
+
+### `e2e/fixtures.ts`
+- const test
+- const expect
 
 ### `scripts/check_bootstrap.py`
 - def parse_ledger
@@ -228,6 +245,9 @@
 - function removeColumn
 - function addCard
 - function removeCard
+
+### `src/lib/clock.ts`
+- function now
 
 ### `src/lib/log.ts`
 - function logOp

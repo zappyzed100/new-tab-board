@@ -35,7 +35,7 @@ describe("addCard / removeCard", () => {
   it("指定した列だけにカードを追加し、他の列は変えない", () => {
     const before = createEmptyBoard();
     const [first, second] = before.columns;
-    const after = addCard(before, first.id, "牛乳を買う");
+    const after = addCard(before, first.id, "牛乳を買う", 0);
     expect(after.columns.find((c) => c.id === first.id)?.cards).toHaveLength(1);
     expect(after.columns.find((c) => c.id === second.id)?.cards).toHaveLength(0);
   });
@@ -43,8 +43,8 @@ describe("addCard / removeCard", () => {
   it("カードを削除すると同じ列の他のカードは残る", () => {
     let board = createEmptyBoard();
     const columnId = board.columns[0].id;
-    board = addCard(board, columnId, "1枚目");
-    board = addCard(board, columnId, "2枚目");
+    board = addCard(board, columnId, "1枚目", 0);
+    board = addCard(board, columnId, "2枚目", 1);
     const [keep, remove] = board.columns[0].cards;
     const after = removeCard(board, columnId, remove.id);
     expect(after.columns[0].cards.map((c) => c.id)).toEqual([keep.id]);

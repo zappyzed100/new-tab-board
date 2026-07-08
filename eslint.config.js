@@ -27,4 +27,12 @@ export default tseslint.config(
     files: ["e2e/**/*.ts", "**/*.test.ts", "**/*.test.tsx"],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // scripts/*.mjs はNode CLIツール。chromeはPlaywrightのevaluate()コールバック内で
+    // ブラウザ側のコンテキストとして参照するため許可する(no-console: この層はキットの
+    // 出力契約に相当するため許可 — post_edit_lint.pyのLOG_EXIT_PREFIXESと同じ整理)。
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node, chrome: "readonly" } },
+    rules: { "no-console": "off" },
+  },
 );

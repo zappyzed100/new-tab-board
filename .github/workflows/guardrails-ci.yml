@@ -51,12 +51,32 @@ jobs:
         with:
           fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（§5）
       - uses: astral-sh/setup-uv@v5
-      # ---- BINDING: 採用列のテスト実行環境をここへ（例: setup-node + npm ci。§5・§11 表A）----
-      # ---------------------------------------------------------------------------------------
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
 
-  # ============ BINDING: 言語別テスト・解析・E2E ジョブ（GUARDRAILS.md §5・§12.4・§11 表A）============
-  # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
-  # paste-block（テスト/解析ジョブ・E2E ジョブ・ツールチェーン固定）をここへ貼る。
-  # 各ジョブに timeout-minutes を必ず付ける（checks と同じハング保険 — G11）。
-  # E2E ジョブは §12.4 の操作レールの CI 変換（PR の赤/緑に変える）——Step 8b の DoD に含まれる。
+  # ============ BINDING: 言語別テスト・解析・E2E ジョブ（ts-react-crx@1 — §5・§12.4）============
+  ts-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npx vitest run
+
+  e2e:   # §12.4 の操作レールを PR の赤/緑へ変換（Step 8b DoD）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run --auto-servernum npx playwright test

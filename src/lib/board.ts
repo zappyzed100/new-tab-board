@@ -2,6 +2,7 @@
 export type Card = {
   id: string;
   text: string;
+  createdAt: number;
 };
 
 export type Column = {
@@ -34,11 +35,11 @@ export function removeColumn(board: Board, columnId: string): Board {
   return { columns: board.columns.filter((c) => c.id !== columnId) };
 }
 
-export function addCard(board: Board, columnId: string, text: string): Board {
+export function addCard(board: Board, columnId: string, text: string, createdAt: number): Board {
   return {
     columns: board.columns.map((column) =>
       column.id === columnId
-        ? { ...column, cards: [...column.cards, { id: crypto.randomUUID(), text }] }
+        ? { ...column, cards: [...column.cards, { id: crypto.randomUUID(), text, createdAt }] }
         : column,
     ),
   };

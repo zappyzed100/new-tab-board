@@ -610,7 +610,8 @@ UI_TESTID_RULES += [(re.compile(r"\.tsx$"),
 # --- 孤立ファイル検出の対象範囲とエントリポイント（§3.3 soft: orphan-file。列充填）---
 # (対象prefixのリスト, 拡張子, エントリポイント正規表現のリスト)
 ORPHAN_UNIVERSES: list[tuple[list[str], str, list[re.Pattern]]] = []
-ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config")]),
+ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config"),
+                                        re.compile(r"(^|/)background\.ts$")]),
                      (["src/"], ".tsx", [re.compile(r"(^|/)main\.tsx?$")])]
 
 # --- import/参照抽出のディスパッチ（表A。列充填。利用可能な実装は中盤に定義済み）---
