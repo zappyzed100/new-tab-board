@@ -81,6 +81,25 @@ repos:
         stages: [commit-msg]
 
       # ============ BINDING: 言語別 push 段ゲート（GUARDRAILS.md §4・§11 Step 0 表A）============
-      # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
-      # paste-block（テスト・静的解析の pre-push フック群）をここへ貼る
-      # （stages: [pre-push] は維持。コードよりゲートが先 — §11 Step 6）。
+      # ts-react-crx@1（bindings/catalog.md）— Step 6 で充填。
+      - id: tsc
+        name: "tsc --noEmit (pre-push — §4)"
+        entry: bash -c 'npx tsc --noEmit'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: eslint
+        name: "eslint (pre-push — §4)"
+        entry: bash -c 'npx eslint .'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      - id: vitest
+        name: "vitest run (pre-push — §4)"
+        entry: bash -c 'npx vitest run'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
