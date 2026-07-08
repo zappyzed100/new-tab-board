@@ -21,7 +21,7 @@
 | 7 | ログ単一出口 | ✅ | `src/lib/log.ts`の`logOp(tag, op, detail, {error, elapsedMs})`を実装し`src/lib/storage.ts`のNO-LOGコメントを実際の呼び出しに置換。単体テスト3件(形式・elapsedMs付与・error付与)で`[タグ] 操作名: 詳細 (+Xms)`形式の出力を実測。log.ts以外でのconsole.log直呼びを注入し`HARD:log-direct-call`で検出→除去を実測。FFI境界(missing-catch-unwind)は該当なし(表B: Chrome拡張にFFI境界は無い) |
 | 8 | テスト決定性 | ✅ | 確率的コンポーネントは無い(表B)ため`solve_for_test`相当のラッパーは該当なし。`test-sleep`(setTimeout)・`test-nondeterminism`(Date.now/new Date/Math.random)・`test-network`(fetch)の3パターンを1テストファイルへ一括注入し、全て規則ID付きで検出→削除後にcheck-structureがexit0に戻ることを実測(パターン自体はStep2でrepo_scan.pyへ充填済み) |
 | 8b | ランタイムレール（動詞・供給・操作/観察） | ✅ | `scripts/{reset-e2e-profile,seed-board,set-time-freeze,dump-storage}.mjs`を実装し`dev.py`の全10動詞が実コマンドに配線済み(未配線ゼロ)。`src/lib/clock.ts`(時刻シーム)を実装しCardに`createdAt`を追加。`e2e/fixtures.ts`+`board.spec.ts`でビルド済み拡張機能を実際にpersistent contextへロードして検証するE2Eを1本実装。実測: ①`reset`→`seed`→`db`を2回実行し出力が完全一致(G1決定性) ②`dev.py e2e`が正常系で緑・アサーションを壊すと赤・戻すと緑(違反注入) ③`test-network`/`ui-missing-testid`はStep2/Step8で規則ID付き検出済み。CIに`ts-test`/`e2e`ジョブを追加(Step9のリモート作成後に実働確認)。E2Eのservice worker発見のため最小限のbackground service worker(`src/background/background.ts`)を追加し、根拠をplan.mdに記録 |
-| 9 | CI（最終防衛線） | 🚧 | |
+| 9 | CI（最終防衛線） | ✅ | `gh repo create --public`でリモート作成しmainへpush(GitHub: zappyzed100/new-tab-board)。①正常pushでchecks/ts-test/e2e全ジョブ緑を実測(初回はcheck-bootstrapのStep3再検証がCI環境を考慮しておらずHARDで落ちるバグを発見、`os.environ.get("CI")`除外を追加し是正) ②GitHub Contents API(ローカルフックを一切通さない経路)でlog-direct-call違反を検証ブランチへ直接コミットしPRを作成→checks/ts-testが正しく赤くなることを実測→PRクローズ・ブランチ削除で後片付け済み。**申し送り**: ブランチ保護のrequired checks登録はリポジトリ管理者設定の変更にあたり自動分類器にブロックされたため未実施——ユーザーが必要に応じてGitHub設定画面から行う |
 | 10 | 総合セルフ監査と引き継ぎ | 🚧 | |
 
 ## 固有名詞リストC（Step 0 で確定——Step 1・10 の残置 grep の機械入力）
