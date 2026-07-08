@@ -4,10 +4,9 @@ import { buildBacklinkIndex, extractLinkedTitles } from "./links";
 
 describe("extractLinkedTitles", () => {
   it("本文中の[[リンク]]を重複無く抽出する", () => {
-    expect(extractLinkedTitles("参照: [[会議メモ]] と [[TODO]]。再度 [[会議メモ]]。")).toEqual([
-      "会議メモ",
-      "TODO",
-    ]);
+    expect(
+      extractLinkedTitles("参照: [[会議メモ]] と [[買い物リスト]]。再度 [[会議メモ]]。"),
+    ).toEqual(["会議メモ", "買い物リスト"]);
   });
 
   it("リンクが無ければ空配列を返す", () => {
