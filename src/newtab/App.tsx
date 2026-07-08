@@ -53,6 +53,8 @@ export function App() {
   const [showTodos, setShowTodos] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showData, setShowData] = useState(false);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
@@ -107,6 +109,19 @@ export function App() {
     ),
   });
 
+  // テーマ(light/dark/auto)の解決結果をdocument.documentElementへ反映する。
+  useEffect(() => {
+    if (!sync) return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    function applyTheme() {
+      if (!sync) return;
+      document.documentElement.dataset.theme = resolveTheme(sync.settings.theme, mql.matches);
+    }
+    applyTheme();
+    mql.addEventListener("change", applyTheme);
+    return () => mql.removeEventListener("change", applyTheme);
+  }, [sync]);
+
   function updateBookmarks(bookmarks: Bookmark[]) {
     if (!sync) return;
     const next = { ...sync, bookmarks };
@@ -122,6 +137,28 @@ export function App() {
     }
   }
 
+  function updateSettings(patch: Partial<Settings>) {
+    if (!sync) return;
+    const next = { ...sync, settings: { ...sync.settings, ...patch } };
+    setSync(next);
+    void saveSyncData(next);
+  }
+
+  function importData(data: { sync: SyncState; notes: Note[] }) {
+    setSync(data.sync);
+    setNotes(data.notes);
+    setActiveNoteId(data.notes[0]?.id ?? null);
+    void saveSyncData(data.sync);
+    void saveLocalData({ notes: data.notes });
+  }
+
+  function openFileAsNote(title: string, content: string) {
+    if (!notes) return;
+    const note = createNote(title, sortedNotes(notes).length);
+    updateNotes(addNote(notes, { ...note, content }));
+    setActiveNoteId(note.id);
+  }
+
   if (!sync || !notes) {
     return <div data-testid="app-loading">読み込み中…</div>;
   }
@@ -135,6 +172,11 @@ export function App() {
 
   return (
     <main data-testid="app-root">
+      <Clock />
+      <ThemeToggle
+        theme={sync.settings.theme}
+        onThemeChange={(theme) => updateSettings({ theme })}
+      />
       <Omnibar bookmarks={sync.bookmarks} appLaunches={sync.appLaunches} settings={sync.settings} />
       <BookmarkGrid
         bookmarks={sync.bookmarks}
@@ -167,6 +209,25 @@ export function App() {
       >
         ショートカット一覧(?)
       </button>
+      <button
+        type="button"
+        data-testid="toggle-calendar"
+        onClick={() => setShowCalendar((v) => !v)}
+      >
+        {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
+      </button>
+      <button type="button" data-testid="toggle-data" onClick={() => setShowData((v) => !v)}>
+        {showData ? "データ管理を閉じる" : "データ管理"}
+      </button>
+      {showCalendar ? <MiniCalendar /> : null}
+      {showData ? (
+        <DataPanel
+          sync={sync}
+          notes={notes}
+          onImportData={importData}
+          onOpenFileAsNote={openFileAsNote}
+        />
+      ) : null}
       {showCommandPalette ? (
         <CommandPalette
           notes={notes}
@@ -174,6 +235,11 @@ export function App() {
           appLaunches={sync.appLaunches}
           openIn={sync.settings.openIn}
           onSelectNote={setActiveNoteId}
+          onOpenFile={() =>
+            void pickAndReadTextFile().then(
+              (r) => r && openFileAsNote(r.name.replace(/\.txt$/i, ""), r.content),
+            )
+          }
           onClose={() => setShowCommandPalette(false)}
         />
       ) : null}
