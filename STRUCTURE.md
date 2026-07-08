@@ -70,6 +70,8 @@
 
 - `src/lib/board.test.ts` — board.test.ts — board.ts の純粋関数の単体テスト
 - `src/lib/board.ts` — board.ts — ボードの純粋なデータモデルと更新関数(I/Oを持たない)
+- `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
+- `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/storage.ts` — storage.ts — chrome.storage.local ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(ボードUI)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
@@ -226,6 +228,9 @@
 - function removeColumn
 - function addCard
 - function removeCard
+
+### `src/lib/log.ts`
+- function logOp
 
 ### `src/lib/storage.ts`
 - function loadBoard
