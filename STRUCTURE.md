@@ -89,11 +89,19 @@
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
+- `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M2以降で機能を積み上げる)
+- `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
+- `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
+- `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
+- `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
+- `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
+- `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
 ## `tests/`
@@ -266,6 +274,14 @@
 ### `src/lib/log.ts`
 - function logOp
 
+### `src/lib/notes.ts`
+- function createNote
+- function addNote
+- function updateNote
+- function removeNote
+- function sortedNotes
+- function reorderNotes
+
 ### `src/lib/storage.ts`
 - const DEFAULT_SETTINGS
 - function loadSyncData
@@ -273,11 +289,23 @@
 - function loadLocalData
 - function saveLocalData
 
+### `src/lib/tags.ts`
+- function extractTags
+
 ### `src/newtab/App.tsx`
 - function App
 
 ### `src/newtab/components/BookmarkGrid.tsx`
 - function BookmarkGrid
+
+### `src/newtab/components/MarkdownPreview.tsx`
+- function MarkdownPreview
+
+### `src/newtab/components/NoteTabs.tsx`
+- function NoteTabs
+
+### `src/newtab/components/Notepad.tsx`
+- function Notepad
 
 ### `src/types.ts`
 - type Bookmark
