@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_scan as rs  # noqa: E402
 
-LEDGER = "BOOTSTRAP.md"
+LEDGER = "docs/guardrails/BOOTSTRAP.md"
 STEP_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "8b", "9", "10"]
 ROW_RE = re.compile(r"^\|\s*(0|1|2|3|4|5|6|7|8|8b|9|10)\s*\|[^|]*\|\s*(✅|🚧|—)\s*\|([^|]*)\|")
 DONE, WIP, NA = "✅", "🚧", "—"

@@ -37,5 +37,6 @@ uv run scripts/dev.py verbs   # 動詞一覧と配線状態
 - `src/lib/` — ストレージ・ログ・時刻などの外部I/Oシーム（UIから直接叩かない — AGENTS.md §5）
 - `e2e/` — Playwright E2E（拡張機能を実際にロードして検証）
 - `docs/stack.md` — 技術選定理由
-- `GUARDRAILS.md` / `GOALS.md` / `bindings/catalog.md` / `AGENTS.md` — このリポジトリの
-  出戻り防止機構（LLMエージェントとの協業ガードレール）の正本。作業前に読むこと。
+- `docs/guardrails/` — `GUARDRAILS.md` / `GOALS.md` / `BOOTSTRAP.md` / `CUSTOMIZE.md`。
+  `bindings/catalog.md` / `AGENTS.md`（ルート）とあわせて、このリポジトリの出戻り防止機構
+  （LLMエージェントとの協業ガードレール）の正本。作業前に読むこと。

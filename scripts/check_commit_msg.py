@@ -56,7 +56,9 @@ PASS_THROUGH_PREFIXES = ("Merge", "Revert", "fixup!", "squash!")
 #   親で赤」まで）。正当な整理も普通に存在するため soft。TEST_PATH_PATTERNS 空なら不発。
 # 検査3（governance-without-goal — §3.4・GOALS.md 運用ルールの機械化）:
 # 正本3文書をステージしたコミットは、メッセージ本文に「どのGに効くか」の引用が必須。
-GOVERNANCE_PATHS = frozenset({"GOALS.md", "GUARDRAILS.md", "bindings/catalog.md"})
+GOVERNANCE_PATHS = frozenset(
+    {"docs/guardrails/GOALS.md", "docs/guardrails/GUARDRAILS.md", "bindings/catalog.md"}
+)
 GOAL_CITATION = re.compile(r"\bG(1[0-4]|[1-9])\b")  # G14 新設と同時改修（v2.8・§10 Phase 19）
 _SCISSORS = ">8"  # `git commit -v` の切り取り線以降（diff本体）は本文ではない
 

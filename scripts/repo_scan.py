@@ -432,7 +432,8 @@ LAYER_FORBIDDEN_IMPORTS += [
 # 正本4文書に加え、防壁の実体ファイル自体も対象——防壁が消えることは静かな fail-open の
 # 最悪形（G7/G9）。列は表Bの必須（例: "app"）をここへ += する。
 REQUIRED_PATHS = [
-    "AGENTS.md", "BOOTSTRAP.md", "CLAUDE.md", "GUARDRAILS.md", "GOALS.md", "bindings/catalog.md",
+    "AGENTS.md", "CLAUDE.md", "bindings/catalog.md",
+    "docs/guardrails/BOOTSTRAP.md", "docs/guardrails/GUARDRAILS.md", "docs/guardrails/GOALS.md",
     ".pre-commit-config.yaml", ".gitattributes", ".python-version",
     ".claude/settings.json",
     ".claude/hooks/guard_git_bypass.py", ".claude/hooks/post_edit_format.py",

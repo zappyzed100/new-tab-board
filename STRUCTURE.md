@@ -11,11 +11,7 @@
 - `.prettierrc.json`
 - `.python-version`
 - `AGENTS.md`
-- `BOOTSTRAP.md`
 - `CLAUDE.md`
-- `CUSTOMIZE.md`
-- `GOALS.md`
-- `GUARDRAILS.md`
 - `README.md`
 - `eslint.config.js`
 - `index.html`
@@ -47,6 +43,10 @@
 
 ## `docs/`
 
+- `docs/guardrails/BOOTSTRAP.md`
+- `docs/guardrails/CUSTOMIZE.md`
+- `docs/guardrails/GOALS.md`
+- `docs/guardrails/GUARDRAILS.md`
 - `docs/stack.md`
 
 ## `e2e/`

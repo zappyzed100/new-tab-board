@@ -71,7 +71,7 @@ repos:
         entry: uv run scripts/check_bootstrap.py
         language: system
         pass_filenames: false
-        files: ^BOOTSTRAP\.md$
+        files: ^docs/guardrails/BOOTSTRAP\.md$
 
       # ---- §3.4 コミットメッセージ検査（pass_filenames は既定 true のまま — §7.6 の注意）----
       - id: check-commit-msg
