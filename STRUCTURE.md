@@ -87,6 +87,8 @@
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
+- `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
+- `src/lib/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
 - `src/lib/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -102,6 +104,8 @@
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
+- `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
+- `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
@@ -277,6 +281,10 @@
 - function getIndexEntry
 - function getAllIndexEntries
 
+### `src/lib/diff.ts`
+- type DiffPart
+- function computeDiff
+
 ### `src/lib/gzip.ts`
 - function gzipCompress
 - function gzipDecompress
@@ -319,6 +327,12 @@
 
 ### `src/newtab/components/BookmarkGrid.tsx`
 - function BookmarkGrid
+
+### `src/newtab/components/DiffView.tsx`
+- function DiffView
+
+### `src/newtab/components/HistoryPanel.tsx`
+- function HistoryPanel
 
 ### `src/newtab/components/MarkdownPreview.tsx`
 - function MarkdownPreview

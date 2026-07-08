@@ -15,12 +15,20 @@ const Notepad = lazy(() => import("./components/Notepad").then((m) => ({ default
 const MarkdownPreview = lazy(() =>
   import("./components/MarkdownPreview").then((m) => ({ default: m.MarkdownPreview })),
 );
+const HistoryPanel = lazy(() =>
+  import("./components/HistoryPanel").then((m) => ({ default: m.HistoryPanel })),
+);
 
 export function App() {
   const [sync, setSync] = useState<SyncState | null>(null);
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
+  // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
+  // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
+  const [restoreCounter, setRestoreCounter] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,18 +91,36 @@ export function App() {
           >
             {showPreview ? "編集に戻る" : "プレビュー"}
           </button>
+          <button
+            type="button"
+            data-testid="toggle-history"
+            onClick={() => setShowHistory((v) => !v)}
+          >
+            {showHistory ? "履歴を閉じる" : "履歴🕑"}
+          </button>
           <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
             {showPreview ? (
               <MarkdownPreview content={activeNote.content} />
             ) : (
               <Notepad
-                key={activeNote.id}
+                key={`editor-${activeNote.id}-${restoreCounter}`}
                 content={activeNote.content}
                 onContentChange={(content) =>
                   updateNotes(updateNote(notes, activeNote.id, { content }))
                 }
               />
             )}
+            {showHistory ? (
+              <HistoryPanel
+                key={`history-${activeNote.id}`}
+                noteId={activeNote.id}
+                currentContent={activeNote.content}
+                onRestore={(content) => {
+                  updateNotes(updateNote(notes, activeNote.id, { content }));
+                  setRestoreCounter((c) => c + 1);
+                }}
+              />
+            ) : null}
           </Suspense>
         </div>
       ) : (
