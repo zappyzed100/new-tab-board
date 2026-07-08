@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "New Tab Board",
   "version": "0.1.0",
-  "description": "新しいタブをカラム/カードのボードに置き換える拡張機能",
+  "description": "新しいタブを個人用ダッシュボードに置き換える拡張機能",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtL4bqFFjb9pyEEBjaZ5fv2gqYd/7Tvp71vTrtx6X+iOsNR0wezsKwKBsFNnhtIAiH5uaT7sosalhSlYtRIzGGFcWr/n2ZnQESuZ+jy7s/aaVVBMqh2J0LXs6EWxqLGD2yqVvjS2Vhb8UuFZUk2dU79C86CsHdINQuZAYJtPg3s/YfeW2+mpmqAobKj50rVGC+SNj7QaACLbWshEQdWGo51E5o7tuaRdqy4c6r7kD9G/K1yhy41t4B1aS6e5Vkw5iqQszsEnZYvoDM5Gth7GAeack03EIQwIwqNnrQkCudt5LkNYI7V63jI8jDs25t+HqZjyYeoOk3ZhDVQHeLtJEIwIDAQAB",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
