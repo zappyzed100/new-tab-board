@@ -15,7 +15,7 @@
 | 1 | 骨格と文書（AGENTS.md / CLAUDE.md / 正本複製） | ✅ | 章14本存在・★/TODO/固有名詞C残置0件をgrepで実測。tsc/vitest/eslint/prettier/build実測通過 |
 | 2 | uv とスクリプト（索引の決定性） | ✅ | generate_structure 2回連続同一ハッシュ・--check exit0/1実測・フルスキャン0.16秒。hard規則10種(missing-required/layer-violation/test-sleep/test-nondeterminism/test-network/deprecated-api/log-direct-call/ui-missing-testid/mcp-not-allowed/env-file-tracked)を1件ずつ違反注入し規則ID付きで検出→除去を実測。post_edit format→lint実測(1757ms<3秒予算) |
 | 3 | pre-commit 導入（ここから門の下） | ✅ | `uv tool install pre-commit`→`pre-commit install`(pre-commit/commit-msg/pre-push全シム導入)。末尾空白+HARD:log-direct-call+AWSキー風ダミー秘密を仕込んだコミットが trailing-whitespace/gitleaks/check-structure の3種それぞれの理由で落ちることを実測。違反ファイル削除後は check-structure exit0・working tree clean |
-| 4 | 迂回防止（guard・コーパス・probe・Stop） | 🚧 | |
+| 4 | 迂回防止（guard・コーパス・probe・Stop） | 🚧 | 完了済み: guard-corpus全74行PASS実測・`dev.py probe "git push -f"`/`"git commit --no-verify -m x"`がDENY、`"git status"`がALLOWを実測(DoD④⑤)。**保留**: `--no-verify`/`--force`push等のライブブロック実測(DoD①②③⑥⑦⑨)——本セッションの実行環境(VSCode拡張/Agent SDK経由のBashツール)ではPreToolUse等のClaude Codeフック層が発火せず2回の実測で実際にコミットが成立してしまうことを確認(該当コミットは`git reset --hard`で即時復元済み・pushはしていない)。ユーザー了承のもと、git ネイティブフック(pre-commit/commit-msg/pre-push)とCIで検証可能なStep 5以降を先に進める。実env確認後に本行へ戻る |
 | 5 | commit-msg 検査 | 🚧 | |
 | 6 | push 段と lint 昇格 | 🚧 | |
 | 7 | ログ単一出口 | 🚧 | |
