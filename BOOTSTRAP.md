@@ -19,7 +19,7 @@
 | 5 | commit-msg 検査 | ✅ | ①不正prefixで`HARD:commit-msg-format`落ち ②テスト無し`fix:`で`HARD:fix-without-test`落ち→テスト同梱で通過 ③`git merge --no-ff`のデフォルト`Merge branch...`メッセージが素通し ④pre-commit installは全フック種込みで導入済み(Step3で実測済み・再発火をStep5でも確認) ⑤package.jsonへの新規依存追加が名前非言及で`HARD:undeclared-dependency`落ち→`依存追加: 名前 — 理由`で通過、バージョン更新のみは素通し ⑥PLAN_LAYER_ROOTS=["src"]配下への新規ディレクトリを作る`feat:`(plan差分なし)が`HARD:feat-without-plan`+`SOFT:feat-without-test`で落ち→plan.md差分で通過、`refactor:`名乗りはplan無しでも素通し。検証用の一時ファイル・コミットはすべてreset --hardで復元済み(作業ツリーはクリーン) |
 | 6 | push 段と lint 昇格 | ✅ | `.pre-commit-config.yaml`にpre-push段の`tsc --noEmit`/`eslint .`/`vitest run`を追加(lint昇格の`no-console`/`no-empty`はStep1のeslint.config.jsで既設定)。`pre-commit run --hook-stage pre-push --all-files`で違反注入を実測: ①`console.log`混入→eslintがexit1で落ち ②アサーション破壊→vitestが落ち ③除去後は3フックとも通過。実`git push`によるフック発火はStep9のリモート作成後に確認する |
 | 7 | ログ単一出口 | ✅ | `src/lib/log.ts`の`logOp(tag, op, detail, {error, elapsedMs})`を実装し`src/lib/storage.ts`のNO-LOGコメントを実際の呼び出しに置換。単体テスト3件(形式・elapsedMs付与・error付与)で`[タグ] 操作名: 詳細 (+Xms)`形式の出力を実測。log.ts以外でのconsole.log直呼びを注入し`HARD:log-direct-call`で検出→除去を実測。FFI境界(missing-catch-unwind)は該当なし(表B: Chrome拡張にFFI境界は無い) |
-| 8 | テスト決定性 | 🚧 | |
+| 8 | テスト決定性 | ✅ | 確率的コンポーネントは無い(表B)ため`solve_for_test`相当のラッパーは該当なし。`test-sleep`(setTimeout)・`test-nondeterminism`(Date.now/new Date/Math.random)・`test-network`(fetch)の3パターンを1テストファイルへ一括注入し、全て規則ID付きで検出→削除後にcheck-structureがexit0に戻ることを実測(パターン自体はStep2でrepo_scan.pyへ充填済み) |
 | 8b | ランタイムレール（動詞・供給・操作/観察） | 🚧 | |
 | 9 | CI（最終防衛線） | 🚧 | |
 | 10 | 総合セルフ監査と引き継ぎ | 🚧 | |
