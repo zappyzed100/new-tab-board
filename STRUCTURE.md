@@ -83,6 +83,8 @@
 - `src/background/background.ts` — background.ts — 最小サービスワーカー(拡張機能IDのE2E解決用・インストール時ログ)
 - `src/lib/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
+- `src/lib/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
+- `src/lib/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
@@ -93,6 +95,8 @@
 - `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
 - `src/lib/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
+- `src/lib/links.test.ts` — links.test.ts — links.ts([[リンク]]パース・バックリンク索引)の単体テスト
+- `src/lib/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
@@ -103,10 +107,13 @@
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/todo.test.ts` — todo.test.ts — todo.ts(横断TODO集約)の単体テスト
+- `src/lib/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
 - `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
+- `src/newtab/components/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
@@ -115,6 +122,7 @@
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
+- `src/newtab/components/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
@@ -274,6 +282,10 @@
 - function sortedBookmarks
 - function reorderBookmarks
 
+### `src/lib/calculator.ts`
+- function evaluateExpression
+- function evaluateLineIfCalculator
+
 ### `src/lib/clock.ts`
 - function now
 
@@ -303,6 +315,12 @@
 - function exceedsChangeThreshold
 - function exceedsMaxCap
 
+### `src/lib/links.ts`
+- function extractLinkedTitles
+- type Backlink
+- type LinkableNote
+- function buildBacklinkIndex
+
 ### `src/lib/log.ts`
 - function logOp
 
@@ -328,6 +346,12 @@
 ### `src/lib/tags.ts`
 - function extractTags
 
+### `src/lib/todo.ts`
+- type AggregatedTodo
+- type TodoNote
+- function extractTodos
+- function aggregateTodos
+
 ### `src/lib/tokenize.ts`
 - function tokenize
 
@@ -336,6 +360,9 @@
 
 ### `src/newtab/App.tsx`
 - function App
+
+### `src/newtab/components/BacklinksPanel.tsx`
+- function BacklinksPanel
 
 ### `src/newtab/components/BookmarkGrid.tsx`
 - function BookmarkGrid
@@ -360,6 +387,9 @@
 
 ### `src/newtab/components/SnapshotScheduler.tsx`
 - function SnapshotScheduler
+
+### `src/newtab/components/TodoPanel.tsx`
+- function TodoPanel
 
 ### `src/types.ts`
 - type Bookmark
