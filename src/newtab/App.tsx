@@ -18,6 +18,9 @@ const MarkdownPreview = lazy(() =>
 const HistoryPanel = lazy(() =>
   import("./components/HistoryPanel").then((m) => ({ default: m.HistoryPanel })),
 );
+const SearchPanel = lazy(() =>
+  import("./components/SearchPanel").then((m) => ({ default: m.SearchPanel })),
+);
 
 export function App() {
   const [sync, setSync] = useState<SyncState | null>(null);
@@ -25,6 +28,7 @@ export function App() {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
@@ -77,6 +81,20 @@ export function App() {
         onNotesChange={updateNotes}
         onSelect={setActiveNoteId}
       />
+      <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
+        {showSearch ? "検索を閉じる" : "検索⌘K"}
+      </button>
+      {showSearch ? (
+        <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+          <SearchPanel
+            notes={notes}
+            onSelectNote={(noteId) => {
+              setActiveNoteId(noteId);
+              setShowSearch(false);
+            }}
+          />
+        </Suspense>
+      ) : null}
       {activeNote ? (
         <div data-testid="note-editor-area">
           <SnapshotScheduler

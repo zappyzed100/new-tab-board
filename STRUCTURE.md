@@ -97,10 +97,14 @@
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
+- `src/lib/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
+- `src/lib/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
 - `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
+- `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
@@ -109,6 +113,7 @@
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
+- `src/newtab/components/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
@@ -309,6 +314,10 @@
 - function sortedNotes
 - function reorderNotes
 
+### `src/lib/search.ts`
+- function indexSnapshot
+- function searchSnapshotIds
+
 ### `src/lib/storage.ts`
 - const DEFAULT_SETTINGS
 - function loadSyncData
@@ -318,6 +327,9 @@
 
 ### `src/lib/tags.ts`
 - function extractTags
+
+### `src/lib/tokenize.ts`
+- function tokenize
 
 ### `src/lib/useSnapshotScheduler.ts`
 - function useSnapshotScheduler
@@ -342,6 +354,9 @@
 
 ### `src/newtab/components/Notepad.tsx`
 - function Notepad
+
+### `src/newtab/components/SearchPanel.tsx`
+- function SearchPanel
 
 ### `src/newtab/components/SnapshotScheduler.tsx`
 - function SnapshotScheduler

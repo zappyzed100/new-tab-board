@@ -6,6 +6,7 @@ import { putSnapshot } from "./db";
 import { gzipCompress } from "./gzip";
 import { exceedsChangeThreshold, exceedsMaxCap, shouldSnapshot } from "./history";
 import { logOp } from "./log";
+import { indexSnapshot } from "./search";
 
 const IDLE_MS = 2_500;
 const MAX_CAP_CHECK_INTERVAL_MS = 5_000;
@@ -30,7 +31,9 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
       return;
     }
     const compressed = await gzipCompress(currentContent);
-    await putSnapshot({ id: crypto.randomUUID(), noteId, timestamp: now, content: compressed });
+    const snapshotId = crypto.randomUUID();
+    await putSnapshot({ id: snapshotId, noteId, timestamp: now, content: compressed });
+    await indexSnapshot(snapshotId, currentContent);
     logOp("history", "snapshot", `note=${noteId} reason=${reason}`);
     lastSnapshotAtRef.current = now;
     lastContentRef.current = currentContent;
