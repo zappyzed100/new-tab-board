@@ -1,5 +1,6 @@
 // BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
-import { useEffect, useState } from "react";
+// 数字キー1-9でのジャンプはApp.tsxのshortcuts.ts単一レジストリ側に統合済み(SPEC.md §4.6)。
+import { useState } from "react";
 import {
   addBookmark,
   createBookmark,
@@ -22,18 +23,6 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
   const [adding, setAdding] = useState(false);
 
   const sorted = sortedBookmarks(bookmarks);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      if (!/^[1-9]$/.test(e.key)) return;
-      const bookmark = sorted[Number(e.key) - 1];
-      if (bookmark) openBookmark(bookmark);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [sorted, openIn]);
 
   function openBookmark(bookmark: Bookmark) {
     if (openIn === "new") {

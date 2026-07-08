@@ -1,11 +1,22 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { BacklinksPanel } from "./components/BacklinksPanel";
 import { BookmarkGrid } from "./components/BookmarkGrid";
+import { CommandPalette } from "./components/CommandPalette";
 import { NoteTabs } from "./components/NoteTabs";
+import { Omnibar } from "./components/Omnibar";
+import { ShortcutsModal } from "./components/ShortcutsModal";
 import { SnapshotScheduler } from "./components/SnapshotScheduler";
+import { sortedBookmarks } from "../lib/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage";
-import { updateNote } from "../lib/notes";
+import { updateNote, sortedNotes } from "../lib/notes";
+import {
+  buildBookmarkJumpShortcuts,
+  buildNoteJumpShortcuts,
+  SHORTCUT_REGISTRY,
+} from "../lib/shortcuts";
+import { forceSnapshot } from "../lib/useSnapshotScheduler";
+import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, Note, Settings } from "../types";
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
@@ -34,6 +45,8 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showTodos, setShowTodos] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
@@ -51,6 +64,42 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
+  // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
+  const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
+  const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
+  const activeNote = notes?.find((n) => n.id === activeNoteId) ?? null;
+
+  const shortcutRegistry = useMemo(
+    () => [
+      ...SHORTCUT_REGISTRY,
+      ...buildNoteJumpShortcuts(orderedNotes.length),
+      ...buildBookmarkJumpShortcuts(orderedBookmarks.length),
+    ],
+    [orderedNotes.length, orderedBookmarks.length],
+  );
+
+  useGlobalShortcuts(shortcutRegistry, {
+    commandPalette: () => setShowCommandPalette(true),
+    toggleSearch: () => setShowSearch((v) => !v),
+    cheatSheet: () => setShowShortcutsModal(true),
+    immediateSnapshot: () => {
+      if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
+    },
+    ...Object.fromEntries(
+      orderedNotes.map((n, i) => [`noteJump-${i}`, () => setActiveNoteId(n.id)]),
+    ),
+    ...Object.fromEntries(
+      orderedBookmarks.map((b, i) => [
+        `bookmarkJump-${i}`,
+        () => {
+          if (sync?.settings.openIn === "new") window.open(b.url, "_blank", "noopener");
+          else window.location.href = b.url;
+        },
+      ]),
+    ),
+  });
 
   function updateBookmarks(bookmarks: Bookmark[]) {
     if (!sync) return;
@@ -71,8 +120,6 @@ export function App() {
     return <div data-testid="app-loading">読み込み中…</div>;
   }
 
-  const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
-
   function selectNoteByTitle(title: string) {
     // このコンポーネントはnotesがnullの間は上のearly returnで描画されないため、
     // ここに到達する時点でnotesは必ず非nullだが、クロージャ内ではTSが型を絞り込めない。
@@ -82,6 +129,7 @@ export function App() {
 
   return (
     <main data-testid="app-root">
+      <Omnibar bookmarks={sync.bookmarks} appLaunches={sync.appLaunches} settings={sync.settings} />
       <BookmarkGrid
         bookmarks={sync.bookmarks}
         openIn={sync.settings.openIn}
@@ -94,11 +142,38 @@ export function App() {
         onSelect={setActiveNoteId}
       />
       <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
-        {showSearch ? "検索を閉じる" : "検索⌘K"}
+        {showSearch ? "検索を閉じる" : "検索⌘F"}
       </button>
       <button type="button" data-testid="toggle-todos" onClick={() => setShowTodos((v) => !v)}>
         {showTodos ? "TODOを閉じる" : "TODO一覧"}
       </button>
+      <button
+        type="button"
+        data-testid="open-command-palette"
+        onClick={() => setShowCommandPalette(true)}
+      >
+        コマンド⌘K
+      </button>
+      <button
+        type="button"
+        data-testid="open-shortcuts-modal"
+        onClick={() => setShowShortcutsModal(true)}
+      >
+        ショートカット一覧(?)
+      </button>
+      {showCommandPalette ? (
+        <CommandPalette
+          notes={notes}
+          bookmarks={sync.bookmarks}
+          appLaunches={sync.appLaunches}
+          openIn={sync.settings.openIn}
+          onSelectNote={setActiveNoteId}
+          onClose={() => setShowCommandPalette(false)}
+        />
+      ) : null}
+      {showShortcutsModal ? (
+        <ShortcutsModal registry={shortcutRegistry} onClose={() => setShowShortcutsModal(false)} />
+      ) : null}
       {showSearch ? (
         <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
           <SearchPanel

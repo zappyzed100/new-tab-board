@@ -11,6 +11,15 @@ import { indexSnapshot } from "./search";
 const IDLE_MS = 2_500;
 const MAX_CAP_CHECK_INTERVAL_MS = 5_000;
 
+/** Cmd/Ctrl+S(即時スナップショット保存。SPEC.md §6)から呼ぶ、無条件で1件保存する関数。 */
+export async function forceSnapshot(noteId: string, content: string): Promise<void> {
+  const compressed = await gzipCompress(content);
+  const snapshotId = crypto.randomUUID();
+  await putSnapshot({ id: snapshotId, noteId, timestamp: clockNow(), content: compressed });
+  await indexSnapshot(snapshotId, content);
+  logOp("history", "snapshot", `note=${noteId} reason=manual`);
+}
+
 export function useSnapshotScheduler(noteId: string, content: string): void {
   const lastSnapshotAtRef = useRef<number | null>(null);
   const lastContentRef = useRef<string | null>(null);

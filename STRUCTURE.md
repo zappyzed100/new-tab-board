@@ -87,6 +87,8 @@
 - `src/lib/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
+- `src/lib/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
+- `src/lib/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
 - `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
@@ -101,8 +103,12 @@
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
+- `src/lib/omnibar.test.ts` — omnibar.test.ts — omnibar.ts(クイック検索バー解決)の単体テスト
+- `src/lib/omnibar.ts` — omnibar.ts — クイック検索バーの解決ロジック(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
 - `src/lib/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
 - `src/lib/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
+- `src/lib/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
+- `src/lib/shortcuts.ts` — shortcuts.ts — キーボードショートカットの単一レジストリ(SPEC.md §4.6・§6)
 - `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
@@ -111,16 +117,20 @@
 - `src/lib/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
 - `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
+- `src/lib/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
+- `src/newtab/components/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
 - `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
+- `src/newtab/components/Omnibar.tsx` — Omnibar.tsx — クイック検索バー(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
 - `src/newtab/components/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
+- `src/newtab/components/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/components/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
@@ -289,6 +299,11 @@
 ### `src/lib/clock.ts`
 - function now
 
+### `src/lib/commandPalette.ts`
+- type CommandItem
+- function buildCommandItems
+- function filterCommandItems
+
 ### `src/lib/db.ts`
 - function putSnapshot
 - function getSnapshotsByNote
@@ -332,9 +347,22 @@
 - function sortedNotes
 - function reorderNotes
 
+### `src/lib/omnibar.ts`
+- type OmnibarResult
+- function resolveOmnibarQuery
+
 ### `src/lib/search.ts`
 - function indexSnapshot
 - function searchSnapshotIds
+
+### `src/lib/shortcuts.ts`
+- type ShortcutCombo
+- type ShortcutDef
+- const SHORTCUT_REGISTRY
+- function matchesCombo
+- function buildNoteJumpShortcuts
+- function buildBookmarkJumpShortcuts
+- function comboLabel
 
 ### `src/lib/storage.ts`
 - const DEFAULT_SETTINGS
@@ -355,7 +383,11 @@
 ### `src/lib/tokenize.ts`
 - function tokenize
 
+### `src/lib/useGlobalShortcuts.ts`
+- function useGlobalShortcuts
+
 ### `src/lib/useSnapshotScheduler.ts`
+- function forceSnapshot
 - function useSnapshotScheduler
 
 ### `src/newtab/App.tsx`
@@ -366,6 +398,9 @@
 
 ### `src/newtab/components/BookmarkGrid.tsx`
 - function BookmarkGrid
+
+### `src/newtab/components/CommandPalette.tsx`
+- function CommandPalette
 
 ### `src/newtab/components/DiffView.tsx`
 - function DiffView
@@ -382,8 +417,14 @@
 ### `src/newtab/components/Notepad.tsx`
 - function Notepad
 
+### `src/newtab/components/Omnibar.tsx`
+- function Omnibar
+
 ### `src/newtab/components/SearchPanel.tsx`
 - function SearchPanel
+
+### `src/newtab/components/ShortcutsModal.tsx`
+- function ShortcutsModal
 
 ### `src/newtab/components/SnapshotScheduler.tsx`
 - function SnapshotScheduler
