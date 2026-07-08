@@ -6,7 +6,7 @@
 # フォーマッタ未導入・対象外拡張子は exit 0（この層は利便であってゲートではない。
 # ゲートは §3〜§5 が担う）。どの整形も冪等。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE: ts-react-crx@1
 #
 # ===== BINDING: 対象拡張子 × 整形コマンド（bindings/catalog.md の採用列から充填）=====
 # v2キットは言語なしで出荷される（下の DISPATCH は空）。Step 0 で採用列の paste-block を
@@ -26,6 +26,12 @@ from pathlib import Path
 # 拡張子 → 整形コマンド（argv のリストのリスト・順に実行）。空 = キット出荷時の既定。
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "format", "{file}"]]
 DISPATCH: dict[str, list[list[str]]] = {}
+# ts-react-crx@1: Windows では node_modules/.bin/prettier(拡張子無し)を
+# 素の subprocess.run に渡すと FileNotFoundError になるため、node 経由で
+# パッケージの JS エントリを直接渡す(bindings/catalog.md の実測是正 — 2026-07-08)。
+DISPATCH[".ts"] = DISPATCH[".tsx"] = [
+    ["node", "node_modules/prettier/bin/prettier.cjs", "--write", "{file}"]
+]
 
 
 def main() -> int:

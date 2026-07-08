@@ -675,14 +675,28 @@ COMMANDS = {
 
 **paste-block（`post_edit_format.py` の DISPATCH へ。直接バイナリ呼び出し）**:
 
+> **Windows実測の是正（2026-07-08）**: ts-react-web@6 の `node_modules/.bin/prettier`
+> （拡張子無し・フォワードスラッシュ）を素の `subprocess.run([...], shell=False)` へ渡すと
+> Windows では `FileNotFoundError: [WinError 2]` になる（`os.path.exists` は True を返す
+> のに `_winapi.CreateProcess` は解決できない——相対パス＋スラッシュ区切りの実行ファイル名は
+> Windows のプロセス起動 API が POSIX ほど寛容に解決しない）。`.bin/prettier.cmd`
+> （バッチファイル）も同様に失敗する（バッチファイルは `cmd.exe` 経由の起動が要る）。
+> 実測で解決したのは **`node` 経由でパッケージ本体の JS エントリを直接渡す形**
+> （`node` はパス区切りが無い名前なので Python の `subprocess` が PATH 解決でき、
+> 渡す `.cjs`/`.js` パスは Node 自身のモジュール解決に渡るだけで Windows の
+> CreateProcess 解決を経由しない）。前提: `npm ci` 実行後に `node_modules/prettier/bin/prettier.cjs`・
+> `node_modules/eslint/bin/eslint.js` が存在すること（`package.json` の `bin` フィールドが正本）。
+
 ```python
-DISPATCH[".ts"] = DISPATCH[".tsx"] = [["node_modules/.bin/prettier", "--write", "{file}"]]
+DISPATCH[".ts"] = DISPATCH[".tsx"] = [
+    ["node", "node_modules/prettier/bin/prettier.cjs", "--write", "{file}"]
+]
 ```
 
 **paste-block（`post_edit_lint.py` の DISPATCH へ）**:
 
 ```python
-_ESLINT = [["node_modules/.bin/eslint", "--max-warnings=0", "{file}"]]
+_ESLINT = [["node", "node_modules/eslint/bin/eslint.js", "--max-warnings=0", "{file}"]]
 DISPATCH[".ts"] = DISPATCH[".tsx"] = DISPATCH[".js"] = DISPATCH[".jsx"] = _ESLINT
 ```
 

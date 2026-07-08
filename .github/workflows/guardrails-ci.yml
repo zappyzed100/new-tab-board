@@ -6,7 +6,7 @@
 # `pre-commit run` は既定で pre-commit ステージのみ実行するため、
 # stages: [pre-push] のテスト・解析群は BINDING の独立ジョブで明示的に回す。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE: ts-react-crx@1
 
 name: CI
 

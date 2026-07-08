@@ -9,7 +9,7 @@
 #   ——忘れると新フック種は「静かに」無効なまま（fail-open の典型）。
 # ※ rev の更新は `pre-commit autoupdate` で行い、コミットとして残す。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE: ts-react-crx@1
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 # stages 未指定のフックは「インストール済みの全フック種」で走る pre-commit 仕様のため、

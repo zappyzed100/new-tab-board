@@ -14,7 +14,7 @@
 #   - 出力は `[dev] 動詞: コマンド` → 実行 → `[dev] 動詞: exit N (+Xms)`（ログ形式 — AGENTS.md §7）。
 #   - COMMANDS が None の動詞は「未配線」を明示して落ちる（静かに何もしない fail-open の禁止）。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE: ts-react-crx@1
 #
 # ===== BINDING: 動詞 → コマンド列（bindings/catalog.md の採用列から充填する）=====
 # 値は「argv のリスト」のリスト（shell=False で順に実行・非0で中断 — §7.2）。
@@ -35,17 +35,17 @@ import repo_scan as rs  # noqa: E402
 ARGS_TOKEN = "{args}"
 
 COMMANDS: dict[str, list[list[str]] | None] = {
-    "up":    None,   # ローカル環境の起動（例: supabase start / docker compose up -d）
-    "reset": None,   # 既知状態への復帰（DB reset + seed まで含めて1コマンド — §12.2）
-    "seed":  None,   # シードデータ投入のみ（reset に含まれるなら同じ配線でよい）
-    "time":  None,   # 時刻の凍結/解除（例: dev.py time 2026-02-28T23:59 / dev.py time clear）
-    "test":  None,   # 単体テスト一式
-    "e2e":   None,   # E2E（実UI貫通）テスト一式
-    "fmt":   None,   # 整形（冪等）
+    "up":    [["npm", "run", "build", "--", "--watch"]],   # dist/ を継続ビルド
+    "reset": [["node", "scripts/reset-e2e-profile.mjs"]],  # E2E persistent context のプロファイル削除
+    "seed":  [["node", "scripts/seed-board.mjs"]],         # 固定フィクスチャの board を書き込む
+    "time":  [["node", "scripts/set-time-freeze.mjs", "{args}"]],   # .time-freeze.json の書換/削除
+    "test":  [["npx", "vitest", "run"]],
+    "e2e":   [["npx", "playwright", "test"]],
+    "fmt":   [["npx", "prettier", "--write", "."]],
     "check": [["uv", "run", "scripts/check_structure.py"]],   # 構造検査（言語なしで即動く）
     "probe": [["uv", "run", "scripts/check_guard_corpus.py", "--probe", "{args}"]],
              # ↑ 迂回防止の事前照会（言語なしで即動く — §2。「試して exit 2」の1周を削る）
-    "db":    None,   # ローカルDBへの読み取りクエリ（例: dev.py db "select count(*) from x"）
+    "db":    [["node", "scripts/dump-storage.mjs"]],   # chrome.storage.local の読み取りダンプ
 }
 
 VERB_HELP: dict[str, str] = {

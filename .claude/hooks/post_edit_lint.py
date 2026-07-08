@@ -15,7 +15,7 @@
 # 防ぎ、編集フローは止めない。表示＋素通しの型は §2b/§2c 系の fail-open 側の整理）。
 # --fix 系（自動修正）はここに置かない —— それは整形フック（第1段）の責務。
 #
-# BINDING-SOURCE: <列ID@版をここに>   ← Step 0 で刻印（§12.7）
+# BINDING-SOURCE: ts-react-crx@1
 #
 # ===== BINDING: 対象拡張子 × lint コマンド（bindings/catalog.md 表A「編集直後 lint」）=====
 # v2キットは言語なしで出荷される（下の DISPATCH は空）。Step 0 で採用列の paste-block を
@@ -39,6 +39,10 @@ from pathlib import Path
 # 拡張子 → lint コマンド（argv のリストのリスト・順に実行）。空 = キット出荷時の既定。
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "check", "{file}"]]
 DISPATCH: dict[str, list[list[str]]] = {}
+# ts-react-crx@1: node 経由での直接呼び出し理由は post_edit_format.py と同じ実測
+# （bindings/catalog.md — 2026-07-08）。
+_ESLINT = [["node", "node_modules/eslint/bin/eslint.js", "--max-warnings=0", "{file}"]]
+DISPATCH[".ts"] = DISPATCH[".tsx"] = DISPATCH[".js"] = DISPATCH[".jsx"] = _ESLINT
 
 
 def main() -> int:
