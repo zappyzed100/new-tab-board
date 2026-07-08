@@ -153,6 +153,7 @@
 ## `tests/`
 
 - `tests/guard_corpus.tsv`
+- `tests/test_repo_scan_test_patterns.py` — test_repo_scan_test_patterns.py — TEST_PATH_PATTERNSのキット自身デフォルトの回帰テスト
 
 ## 公開シンボル
 
@@ -488,3 +489,6 @@
 - type LocalData
 - type Snapshot
 - type IndexEntry
+
+### `tests/test_repo_scan_test_patterns.py`
+- class TestPathPatternsTest

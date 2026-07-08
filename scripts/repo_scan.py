@@ -392,7 +392,13 @@ GENERATED_PATTERNS = [re.compile(p) for p in (
 )]
 
 # --- テストファイルの判別（§3.4 検査2・§9 の検査対象の定義。列充填）---
-TEST_PATH_PATTERNS: list[re.Pattern] = []
+# v2.25（G10）: .claude/hooks/*.py・scripts/*.py はキット自身のインフラで、採用列に
+# 関係なく常にPython（HEADER_REQUIRED_EXTSが.py/.shを常時対象とするのと同じ扱い）。
+# その回帰テスト（tests/test_*.py・tests/*_test.py）を検査2等が認識できるよう、
+# 列充填の前段でキット自身の分として常時追加する。
+TEST_PATH_PATTERNS: list[re.Pattern] = [
+    re.compile(p) for p in (r"^tests/", r"_test\.py$", r"(^|/)test_[^/]+\.py$")
+]
 TEST_PATH_PATTERNS += [re.compile(p) for p in (r"\.test\.tsx?$", r"^e2e/.*\.spec\.ts$")]
 
 # --- 単一テストファイル実行（§5 red-first 証明 — v2.7・Phase 18。列充填。None なら不発）---
