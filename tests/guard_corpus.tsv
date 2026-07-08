@@ -1,0 +1,74 @@
+DENY	git commit --no-verify
+DENY	git commit --no-verify -m "wip"
+DENY	git commit -m "x" --no-verify
+DENY	git push --no-verify
+DENY	git commit -n -m "wip"
+DENY	git commit -anm "wip"
+DENY	env -u CLAUDECODE git commit --no-verify -m "x"
+DENY	cd sub && git commit --no-verify -m "x"
+DENY	SKIP=check-structure git commit -m "x"
+DENY	git stash && SKIP=gitleaks git commit -m "x"
+DENY	git push --force
+DENY	git push -f
+DENY	git push origin -f
+DENY	git push --force origin main
+DENY	git push origin main --force-with-lease
+DENY	timeout 60 git push -f origin main
+DENY	git pull && git push -f
+DENY	git config core.hooksPath /tmp/hooks
+DENY	git config --local core.hooksPath .githooks
+DENY	git -c core.hooksPath=/tmp/x commit -m "x"
+DENY	git -c core.hookspath=/dev/null push
+DENY	pre-commit uninstall
+DENY	uvx pre-commit uninstall
+DENY	cd sub && pre-commit uninstall
+DENY	uv tool uninstall pre-commit
+ALLOW	git status
+ALLOW	git diff --stat
+ALLOW	git log --oneline -n 5
+ALLOW	git commit -m "feat: add corpus"
+ALLOW	git commit -am "fix: typo"
+ALLOW	git commit --amend --no-edit
+ALLOW	git push
+ALLOW	git push origin main
+ALLOW	git commit -m "fix: a" && git push
+ALLOW	git commit -m "docs: --no-verify の説明を追記"
+ALLOW	git commit -m "docs: SKIP= と -f の解説"
+ALLOW	git commit -m 'chore: keep --force notes'
+ALLOW	echo "pre-commit uninstall"
+ALLOW	pre-commit run --all-files
+ALLOW	pre-commit install
+DENY	rm -rf .git
+DENY	rm -fr .git
+DENY	rm -rf ./.git
+DENY	rm -rf .git/hooks
+DENY	cd /tmp && rm -rf myrepo/.git
+DENY	rm -rf ".git"
+ALLOW	rm -rf node_modules
+ALLOW	rm -rf build dist
+ALLOW	rm -rf .github/workflows
+ALLOW	git commit -m "docs: rm -rf .git の危険性を追記"
+DENY	dirty	git reset --hard
+DENY	dirty	git reset --hard HEAD~1
+DENY	dirty	git clean -fd
+DENY	dirty	git clean -f
+DENY	dirty	git clean --force -dx
+DENY	dirty	git checkout -- .
+DENY	dirty	git checkout .
+DENY	dirty	git checkout HEAD -- .
+DENY	dirty	git restore .
+DENY	dirty	git restore --worktree .
+DENY	dirty	git restore -SW .
+ALLOW	clean	git reset --hard
+ALLOW	clean	git clean -fd
+ALLOW	clean	git checkout -- .
+ALLOW	clean	git restore .
+ALLOW	dirty	git restore --staged .
+ALLOW	dirty	git restore src/main.py
+ALLOW	dirty	git reset HEAD~1
+ALLOW	dirty	git reset --soft HEAD~1
+ALLOW	dirty	git checkout main
+ALLOW	dirty	git checkout -b feature/x
+ALLOW	dirty	git clean -n
+ALLOW	dirty	git stash
+ALLOW	dirty	git add . && git commit -m "feat: x"
