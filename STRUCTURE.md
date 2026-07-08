@@ -157,6 +157,7 @@
 - `tests/test_check_commit_msg.py` — test_check_commit_msg.py — check_commit_msg.pyの検査2(fix-without-test)回帰テスト
 - `tests/test_check_commit_msg_history.py` — test_check_commit_msg_history.py — check_commit_msg_history.pyの回帰テスト
 - `tests/test_repo_scan_test_patterns.py` — test_repo_scan_test_patterns.py — TEST_PATH_PATTERNSのキット自身デフォルトの回帰テスト
+- `tests/test_session_baseline.py` — test_session_baseline.py — session_baseline.py(SessionStartのsource分岐)の回帰テスト
 
 ## 公開シンボル
 
@@ -514,3 +515,9 @@
 
 ### `tests/test_repo_scan_test_patterns.py`
 - class TestPathPatternsTest
+
+### `tests/test_session_baseline.py`
+- def make_repo
+- def run_hook
+- def baseline_path
+- class SessionBaselineTest

@@ -15,6 +15,21 @@
 #
 # v2.23（G11・言語移行）: SessionStart は1セッション1回のみの発火（編集直後系ホット
 # パスほど頻度は高くないが、他フックとの実装言語統一のため移植する）。
+#
+# v2.25（G7・compact再発火バグ修正）: 上の前提は誤りだった。SessionStart の入力には
+# `source`（"startup" | "resume" | "clear" | "compact"）があり、**compact（要約による
+# 圧縮）でも同じ session_id のまま再発火する**（実測: 同一 session_id の transcript 内で
+# `isCompactSummary` の前後とも sessionId が不変）。この再発火時、その瞬間 dirty だった
+# ファイル（要約直前に AI 自身が編集途中だったもの）が「人間の WIP」として baseline に
+# 上書きされ、以後そのセッションの残り全体でそれらのファイルへの Edit/Write が
+# 誤ってブロックされ続けるバグがあった（§2c 本来の保護対象は人間の並行編集であり、
+# AI 自身の継続作業ではない）。
+#
+# 対処: source=="compact" の時は git status も呼ばず baseline ファイルにも一切
+# 触れない（空文字列で上書きするのも不可——それだと真の startup 時点の正当な
+# baseline 内容を破壊する、今回起きたのと同じ事故になる）。source が取得できない/
+# 想定外の値の場合は安全側に倒し、従来通り baseline を書く（ハーネスの将来変更で
+# source の意味が変わる可能性への保険）。
 
 from __future__ import annotations
 
@@ -70,6 +85,11 @@ def main() -> int:
 
     session_id_raw = payload.get("session_id") or ""
     session_id = SESSION_ID_ALLOWED.sub("", session_id_raw) or "unknown"
+
+    if payload.get("source") == "compact":
+        print("[session-baseline] compact再発火のためbaseline更新をスキップ（既存を保持。"
+              "GUARDRAILS.md §2c v2.25）", file=sys.stderr)
+        return 0
 
     try:
         proc = subprocess.run(["git", "-C", root, "status", "--porcelain"],
