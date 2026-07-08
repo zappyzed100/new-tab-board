@@ -8,6 +8,8 @@ __pycache__/
 .claude/session/
 # red-first 証明の一時 worktree（§5。中断で残骸が出ても dirty 扱いにしない — v2.7）
 .red-first-*/
+# commit-msg段CI再生の一時 worktree（§3.4・§5・v2.25。中断で残骸が出ても dirty 扱いにしない）
+.commit-msg-history-*/
 # <<< guardrails-kit <<<
 
 # --- new-tab-board 固有(プロジェクト自由領域) ---

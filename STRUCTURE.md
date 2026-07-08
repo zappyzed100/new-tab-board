@@ -65,6 +65,7 @@
 
 - `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: GUARDRAILS.md §3.5）
 - `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: GUARDRAILS.md §3.4）
+- `scripts/check_commit_msg_history.py` — check_commit_msg_history.py — commit-msg段のHARD検査をCIでPR範囲に対して再生する
 - `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: GUARDRAILS.md §2）
 - `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: GUARDRAILS.md §5）
 - `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: GUARDRAILS.md §7.5・§3.3）
@@ -153,6 +154,8 @@
 ## `tests/`
 
 - `tests/guard_corpus.tsv`
+- `tests/test_check_commit_msg.py` — test_check_commit_msg.py — check_commit_msg.pyの検査2(fix-without-test)回帰テスト
+- `tests/test_check_commit_msg_history.py` — test_check_commit_msg_history.py — check_commit_msg_history.pyの回帰テスト
 - `tests/test_repo_scan_test_patterns.py` — test_repo_scan_test_patterns.py — TEST_PATH_PATTERNSのキット自身デフォルトの回帰テスト
 
 ## 公開シンボル
@@ -215,6 +218,14 @@
 - def check_feat_test
 - def check_test_shrink
 - def check_commit_size
+- def main
+
+### `scripts/check_commit_msg_history.py`
+- def resolve_rev
+- def all_commits
+- def has_parent
+- class CommitWorktree
+- def check_one
 - def main
 
 ### `scripts/check_guard_corpus.py`
@@ -489,6 +500,17 @@
 - type LocalData
 - type Snapshot
 - type IndexEntry
+
+### `tests/test_check_commit_msg.py`
+- def make_repo
+- def run_in_repo
+- class FixWithoutTestTest
+
+### `tests/test_check_commit_msg_history.py`
+- def make_repo
+- def commit
+- def run_history
+- class CheckCommitMsgHistoryTest
 
 ### `tests/test_repo_scan_test_patterns.py`
 - class TestPathPatternsTest

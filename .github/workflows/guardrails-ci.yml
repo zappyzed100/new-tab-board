@@ -6,6 +6,13 @@
 # `pre-commit run` は既定で pre-commit ステージのみ実行するため、
 # stages: [pre-push] のテスト・解析群は BINDING の独立ジョブで明示的に回す。
 #
+# v2.25（G10・是正）: 上記コメントは stages: [pre-push] の抜けだけを注意していたが、
+# stages: [commit-msg]（check-commit-msg）も同じく `pre-commit run --all-files` には
+# 乗らず、CI に一切再生されていなかった（`pre-commit install` していない環境からの
+# コミットには commit-msg 段の HARD 検査が丸ごと効かない実害があった）。
+# commit-msg-history ジョブが scripts/check_commit_msg_history.py で PR 範囲のコミットを
+# 1つずつ再生し、この抜け穴を塞ぐ。
+#
 # BINDING-SOURCE: ts-react-crx@1
 
 name: CI
@@ -55,6 +62,20 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
+
+  # commit-msg段の再生（§3.4・§5・v2.25）: check-commit-msg は pre-commit install した
+  # ローカル環境でしか発火しないため、PR のコミット範囲を1つずつ一時 worktree で
+  # 再現し check_commit_msg.py を無改造のまま再生する（red-first と同じ流儀）。
+  commit-msg-history:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（§5）
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run scripts/check_commit_msg_history.py --base "${{ github.event.pull_request.base.sha }}"
 
   # ============ BINDING: 言語別テスト・解析・E2E ジョブ（ts-react-crx@1 — §5・§12.4）============
   ts-test:
