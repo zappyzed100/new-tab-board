@@ -81,6 +81,8 @@
 ## `src/`
 
 - `src/background/background.ts` — background.ts — 最小サービスワーカー(拡張機能IDのE2E解決用・インストール時ログ)
+- `src/lib/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
+- `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
@@ -89,7 +91,8 @@
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M1以降で機能を積み上げる)
+- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M2以降で機能を積み上げる)
+- `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
@@ -240,6 +243,14 @@
 - def dart_package_roots
 - def is_kit_source_repo
 
+### `src/lib/bookmarks.ts`
+- function createBookmark
+- function addBookmark
+- function updateBookmark
+- function removeBookmark
+- function sortedBookmarks
+- function reorderBookmarks
+
 ### `src/lib/clock.ts`
 - function now
 
@@ -264,6 +275,9 @@
 
 ### `src/newtab/App.tsx`
 - function App
+
+### `src/newtab/components/BookmarkGrid.tsx`
+- function BookmarkGrid
 
 ### `src/types.ts`
 - type Bookmark
