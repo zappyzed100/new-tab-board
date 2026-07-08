@@ -85,14 +85,21 @@
 - `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
 - `src/lib/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
+- `src/lib/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
+- `src/lib/calendarMonth.ts` — calendarMonth.ts — 小型カレンダーの月グリッド構築 + Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
+- `src/lib/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
+- `src/lib/clockFormat.ts` — clockFormat.ts — 時計/日付表示用のフォーマット(純関数。SPEC.md §4.8)
 - `src/lib/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
 - `src/lib/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
 - `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
+- `src/lib/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
+- `src/lib/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
+- `src/lib/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
 - `src/lib/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -113,6 +120,8 @@
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
+- `src/lib/theme.ts` — theme.ts — テーマ設定(light/dark/auto)の解決(純関数。SPEC.md §4.8)
 - `src/lib/todo.test.ts` — todo.test.ts — todo.ts(横断TODO集約)の単体テスト
 - `src/lib/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
@@ -122,19 +131,23 @@
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
+- `src/newtab/components/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
+- `src/newtab/components/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作(SPEC.md §4.7・§4.10-a)
 - `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
+- `src/newtab/components/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
 - `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/Omnibar.tsx` — Omnibar.tsx — クイック検索バー(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
 - `src/newtab/components/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
+- `src/newtab/components/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
-- `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
+- `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージ・APIのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
 ## `tests/`
@@ -296,8 +309,16 @@
 - function evaluateExpression
 - function evaluateLineIfCalculator
 
+### `src/lib/calendarMonth.ts`
+- type CalendarDay
+- function buildMonthGrid
+- function buildGCalUrl
+
 ### `src/lib/clock.ts`
 - function now
+
+### `src/lib/clockFormat.ts`
+- function formatClock
 
 ### `src/lib/commandPalette.ts`
 - type CommandItem
@@ -316,6 +337,17 @@
 ### `src/lib/diff.ts`
 - type DiffPart
 - function computeDiff
+
+### `src/lib/exportImport.ts`
+- const EXPORT_VERSION
+- type ExportPayload
+- function buildExportPayload
+- function serializeExport
+- function parseImportPayload
+
+### `src/lib/fileSystem.ts`
+- function pickAndReadTextFile
+- function exportNotesToFolder
 
 ### `src/lib/gzip.ts`
 - function gzipCompress
@@ -374,6 +406,9 @@
 ### `src/lib/tags.ts`
 - function extractTags
 
+### `src/lib/theme.ts`
+- function resolveTheme
+
 ### `src/lib/todo.ts`
 - type AggregatedTodo
 - type TodoNote
@@ -399,8 +434,14 @@
 ### `src/newtab/components/BookmarkGrid.tsx`
 - function BookmarkGrid
 
+### `src/newtab/components/Clock.tsx`
+- function Clock
+
 ### `src/newtab/components/CommandPalette.tsx`
 - function CommandPalette
+
+### `src/newtab/components/DataPanel.tsx`
+- function DataPanel
 
 ### `src/newtab/components/DiffView.tsx`
 - function DiffView
@@ -410,6 +451,9 @@
 
 ### `src/newtab/components/MarkdownPreview.tsx`
 - function MarkdownPreview
+
+### `src/newtab/components/MiniCalendar.tsx`
+- function MiniCalendar
 
 ### `src/newtab/components/NoteTabs.tsx`
 - function NoteTabs
@@ -428,6 +472,9 @@
 
 ### `src/newtab/components/SnapshotScheduler.tsx`
 - function SnapshotScheduler
+
+### `src/newtab/components/ThemeToggle.tsx`
+- function ThemeToggle
 
 ### `src/newtab/components/TodoPanel.tsx`
 - function TodoPanel

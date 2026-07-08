@@ -2,19 +2,25 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { BacklinksPanel } from "./components/BacklinksPanel";
 import { BookmarkGrid } from "./components/BookmarkGrid";
+import { Clock } from "./components/Clock";
 import { CommandPalette } from "./components/CommandPalette";
+import { DataPanel } from "./components/DataPanel";
+import { MiniCalendar } from "./components/MiniCalendar";
 import { NoteTabs } from "./components/NoteTabs";
 import { Omnibar } from "./components/Omnibar";
 import { ShortcutsModal } from "./components/ShortcutsModal";
 import { SnapshotScheduler } from "./components/SnapshotScheduler";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { sortedBookmarks } from "../lib/bookmarks";
+import { pickAndReadTextFile } from "../lib/fileSystem";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage";
-import { updateNote, sortedNotes } from "../lib/notes";
+import { addNote, createNote, sortedNotes, updateNote } from "../lib/notes";
 import {
   buildBookmarkJumpShortcuts,
   buildNoteJumpShortcuts,
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts";
+import { resolveTheme } from "../lib/theme";
 import { forceSnapshot } from "../lib/useSnapshotScheduler";
 import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, Note, Settings } from "../types";

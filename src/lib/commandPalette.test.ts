@@ -18,6 +18,13 @@ describe("buildCommandItems", () => {
       { type: "applaunch", id: "a1", label: "code", url: "vscode://" },
     ]);
   });
+
+  it("固定アクション(ファイルを開く等)を末尾に追加できる", () => {
+    const items = buildCommandItems(notes, bookmarks, appLaunches, [
+      { id: "open-file", label: "ファイルを開く" },
+    ]);
+    expect(items.at(-1)).toEqual({ type: "action", id: "open-file", label: "ファイルを開く" });
+  });
 });
 
 describe("filterCommandItems", () => {

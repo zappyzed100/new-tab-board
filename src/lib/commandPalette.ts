@@ -4,13 +4,15 @@ import type { AppLaunch, Bookmark, Note } from "../types";
 export type CommandItem =
   | { type: "note"; id: string; label: string }
   | { type: "bookmark"; id: string; label: string; url: string }
-  | { type: "applaunch"; id: string; label: string; url: string };
+  | { type: "applaunch"; id: string; label: string; url: string }
+  | { type: "action"; id: string; label: string };
 
-/** ノート切替・ブックマーク遷移・アプリ起動を1つの候補リストに統合する。 */
+/** ノート切替・ブックマーク遷移・アプリ起動・(ファイルを開く等の)固定アクションを1つの候補リストに統合する。 */
 export function buildCommandItems(
   notes: Note[],
   bookmarks: Bookmark[],
   appLaunches: AppLaunch[],
+  actions: { id: string; label: string }[] = [],
 ): CommandItem[] {
   return [
     ...notes.map((n): CommandItem => ({ type: "note", id: n.id, label: n.title })),
@@ -26,6 +28,7 @@ export function buildCommandItems(
       label: a.alias,
       url: a.scheme,
     })),
+    ...actions.map((a): CommandItem => ({ type: "action", id: a.id, label: a.label })),
   ];
 }
 

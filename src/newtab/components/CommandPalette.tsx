@@ -9,8 +9,11 @@ type Props = {
   appLaunches: AppLaunch[];
   openIn: Settings["openIn"];
   onSelectNote: (noteId: string) => void;
+  onOpenFile: () => void;
   onClose: () => void;
 };
+
+const ACTIONS = [{ id: "open-file", label: "ファイルを開く" }];
 
 export function CommandPalette({
   notes,
@@ -18,13 +21,14 @@ export function CommandPalette({
   appLaunches,
   openIn,
   onSelectNote,
+  onOpenFile,
   onClose,
 }: Props) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
   const items = useMemo(
-    () => buildCommandItems(notes, bookmarks, appLaunches),
+    () => buildCommandItems(notes, bookmarks, appLaunches, ACTIONS),
     [notes, bookmarks, appLaunches],
   );
   const filtered = useMemo(() => filterCommandItems(items, query), [items, query]);
@@ -35,6 +39,8 @@ export function CommandPalette({
     } else if (item.type === "bookmark") {
       if (openIn === "new") window.open(item.url, "_blank", "noopener");
       else window.location.href = item.url;
+    } else if (item.type === "action") {
+      if (item.id === "open-file") onOpenFile();
     } else {
       window.location.href = item.url;
     }
