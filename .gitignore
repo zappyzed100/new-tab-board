@@ -9,3 +9,12 @@ __pycache__/
 # red-first 証明の一時 worktree（§5。中断で残骸が出ても dirty 扱いにしない — v2.7）
 .red-first-*/
 # <<< guardrails-kit <<<
+
+# --- new-tab-board 固有(プロジェクト自由領域) ---
+node_modules/
+dist/
+playwright-report/
+test-results/
+.pw-user-data/
+.time-freeze.json
+

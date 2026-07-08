@@ -1,0 +1,30 @@
+// eslint.config.js — lint昇格の設定(GUARDRAILS.md §8.1・bindings/catalog.md ts-react-crx@1)
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import globals from "globals";
+
+export default tseslint.config(
+  { ignores: ["dist/**", "node_modules/**", "playwright-report/**", "test-results/**"] },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node, chrome: "readonly" },
+    },
+    rules: {
+      "no-console": "error",
+      "no-empty": "error",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+    },
+  },
+  {
+    // ログの単一出口(GUARDRAILS.md §8.2)のみ console 呼び出しを許可する
+    files: ["src/lib/log.ts"],
+    rules: { "no-console": "off" },
+  },
+  {
+    files: ["e2e/**/*.ts", "**/*.test.ts", "**/*.test.tsx"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+);

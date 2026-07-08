@@ -1,0 +1,8 @@
+node_modules
+dist
+playwright-report
+test-results
+# キットの正本文書・設定はプロジェクト側のフォーマッタで書き換えない(GUARDRAILS.md §5 の分離)
+*.md
+*.yml
+*.yaml

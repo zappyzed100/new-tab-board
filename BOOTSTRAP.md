@@ -12,7 +12,7 @@
 | Step | 内容 | 状態 | 備考 |
 |---|---|---|---|
 | 0 | 入力の確定（採用列・刻印・表A/B/C/D） | ✅ | 採用列: ts-react-crx@1（bindings/catalog.md 新設）。確率的コンポーネント無・外部I/Oは chrome.storage.local のみ |
-| 1 | 骨格と文書（AGENTS.md / CLAUDE.md / 正本複製） | 🚧 | |
+| 1 | 骨格と文書（AGENTS.md / CLAUDE.md / 正本複製） | ✅ | 章14本存在・★/TODO/固有名詞C残置0件をgrepで実測。tsc/vitest/eslint/prettier/build実測通過 |
 | 2 | uv とスクリプト（索引の決定性） | 🚧 | |
 | 3 | pre-commit 導入（ここから門の下） | 🚧 | |
 | 4 | 迂回防止（guard・コーパス・probe・Stop） | 🚧 | |

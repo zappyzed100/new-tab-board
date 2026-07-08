@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "New Tab Board",
+  "version": "0.1.0",
+  "description": "新しいタブをカラム/カードのボードに置き換える拡張機能",
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "permissions": ["storage"]
+}
