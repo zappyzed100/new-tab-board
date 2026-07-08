@@ -1,32 +1,62 @@
-// storage.ts — chrome.storage.local ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-import type { Board } from "./board";
+// storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+import type { AppLaunch, Bookmark, Note, Settings } from "../types";
 import { logOp } from "./log";
 
-const STORAGE_KEY = "board";
+const SYNC_KEY = "syncData";
+const LOCAL_KEY = "localData";
 
-function hasChromeStorage(): boolean {
-  return typeof chrome !== "undefined" && !!chrome.storage?.local;
+export const DEFAULT_SETTINGS: Settings = {
+  openIn: "same",
+  theme: "auto",
+  searchEngine: "https://www.google.com/search?q=%s",
+};
+
+type SyncShape = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
+type LocalShape = { notes: Note[] };
+
+function hasChromeStorage(area: "sync" | "local"): boolean {
+  return typeof chrome !== "undefined" && !!chrome.storage?.[area];
 }
 
-export async function loadBoard(): Promise<Board | null> {
+async function readArea<T>(area: "sync" | "local", key: string, fallback: T): Promise<T> {
   const started = Date.now();
-  if (hasChromeStorage()) {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    logOp("storage", "load", "chrome.storage.local", { elapsedMs: Date.now() - started });
-    return (result[STORAGE_KEY] as Board | undefined) ?? null;
+  if (hasChromeStorage(area)) {
+    const result = await chrome.storage[area].get(key);
+    logOp("storage", "load", `chrome.storage.${area}`, { elapsedMs: Date.now() - started });
+    return (result[key] as T | undefined) ?? fallback;
   }
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  logOp("storage", "load", "localStorage(fallback)", { elapsedMs: Date.now() - started });
-  return raw ? (JSON.parse(raw) as Board) : null;
+  const raw = window.localStorage.getItem(`${area}:${key}`);
+  logOp("storage", "load", `localStorage(fallback:${area})`, { elapsedMs: Date.now() - started });
+  return raw ? (JSON.parse(raw) as T) : fallback;
 }
 
-export async function saveBoard(board: Board): Promise<void> {
+async function writeArea<T>(area: "sync" | "local", key: string, value: T): Promise<void> {
   const started = Date.now();
-  if (hasChromeStorage()) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: board });
-    logOp("storage", "save", "chrome.storage.local", { elapsedMs: Date.now() - started });
+  if (hasChromeStorage(area)) {
+    await chrome.storage[area].set({ [key]: value });
+    logOp("storage", "save", `chrome.storage.${area}`, { elapsedMs: Date.now() - started });
     return;
   }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
-  logOp("storage", "save", "localStorage(fallback)", { elapsedMs: Date.now() - started });
+  window.localStorage.setItem(`${area}:${key}`, JSON.stringify(value));
+  logOp("storage", "save", `localStorage(fallback:${area})`, { elapsedMs: Date.now() - started });
+}
+
+export async function loadSyncData(): Promise<SyncShape> {
+  return readArea<SyncShape>("sync", SYNC_KEY, {
+    bookmarks: [],
+    appLaunches: [],
+    settings: DEFAULT_SETTINGS,
+  });
+}
+
+export async function saveSyncData(data: SyncShape): Promise<void> {
+  await writeArea("sync", SYNC_KEY, data);
+}
+
+export async function loadLocalData(): Promise<LocalShape> {
+  return readArea<LocalShape>("local", LOCAL_KEY, { notes: [] });
+}
+
+export async function saveLocalData(data: LocalShape): Promise<void> {
+  await writeArea("local", LOCAL_KEY, data);
 }

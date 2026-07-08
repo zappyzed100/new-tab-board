@@ -13,6 +13,7 @@
 - `AGENTS.md`
 - `CLAUDE.md`
 - `README.md`
+- `SPEC.md`
 - `eslint.config.js`
 - `index.html`
 - `package-lock.json`
@@ -22,6 +23,7 @@
 - `tsconfig.json`
 - `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)とbackground service workerのビルド設定
 - `vitest.config.ts` — vitest.config.ts — 単体テスト設定(e2e/はPlaywrightの領域なのでvitestの収集対象から除外)
+- `vitest.setup.ts` — vitest.setup.ts — vitest全体のセットアップ(IndexedDBをfake-indexeddbでpolyfill)
 
 ## `.claude/`
 
@@ -52,7 +54,7 @@
 ## `e2e/`
 
 - `e2e/README.md`
-- `e2e/board.spec.ts` — board.spec.ts — 新しいタブボードのE2E(拡張機能を実際にロードして検証。GUARDRAILS.md §12.4)
+- `e2e/board.spec.ts` — board.spec.ts — 新しいタブの最小スモークE2E(M0の一時的なプレースホルダ。M9で機能テストに置き換える)
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 
 ## `public/`
@@ -79,15 +81,17 @@
 ## `src/`
 
 - `src/background/background.ts` — background.ts — 最小サービスワーカー(拡張機能IDのE2E解決用・インストール時ログ)
-- `src/lib/board.test.ts` — board.test.ts — board.ts の純粋関数の単体テスト
-- `src/lib/board.ts` — board.ts — ボードの純粋なデータモデルと更新関数(I/Oを持たない)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
+- `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
+- `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
-- `src/lib/storage.ts` — storage.ts — chrome.storage.local ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(ボードUI)
+- `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
+- `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+- `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M1以降で機能を積み上げる)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
+- `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
 ## `tests/`
 
@@ -236,25 +240,37 @@
 - def dart_package_roots
 - def is_kit_source_repo
 
-### `src/lib/board.ts`
-- type Card
-- type Column
-- type Board
-- function createEmptyBoard
-- function addColumn
-- function removeColumn
-- function addCard
-- function removeCard
-
 ### `src/lib/clock.ts`
 - function now
+
+### `src/lib/db.ts`
+- function putSnapshot
+- function getSnapshotsByNote
+- function getSnapshot
+- function deleteSnapshot
+- function putIndexEntry
+- function getIndexEntry
+- function getAllIndexEntries
 
 ### `src/lib/log.ts`
 - function logOp
 
 ### `src/lib/storage.ts`
-- function loadBoard
-- function saveBoard
+- const DEFAULT_SETTINGS
+- function loadSyncData
+- function saveSyncData
+- function loadLocalData
+- function saveLocalData
 
 ### `src/newtab/App.tsx`
 - function App
+
+### `src/types.ts`
+- type Bookmark
+- type AppLaunch
+- type Settings
+- type SyncData
+- type Note
+- type LocalData
+- type Snapshot
+- type IndexEntry
