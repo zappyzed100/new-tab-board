@@ -87,6 +87,10 @@
 - `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
+- `src/lib/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
+- `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
+- `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
+- `src/lib/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
@@ -95,11 +99,13 @@
 - `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 - `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
+- `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
@@ -271,6 +277,19 @@
 - function getIndexEntry
 - function getAllIndexEntries
 
+### `src/lib/gzip.ts`
+- function gzipCompress
+- function gzipDecompress
+
+### `src/lib/history.ts`
+- const MIN_FLOOR_MS
+- const MAX_CAP_MS
+- const CHANGE_THRESHOLD_CHARS
+- type SnapshotGateInput
+- function shouldSnapshot
+- function exceedsChangeThreshold
+- function exceedsMaxCap
+
 ### `src/lib/log.ts`
 - function logOp
 
@@ -292,6 +311,9 @@
 ### `src/lib/tags.ts`
 - function extractTags
 
+### `src/lib/useSnapshotScheduler.ts`
+- function useSnapshotScheduler
+
 ### `src/newtab/App.tsx`
 - function App
 
@@ -306,6 +328,9 @@
 
 ### `src/newtab/components/Notepad.tsx`
 - function Notepad
+
+### `src/newtab/components/SnapshotScheduler.tsx`
+- function SnapshotScheduler
 
 ### `src/types.ts`
 - type Bookmark

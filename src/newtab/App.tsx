@@ -2,6 +2,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { BookmarkGrid } from "./components/BookmarkGrid";
 import { NoteTabs } from "./components/NoteTabs";
+import { SnapshotScheduler } from "./components/SnapshotScheduler";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage";
 import { updateNote } from "../lib/notes";
 import type { AppLaunch, Bookmark, Note, Settings } from "../types";
@@ -70,6 +71,11 @@ export function App() {
       />
       {activeNote ? (
         <div data-testid="note-editor-area">
+          <SnapshotScheduler
+            key={activeNote.id}
+            noteId={activeNote.id}
+            content={activeNote.content}
+          />
           <button
             type="button"
             data-testid="toggle-preview"
