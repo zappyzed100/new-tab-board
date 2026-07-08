@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -119,6 +120,10 @@ def assert_step_2(root: Path, ctx: dict) -> list[str]:
 
 
 def assert_step_3(root: Path, ctx: dict) -> list[str]:
+    if os.environ.get("CI"):
+        # CI のチェックアウトは pre-commit install を実行しないため .git/hooks/ に
+        # シムが無いのが正常（check_structure.py の check_hooks_installed と同じ整理）。
+        return []
     cfg = rs.read_text(root, ".pre-commit-config.yaml") if ".pre-commit-config.yaml" in ctx["tracked"] else ""
     m = re.search(r"default_install_hook_types:\s*\[([^\]]*)\]", cfg)
     types = [t.strip() for t in (m.group(1).split(",") if m else []) if t.strip()]
