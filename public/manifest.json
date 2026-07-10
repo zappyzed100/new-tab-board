@@ -11,5 +11,9 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
-  "permissions": ["storage"]
+  "permissions": ["storage", "identity"],
+  "oauth2": {
+    "client_id": "775491052559-3nj5soaef2o5uqu5r2h79eltg3r07vsb.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+  }
 }

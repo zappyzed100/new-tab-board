@@ -98,9 +98,15 @@
 - `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
 - `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
+- `src/lib/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
+- `src/lib/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
+- `src/lib/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
+- `src/lib/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
 - `src/lib/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
+- `src/lib/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
+- `src/lib/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
 - `src/lib/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -127,6 +133,7 @@
 - `src/lib/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
 - `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
+- `src/lib/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
@@ -351,6 +358,16 @@
 - type DiffPart
 - function computeDiff
 
+### `src/lib/drive.ts`
+- type FetchLike
+- function findFileForNote
+- function uploadNote
+
+### `src/lib/driveSync.ts`
+- type SyncResult
+- type SyncDeps
+- function syncNoteToDrive
+
 ### `src/lib/exportImport.ts`
 - const EXPORT_VERSION
 - type ExportPayload
@@ -361,6 +378,10 @@
 ### `src/lib/fileSystem.ts`
 - function pickAndReadTextFile
 - function exportNotesToFolder
+
+### `src/lib/googleAuth.ts`
+- function getAuthToken
+- function invalidateToken
 
 ### `src/lib/gzip.ts`
 - function gzipCompress
@@ -430,6 +451,10 @@
 
 ### `src/lib/tokenize.ts`
 - function tokenize
+
+### `src/lib/useDriveSync.ts`
+- type DriveSyncStatus
+- function useDriveSync
 
 ### `src/lib/useGlobalShortcuts.ts`
 - function useGlobalShortcuts

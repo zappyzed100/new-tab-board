@@ -32,6 +32,8 @@ export type Note = {
   content: string;
   pinned: boolean;
   order: number;
+  driveFileId?: string;
+  lastSyncedAt?: number;
 };
 
 export type LocalData = {

@@ -22,8 +22,17 @@ import {
 } from "../lib/shortcuts";
 import { resolveTheme } from "../lib/theme";
 import { forceSnapshot } from "../lib/useSnapshotScheduler";
+import { useDriveSync } from "../lib/useDriveSync";
 import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, Note, Settings } from "../types";
+
+const DRIVE_SYNC_LABEL: Record<string, string> = {
+  idle: "",
+  syncing: "同期中…",
+  synced: "☁同期済",
+  unauthenticated: "Drive未認証",
+  error: "同期エラー",
+};
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
 
@@ -79,6 +88,15 @@ export function App() {
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
   const activeNote = notes?.find((n) => n.id === activeNoteId) ?? null;
 
+  const { status: driveSyncStatus, syncNow: syncDriveNow } = useDriveSync(
+    activeNote,
+    (driveFileId, lastSyncedAt) => {
+      if (notes && activeNote) {
+        updateNotes(updateNote(notes, activeNote.id, { driveFileId, lastSyncedAt }));
+      }
+    },
+  );
+
   const shortcutRegistry = useMemo(
     () => [
       ...SHORTCUT_REGISTRY,
@@ -94,6 +112,7 @@ export function App() {
     cheatSheet: () => setShowShortcutsModal(true),
     immediateSnapshot: () => {
       if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
+      syncDriveNow(true);
     },
     ...Object.fromEntries(
       orderedNotes.map((n, i) => [`noteJump-${i}`, () => setActiveNoteId(n.id)]),
@@ -189,6 +208,9 @@ export function App() {
         onNotesChange={updateNotes}
         onSelect={setActiveNoteId}
       />
+      {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
+        <span data-testid="drive-sync-status">{DRIVE_SYNC_LABEL[driveSyncStatus]}</span>
+      ) : null}
       <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
         {showSearch ? "検索を閉じる" : "検索⌘F"}
       </button>
