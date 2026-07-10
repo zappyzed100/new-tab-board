@@ -56,14 +56,17 @@ async function pollNextEvent(): Promise<void> {
 async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null): Promise<void> {
   if (!event) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
+    logOp("background", "pre-event-alarm-clear", "no next event");
     return;
   }
   const when = resolveAlarmTime(event.startsAt, clockNow());
   if (when === null) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
+    logOp("background", "pre-event-alarm-clear", `startsAt=${event.startsAt} (既に開始済み)`);
     return;
   }
   chrome.alarms.create(PRE_EVENT_ALARM_NAME, { when });
+  logOp("background", "pre-event-alarm-schedule", `when=${when}`);
 }
 
 async function fireAlarm(): Promise<void> {

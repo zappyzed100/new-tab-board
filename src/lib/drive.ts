@@ -17,7 +17,10 @@ export async function findFileForNote(
   const res = await fetchImpl(`${FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id)`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Drive検索失敗: HTTP ${res.status}`);
+  if (!res.ok) {
+    logOp("drive", "find-error", `note=${noteId} status=${res.status}`);
+    throw new Error(`Drive検索失敗: HTTP ${res.status}`);
+  }
   const data = (await res.json()) as { files?: { id: string }[] };
   return data.files?.[0]?.id ?? null;
 }
@@ -53,7 +56,10 @@ export async function uploadNote(
     },
     body,
   });
-  if (!res.ok) throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
+  if (!res.ok) {
+    logOp("drive", "upload-error", `note=${note.id} status=${res.status}`);
+    throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
+  }
   const data = (await res.json()) as { id: string };
   logOp(
     "drive",

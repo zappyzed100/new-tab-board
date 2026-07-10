@@ -30,7 +30,10 @@ export async function fetchNextEvent(
   const res = await fetchImpl(`${EVENTS_URL}?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Calendar取得失敗: HTTP ${res.status}`);
+  if (!res.ok) {
+    logOp("calendar", "fetch-error", `status=${res.status}`);
+    throw new Error(`Calendar取得失敗: HTTP ${res.status}`);
+  }
   const data = (await res.json()) as { items?: GCalEvent[] };
   const items = data.items ?? [];
   // start.dateTimeが無く start.date のみ = 終日予定(SPEC.md §4.9で対象外)
