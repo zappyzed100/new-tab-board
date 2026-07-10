@@ -183,6 +183,7 @@
 - `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
+- `src/newtab/styles.css`
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージ・APIのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)

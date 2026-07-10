@@ -42,7 +42,9 @@ type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Se
 
 // CodeMirror本体はサイズが大きいため動的importで分割し、初期描画をブロックしない
 // (SPEC.md §8「新規タブは即座に描画」)。プレビュー用のmarkdown-it/DOMPurifyも同様。
-const Notepad = lazy(() => import("./components/notes/Notepad").then((m) => ({ default: m.Notepad })));
+const Notepad = lazy(() =>
+  import("./components/notes/Notepad").then((m) => ({ default: m.Notepad })),
+);
 const MarkdownPreview = lazy(() =>
   import("./components/notes/MarkdownPreview").then((m) => ({ default: m.MarkdownPreview })),
 );
@@ -256,65 +258,84 @@ export function App() {
           アラーム停止
         </button>
       ) : null}
-      <Clock />
-      <ThemeToggle
-        theme={sync.settings.theme}
-        onThemeChange={(theme) => updateSettings({ theme })}
-      />
-      <Omnibar bookmarks={sync.bookmarks} appLaunches={sync.appLaunches} settings={sync.settings} />
-      <BookmarkGrid
-        bookmarks={sync.bookmarks}
-        openIn={sync.settings.openIn}
-        onBookmarksChange={updateBookmarks}
-      />
-      <NoteTabs
-        notes={notes}
-        activeNoteId={activeNoteId}
-        onNotesChange={updateNotes}
-        onSelect={setActiveNoteId}
-      />
-      {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-        <span data-testid="drive-sync-status">{DRIVE_SYNC_LABEL[driveSyncStatus]}</span>
-      ) : null}
-      <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
-        {showSearch ? "検索を閉じる" : "検索⌘F"}
-      </button>
-      <button type="button" data-testid="toggle-todos" onClick={() => setShowTodos((v) => !v)}>
-        {showTodos ? "TODOを閉じる" : "TODO一覧"}
-      </button>
-      <button
-        type="button"
-        data-testid="open-command-palette"
-        onClick={() => setShowCommandPalette(true)}
-      >
-        コマンド⌘K
-      </button>
-      <button
-        type="button"
-        data-testid="open-shortcuts-modal"
-        onClick={() => setShowShortcutsModal(true)}
-      >
-        ショートカット一覧(?)
-      </button>
-      <button
-        type="button"
-        data-testid="toggle-calendar"
-        onClick={() => setShowCalendar((v) => !v)}
-      >
-        {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
-      </button>
-      <button type="button" data-testid="toggle-data" onClick={() => setShowData((v) => !v)}>
-        {showData ? "データ管理を閉じる" : "データ管理"}
-      </button>
-      {showCalendar ? <MiniCalendar /> : null}
-      {showData ? (
-        <DataPanel
-          sync={sync}
-          notes={notes}
-          onImportData={importData}
-          onOpenFileAsNote={openFileAsNote}
+
+      <header className="app-header">
+        <Clock />
+        <Omnibar
+          bookmarks={sync.bookmarks}
+          appLaunches={sync.appLaunches}
+          settings={sync.settings}
         />
-      ) : null}
+        <ThemeToggle
+          theme={sync.settings.theme}
+          onThemeChange={(theme) => updateSettings({ theme })}
+        />
+      </header>
+
+      <nav className="app-toolbar">
+        <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
+          {showSearch ? "検索を閉じる" : "検索⌘F"}
+        </button>
+        <button type="button" data-testid="toggle-todos" onClick={() => setShowTodos((v) => !v)}>
+          {showTodos ? "TODOを閉じる" : "TODO一覧"}
+        </button>
+        <button
+          type="button"
+          data-testid="open-command-palette"
+          onClick={() => setShowCommandPalette(true)}
+        >
+          コマンド⌘K
+        </button>
+        <button
+          type="button"
+          data-testid="open-shortcuts-modal"
+          onClick={() => setShowShortcutsModal(true)}
+        >
+          ショートカット一覧(?)
+        </button>
+        <button
+          type="button"
+          data-testid="toggle-calendar"
+          onClick={() => setShowCalendar((v) => !v)}
+        >
+          {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
+        </button>
+        <button type="button" data-testid="toggle-data" onClick={() => setShowData((v) => !v)}>
+          {showData ? "データ管理を閉じる" : "データ管理"}
+        </button>
+        {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
+          <span data-testid="drive-sync-status">{DRIVE_SYNC_LABEL[driveSyncStatus]}</span>
+        ) : null}
+      </nav>
+
+      <div className="app-overlays">
+        {showCalendar ? <MiniCalendar /> : null}
+        {showData ? (
+          <DataPanel
+            sync={sync}
+            notes={notes}
+            onImportData={importData}
+            onOpenFileAsNote={openFileAsNote}
+          />
+        ) : null}
+        {showSearch ? (
+          <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+            <SearchPanel
+              notes={notes}
+              onSelectNote={(noteId) => {
+                setActiveNoteId(noteId);
+                setShowSearch(false);
+              }}
+            />
+          </Suspense>
+        ) : null}
+        {showTodos ? (
+          <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
+            <TodoPanel notes={notes} onSelectNote={setActiveNoteId} />
+          </Suspense>
+        ) : null}
+      </div>
+
       {showCommandPalette ? (
         <CommandPalette
           notes={notes}
@@ -333,72 +354,81 @@ export function App() {
       {showShortcutsModal ? (
         <ShortcutsModal registry={shortcutRegistry} onClose={() => setShowShortcutsModal(false)} />
       ) : null}
-      {showSearch ? (
-        <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-          <SearchPanel
+
+      <div className="app-main">
+        <BookmarkGrid
+          bookmarks={sync.bookmarks}
+          openIn={sync.settings.openIn}
+          onBookmarksChange={updateBookmarks}
+        />
+        <section className="app-notes">
+          <NoteTabs
             notes={notes}
-            onSelectNote={(noteId) => {
-              setActiveNoteId(noteId);
-              setShowSearch(false);
-            }}
+            activeNoteId={activeNoteId}
+            onNotesChange={updateNotes}
+            onSelect={setActiveNoteId}
           />
-        </Suspense>
-      ) : null}
-      {showTodos ? (
-        <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
-          <TodoPanel notes={notes} onSelectNote={setActiveNoteId} />
-        </Suspense>
-      ) : null}
-      {activeNote ? (
-        <div data-testid="note-editor-area">
-          <SnapshotScheduler
-            key={activeNote.id}
-            noteId={activeNote.id}
-            content={activeNote.content}
-          />
-          <button
-            type="button"
-            data-testid="toggle-preview"
-            onClick={() => setShowPreview((v) => !v)}
-          >
-            {showPreview ? "編集に戻る" : "プレビュー"}
-          </button>
-          <button
-            type="button"
-            data-testid="toggle-history"
-            onClick={() => setShowHistory((v) => !v)}
-          >
-            {showHistory ? "履歴を閉じる" : "履歴🕑"}
-          </button>
-          <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
-            {showPreview ? (
-              <MarkdownPreview content={activeNote.content} onNavigateToNote={selectNoteByTitle} />
-            ) : (
-              <Notepad
-                key={`editor-${activeNote.id}-${restoreCounter}`}
-                content={activeNote.content}
-                onContentChange={(content) =>
-                  updateNotes(updateNote(notes, activeNote.id, { content }))
-                }
-              />
-            )}
-            {showHistory ? (
-              <HistoryPanel
-                key={`history-${activeNote.id}`}
+          {activeNote ? (
+            <div data-testid="note-editor-area">
+              <SnapshotScheduler
+                key={activeNote.id}
                 noteId={activeNote.id}
-                currentContent={activeNote.content}
-                onRestore={(content) => {
-                  updateNotes(updateNote(notes, activeNote.id, { content }));
-                  setRestoreCounter((c) => c + 1);
-                }}
+                content={activeNote.content}
               />
-            ) : null}
-          </Suspense>
-          <BacklinksPanel notes={notes} activeNote={activeNote} onSelectNote={setActiveNoteId} />
-        </div>
-      ) : (
-        <div data-testid="no-notes">ノートがありません</div>
-      )}
+              <div className="app-toolbar">
+                <button
+                  type="button"
+                  data-testid="toggle-preview"
+                  onClick={() => setShowPreview((v) => !v)}
+                >
+                  {showPreview ? "編集に戻る" : "プレビュー"}
+                </button>
+                <button
+                  type="button"
+                  data-testid="toggle-history"
+                  onClick={() => setShowHistory((v) => !v)}
+                >
+                  {showHistory ? "履歴を閉じる" : "履歴🕑"}
+                </button>
+              </div>
+              <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
+                {showPreview ? (
+                  <MarkdownPreview
+                    content={activeNote.content}
+                    onNavigateToNote={selectNoteByTitle}
+                  />
+                ) : (
+                  <Notepad
+                    key={`editor-${activeNote.id}-${restoreCounter}`}
+                    content={activeNote.content}
+                    onContentChange={(content) =>
+                      updateNotes(updateNote(notes, activeNote.id, { content }))
+                    }
+                  />
+                )}
+                {showHistory ? (
+                  <HistoryPanel
+                    key={`history-${activeNote.id}`}
+                    noteId={activeNote.id}
+                    currentContent={activeNote.content}
+                    onRestore={(content) => {
+                      updateNotes(updateNote(notes, activeNote.id, { content }));
+                      setRestoreCounter((c) => c + 1);
+                    }}
+                  />
+                ) : null}
+              </Suspense>
+              <BacklinksPanel
+                notes={notes}
+                activeNote={activeNote}
+                onSelectNote={setActiveNoteId}
+              />
+            </div>
+          ) : (
+            <div data-testid="no-notes">ノートがありません</div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }
