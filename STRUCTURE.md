@@ -58,7 +58,13 @@
 
 - `e2e/README.md`
 - `e2e/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
+- `e2e/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)+オムニバーのE2E(SPEC.md §4.4・§4.5)
+- `e2e/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
+- `e2e/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/ピン留め/削除E2E(SPEC.md §4.2)
+- `e2e/search-todo-backlinks.spec.ts` — search-todo-backlinks.spec.ts — 全文検索/横断TODO/バックリンクのE2E(SPEC.md §7 v1確定)
+- `e2e/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 
 ## `public/`
 
@@ -111,6 +117,7 @@
 - `src/lib/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
+- `src/lib/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(File System Access APIラッパー)の単体テスト
 - `src/lib/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
 - `src/lib/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
 - `src/lib/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
@@ -150,6 +157,7 @@
 - `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
 - `src/lib/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
+- `src/lib/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
 - `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
