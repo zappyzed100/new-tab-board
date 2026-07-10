@@ -43,6 +43,7 @@ export type LocalData = {
     startsAt: number;
     fetchedAt: number;
   };
+  alarmActive?: boolean;
 };
 
 export type Snapshot = {

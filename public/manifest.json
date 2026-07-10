@@ -11,7 +11,8 @@
     "service_worker": "assets/background.js",
     "type": "module"
   },
-  "permissions": ["storage", "identity", "alarms"],
+  "icons": { "128": "icon128.png" },
+  "permissions": ["storage", "identity", "alarms", "notifications", "offscreen"],
   "oauth2": {
     "client_id": "775491052559-3nj5soaef2o5uqu5r2h79eltg3r07vsb.apps.googleusercontent.com",
     "scopes": [

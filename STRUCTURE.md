@@ -16,12 +16,13 @@
 - `SPEC.md`
 - `eslint.config.js`
 - `index.html`
+- `offscreen.html`
 - `package-lock.json`
 - `package.json`
 - `plan.md`
 - `playwright.config.ts` — playwright.config.ts — E2E設定(拡張機能ロードにはheaded実行が必須 — GUARDRAILS.md §11)
 - `tsconfig.json`
-- `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)とbackground service workerのビルド設定
+- `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)・background service worker・
 - `vitest.config.ts` — vitest.config.ts — 単体テスト設定(e2e/はPlaywrightの領域なのでvitestの収集対象から除外)
 - `vitest.setup.ts` — vitest.setup.ts — vitest全体のセットアップ(IndexedDBをfake-indexeddbでpolyfill)
 
@@ -59,6 +60,8 @@
 
 ## `public/`
 
+- `public/alarm-beep.wav`
+- `public/icon128.png`
 - `public/manifest.json`
 
 ## `scripts/`
@@ -81,7 +84,7 @@
 
 ## `src/`
 
-- `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング。SPEC.md §4.9)
+- `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
 - `src/lib/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
@@ -123,6 +126,8 @@
 - `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/omnibar.test.ts` — omnibar.test.ts — omnibar.ts(クイック検索バー解決)の単体テスト
 - `src/lib/omnibar.ts` — omnibar.ts — クイック検索バーの解決ロジック(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
+- `src/lib/preEventAlarm.test.ts` — preEventAlarm.test.ts — preEventAlarm.ts(予定前アラームのスケジュール計算)の単体テスト
+- `src/lib/preEventAlarm.ts` — preEventAlarm.ts — 予定前アラームのスケジュール計算(純関数。SPEC.md §4.11)
 - `src/lib/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
 - `src/lib/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
 - `src/lib/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
@@ -159,6 +164,7 @@
 - `src/newtab/components/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
+- `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージ・APIのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
@@ -429,6 +435,9 @@
 ### `src/lib/omnibar.ts`
 - type OmnibarResult
 - function resolveOmnibarQuery
+
+### `src/lib/preEventAlarm.ts`
+- function resolveAlarmTime
 
 ### `src/lib/search.ts`
 - function indexSnapshot

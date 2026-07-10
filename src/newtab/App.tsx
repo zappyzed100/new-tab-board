@@ -67,6 +67,7 @@ export function App() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showData, setShowData] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
+  const [alarmActive, setAlarmActive] = useState(false);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
@@ -80,6 +81,7 @@ export function App() {
       setNotes(localData.notes);
       setActiveNoteId(localData.notes[0]?.id ?? null);
       setNextEventCache(localData.nextEventCache);
+      setAlarmActive(localData.alarmActive ?? false);
     });
     return () => {
       cancelled = true;
@@ -88,12 +90,26 @@ export function App() {
 
   // background.tsが数分おきに更新するnextEventCacheを取り込みつつ、カウントダウン表示を
   // 定期的に再計算させる(SPEC.md §4.9「毎秒/毎分再計算」。30秒間隔で分単位の精度は満たす)。
+  // alarmActiveもここで併せて反映し、予定前アラーム鳴動中は停止ボタンを表示する(§4.11)。
   useEffect(() => {
     const interval = setInterval(() => {
-      void loadLocalData().then((local) => setNextEventCache(local.nextEventCache));
+      void loadLocalData().then((local) => {
+        setNextEventCache(local.nextEventCache);
+        setAlarmActive(local.alarmActive ?? false);
+      });
     }, 30_000);
     return () => clearInterval(interval);
   }, []);
+
+  function stopPreEventAlarm() {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: "stop-pre-event-alarm" });
+    }
+    setAlarmActive(false);
+    // background.tsのstopAlarm()を待たず、UI側でも即座に永続化する(30秒間隔の
+    // 定期リフレッシュが古いalarmActive:trueを読み直して復活させるのを防ぐため)。
+    void loadLocalData().then((local) => saveLocalData({ ...local, alarmActive: false }));
+  }
 
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
@@ -213,6 +229,11 @@ export function App() {
       ) : null}
       {countdown.kind === "in-progress" ? (
         <div data-testid="next-event-countdown">予定は進行中です</div>
+      ) : null}
+      {alarmActive ? (
+        <button type="button" data-testid="stop-pre-event-alarm" onClick={stopPreEventAlarm}>
+          アラーム停止
+        </button>
       ) : null}
       <Clock />
       <ThemeToggle

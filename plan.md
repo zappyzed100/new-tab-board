@@ -1,5 +1,13 @@
 # plan.md — 設計根拠
 
+## src/offscreen/ (M12・2026-07-11)
+予定前アラーム(SPEC.md §4.11)はMV3のservice workerが音声を再生できないため、
+`chrome.offscreen`(reason: AUDIO_PLAYBACK)でオフスクリーンドキュメントを作り、
+その中の`<audio loop>`でループ再生する。newtab/lib一方向のレイヤーとは別に
+「拡張機能が生成する隠しページ」という第三のエントリポイントが必要なため、
+`src/newtab/`と並ぶ`src/offscreen/`として新設した(background.tsと同じ思想で、
+vite.config.tsに専用ビルドエントリを追加する)。
+
 ## src/background/ (Step 8b・2026-07-08)
 E2Eテストが拡張機能IDを解決するには service worker の存在が必要(Manifest V3では
 `context.serviceWorkers()` / `waitForEvent("serviceworker")` でIDを取得する)。
