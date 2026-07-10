@@ -183,7 +183,7 @@ textarea:focus {
 .app-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -197,6 +197,34 @@ textarea:focus {
   background: var(--accent);
   color: var(--accent-fg);
   border-color: var(--accent);
+}
+
+/* 検索/TODO/カレンダー/データ管理は「同時に1つだけ選べるタブ」として
+   1つの連結したセグメントに見せる(隙間なし・角丸は両端だけ)。 */
+.app-tabs {
+  display: flex;
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px;
+}
+
+.app-tabs button[type="button"] {
+  border-radius: 6px;
+}
+
+.app-tabs button[role="tab"][aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* コマンドパレット/ショートカット一覧はタブ(切替表示)ではなく単発のオーバーレイ
+   起動ボタンなので、タブ群とは視覚的に区切って隣に置く。 */
+.app-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border);
 }
 
 .app-overlays {

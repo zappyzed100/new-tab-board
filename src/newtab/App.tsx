@@ -64,12 +64,14 @@ export function App() {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showTodos, setShowTodos] = useState(false);
+  // 検索/TODO/カレンダー/データ管理は同時に複数表示すると関係性が分かりにくいため、
+  // 独立したbooleanではなく単一の「今どのタブが選ばれているか」で管理する
+  // (タブ切替と同じ挙動——別のタブを開くと前のタブは自動で閉じる)。
+  const [activePanel, setActivePanel] = useState<"search" | "todos" | "calendar" | "data" | null>(
+    null,
+  );
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showData, setShowData] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
@@ -160,7 +162,7 @@ export function App() {
 
   useGlobalShortcuts(shortcutRegistry, {
     commandPalette: () => setShowCommandPalette(true),
-    toggleSearch: () => setShowSearch((v) => !v),
+    toggleSearch: () => setActivePanel((p) => (p === "search" ? null : "search")),
     cheatSheet: () => setShowShortcutsModal(true),
     immediateSnapshot: () => {
       if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
@@ -278,54 +280,68 @@ export function App() {
       </header>
 
       <nav className="app-toolbar">
-        <button
-          type="button"
-          data-testid="toggle-search"
-          title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
-          onClick={() => setShowSearch((v) => !v)}
-        >
-          🔍 {showSearch ? "検索を閉じる" : "検索⌘F"}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-todos"
-          title="全ノートの「- [ ] 未完了タスク」を一覧表示する"
-          onClick={() => setShowTodos((v) => !v)}
-        >
-          ✅ {showTodos ? "TODOを閉じる" : "TODO一覧"}
-        </button>
-        <button
-          type="button"
-          data-testid="open-command-palette"
-          title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
-          onClick={() => setShowCommandPalette(true)}
-        >
-          ⌘ コマンド⌘K
-        </button>
-        <button
-          type="button"
-          data-testid="open-shortcuts-modal"
-          title="使えるキーボードショートカットの一覧を表示する"
-          onClick={() => setShowShortcutsModal(true)}
-        >
-          ⌨️ ショートカット一覧(?)
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-calendar"
-          title="月表示の小型カレンダーを開く(日付クリックでGoogleカレンダーへ)"
-          onClick={() => setShowCalendar((v) => !v)}
-        >
-          📅 {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
-        </button>
-        <button
-          type="button"
-          data-testid="toggle-data"
-          title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
-          onClick={() => setShowData((v) => !v)}
-        >
-          🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
-        </button>
+        <div className="app-tabs" role="tablist" aria-label="表示パネルの切替">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "search"}
+            data-testid="toggle-search"
+            title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
+            onClick={() => setActivePanel((p) => (p === "search" ? null : "search"))}
+          >
+            🔍 {activePanel === "search" ? "検索を閉じる" : "検索⌘F"}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "todos"}
+            data-testid="toggle-todos"
+            title="全ノートの「- [ ] 未完了タスク」を一覧表示する"
+            onClick={() => setActivePanel((p) => (p === "todos" ? null : "todos"))}
+          >
+            ✅ {activePanel === "todos" ? "TODOを閉じる" : "TODO一覧"}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "calendar"}
+            data-testid="toggle-calendar"
+            title="月表示の小型カレンダーを開く(日付クリックでGoogleカレンダーへ)"
+            onClick={() => setActivePanel((p) => (p === "calendar" ? null : "calendar"))}
+          >
+            📅 {activePanel === "calendar" ? "カレンダーを閉じる" : "カレンダー"}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === "data"}
+            data-testid="toggle-data"
+            title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
+            onClick={() => setActivePanel((p) => (p === "data" ? null : "data"))}
+          >
+            🗄️ {activePanel === "data" ? "データ管理を閉じる" : "データ管理"}
+          </button>
+        </div>
+
+        <div className="app-actions">
+          <button
+            type="button"
+            data-testid="open-command-palette"
+            title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
+            onClick={() => setShowCommandPalette(true)}
+          >
+            ⌘ コマンド⌘K
+          </button>
+          <button
+            type="button"
+            data-testid="open-shortcuts-modal"
+            title="使えるキーボードショートカットの一覧を表示する"
+            onClick={() => setShowShortcutsModal(true)}
+          >
+            ⌨️ ショートカット一覧(?)
+          </button>
+        </div>
+
         {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
           <span data-testid="drive-sync-status" title="このノートのGoogle Drive自動同期の状態">
             {DRIVE_SYNC_LABEL[driveSyncStatus]}
@@ -334,8 +350,8 @@ export function App() {
       </nav>
 
       <div className="app-overlays">
-        {showCalendar ? <MiniCalendar /> : null}
-        {showData ? (
+        {activePanel === "calendar" ? <MiniCalendar /> : null}
+        {activePanel === "data" ? (
           <DataPanel
             sync={sync}
             notes={notes}
@@ -343,18 +359,18 @@ export function App() {
             onOpenFileAsNote={openFileAsNote}
           />
         ) : null}
-        {showSearch ? (
+        {activePanel === "search" ? (
           <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
             <SearchPanel
               notes={notes}
               onSelectNote={(noteId) => {
                 setActiveNoteId(noteId);
-                setShowSearch(false);
+                setActivePanel(null);
               }}
             />
           </Suspense>
         ) : null}
-        {showTodos ? (
+        {activePanel === "todos" ? (
           <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
             <TodoPanel notes={notes} onSelectNote={setActiveNoteId} />
           </Suspense>

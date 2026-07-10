@@ -39,3 +39,23 @@ test("小型カレンダーで前月/翌月に移動できる", async ({ context
   await page.getByTestId("calendar-prev-month").click();
   await expect(page.getByTestId("calendar-month-label")).toHaveText(initialLabel ?? "");
 });
+
+test("検索/TODO/カレンダー/データ管理はタブのように排他的で、1つ開くと他は閉じる", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  await page.getByTestId("toggle-search").click();
+  await expect(page.getByTestId("search-panel")).toBeVisible();
+
+  await page.getByTestId("toggle-calendar").click();
+  await expect(page.getByTestId("mini-calendar")).toBeVisible();
+  await expect(page.getByTestId("search-panel")).not.toBeVisible();
+
+  await page.getByTestId("toggle-data").click();
+  await expect(page.getByTestId("data-panel")).toBeVisible();
+  await expect(page.getByTestId("mini-calendar")).not.toBeVisible();
+});
