@@ -50,6 +50,7 @@
 - `docs/guardrails/CUSTOMIZE.md`
 - `docs/guardrails/GOALS.md`
 - `docs/guardrails/GUARDRAILS.md`
+- `docs/manual-verification.md`
 - `docs/native-messaging-protocol.md`
 - `docs/stack.md`
 

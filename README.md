@@ -48,10 +48,18 @@ uv run scripts/dev.py verbs   # 動詞一覧と配線状態
   経由での.txt読み込み・全ノートのフォルダ一括書き出し。
 - **時計/テーマ(light/dark/auto)+小型カレンダー**: 日クリックでGoogleカレンダーへURL遷移
   (API/OAuth不要・一方向)。
+- **Google Drive自動同期**: ノート現行内容のみを上書きミラー(履歴は上げない)。
+- **Google Calendar読み取り+次の予定カウントダウン**: 数分おきのポーリング+
+  ローカルティックで最上部に大きく表示。
+- **予定前アラーム**: 予定の10分前から、停止するまで鳴り続ける(Chrome起動中のみ)。
+- **SSD→NAS二層アーカイブ**: IndexedDB(SSD一次退避)からNASフォルダへ履歴本体を
+  store-and-forward。
+- **Flow Launcher連携(拡張側クライアントのみ)**: host本体は別リポジトリで実装
+  (通信規約は`docs/native-messaging-protocol.md`)。
 
-対象外(v1範囲外。将来検討は `SPEC.md` 参照): Google Drive自動同期・Google Calendar API
-読み取り(次の予定カウントダウン)・予定前アラーム・NAS二層アーカイブの自動化・
-Flow Launcher連携。
+外部連携機能(Drive/Calendar/アラーム/NAS/Flow Launcher)は自動テストで検証できない
+実機確認項目を伴う。チェックリストは[docs/manual-verification.md](docs/manual-verification.md)
+を参照。
 
 ## リポジトリの構成
 
@@ -61,6 +69,8 @@ Flow Launcher連携。
 - `e2e/` — Playwright E2E（拡張機能を実際にロードして検証）
 - `SPEC.md` — 機能仕様の正本
 - `docs/stack.md` — 技術選定理由
+- `docs/native-messaging-protocol.md` — Flow Launcher連携の通信規約(host側実装の契約)
+- `docs/manual-verification.md` — 自動テストで検証できない実機確認チェックリスト
 - `docs/guardrails/` — `GUARDRAILS.md` / `GOALS.md` / `BOOTSTRAP.md` / `CUSTOMIZE.md`。
   `bindings/catalog.md` / `AGENTS.md`（ルート）とあわせて、このリポジトリの出戻り防止機構
   （LLMエージェントとの協業ガードレール）の正本。作業前に読むこと。
