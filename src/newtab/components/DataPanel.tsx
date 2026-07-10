@@ -1,7 +1,10 @@
-// DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作(SPEC.md §4.7・§4.10-a)
+// DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
+// (SPEC.md §4.3・§4.7・§4.10-a)
 import { useRef, useState } from "react";
+import { setNasDirectoryHandle } from "../../lib/db";
 import { buildExportPayload, parseImportPayload, serializeExport } from "../../lib/exportImport";
 import { exportNotesToFolder, pickAndReadTextFile } from "../../lib/fileSystem";
+import { flushAllToNas } from "../../lib/nasArchive";
 import { now } from "../../lib/clock";
 import type { AppLaunch, Bookmark, Note, Settings } from "../../types";
 
@@ -60,6 +63,23 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
     setMessage("フォルダへ書き出しました");
   }
 
+  async function handleSetNasFolder() {
+    try {
+      const handle = await window.showDirectoryPicker();
+      await setNasDirectoryHandle(handle);
+      setMessage("NASフォルダを設定しました");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setMessage("NASフォルダの設定に失敗しました");
+      throw err;
+    }
+  }
+
+  async function handleFlushNow() {
+    const { flushed, failed } = await flushAllToNas();
+    setMessage(`NASへ${flushed}件書き出しました(失敗${failed}件)`);
+  }
+
   return (
     <div data-testid="data-panel">
       <button type="button" data-testid="data-export-json" onClick={handleExport}>
@@ -86,6 +106,16 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
       />
       <button type="button" data-testid="data-open-file" onClick={() => void handleOpenFile()}>
         ファイルを開く
+      </button>
+      <button
+        type="button"
+        data-testid="data-set-nas-folder"
+        onClick={() => void handleSetNasFolder()}
+      >
+        NASフォルダを設定
+      </button>
+      <button type="button" data-testid="data-flush-nas" onClick={() => void handleFlushNow()}>
+        今すぐNASへ書き出し
       </button>
       <button
         type="button"

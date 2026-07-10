@@ -23,6 +23,7 @@ import {
 import { resolveTheme } from "../lib/theme";
 import { now as clockNow } from "../lib/clock";
 import { computeCountdown } from "../lib/nextEventCountdown";
+import { flushAllToNas } from "../lib/nasArchive";
 import { forceSnapshot } from "../lib/useSnapshotScheduler";
 import { useDriveSync } from "../lib/useDriveSync";
 import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
@@ -86,6 +87,13 @@ export function App() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // 新規タブページが開いたタイミングでNASフォルダの権限確認→有効なうちにフラッシュを
+  // 試行する(SPEC.md §4.3。File System Accessはservice workerでは使えないためnew-tab
+  // 文脈でのみ実行できる。NAS未設定/権限無し/到達不可はnasArchive.ts側で静かに0件扱い)。
+  useEffect(() => {
+    void flushAllToNas();
   }, []);
 
   // background.tsが数分おきに更新するnextEventCacheを取り込みつつ、カウントダウン表示を

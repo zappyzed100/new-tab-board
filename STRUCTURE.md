@@ -100,7 +100,7 @@
 - `src/lib/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
 - `src/lib/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
 - `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
-- `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス。GUARDRAILS.md §8.2)
+- `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
 - `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
 - `src/lib/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
@@ -120,6 +120,8 @@
 - `src/lib/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
+- `src/lib/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
 - `src/lib/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
 - `src/lib/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
@@ -150,7 +152,7 @@
 - `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
-- `src/newtab/components/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作(SPEC.md §4.7・§4.10-a)
+- `src/newtab/components/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
 - `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
@@ -363,11 +365,15 @@
 ### `src/lib/db.ts`
 - function putSnapshot
 - function getSnapshotsByNote
+- function getAllSnapshots
 - function getSnapshot
 - function deleteSnapshot
+- function markSnapshotArchived
 - function putIndexEntry
 - function getIndexEntry
 - function getAllIndexEntries
+- function getNasDirectoryHandle
+- function setNasDirectoryHandle
 
 ### `src/lib/diff.ts`
 - type DiffPart
@@ -419,6 +425,13 @@
 
 ### `src/lib/log.ts`
 - function logOp
+
+### `src/lib/nasArchive.ts`
+- function probeNasReachable
+- function flushSnapshotToNas
+- function flushAllToNas
+- function readArchivedSnapshot
+- function getSnapshotBody
 
 ### `src/lib/nextEventCountdown.ts`
 - type CountdownState

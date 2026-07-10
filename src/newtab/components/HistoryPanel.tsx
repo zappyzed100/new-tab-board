@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { now as clockNow } from "../../lib/clock";
 import { getSnapshotsByNote, putSnapshot } from "../../lib/db";
 import { gzipCompress, gzipDecompress } from "../../lib/gzip";
+import { getSnapshotBody } from "../../lib/nasArchive";
 import type { Snapshot } from "../../types";
 import { DiffView } from "./DiffView";
 
@@ -31,9 +32,10 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
     for (const id of selectedIds) {
       const snapshot = snapshots.find((s) => s.id === id);
       if (snapshot && decoded[id] === undefined) {
-        void gzipDecompress(snapshot.content).then((text) =>
-          setDecoded((prev) => ({ ...prev, [id]: text })),
-        );
+        void getSnapshotBody(snapshot).then((body) => {
+          if (body === null) return; // NAS排出済みでオフライン等(degrade表示——diffは出さない)
+          void gzipDecompress(body).then((text) => setDecoded((prev) => ({ ...prev, [id]: text })));
+        });
       }
     }
   }, [selectedIds, snapshots, decoded]);
@@ -47,7 +49,9 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
   }
 
   async function handleRestore(snapshot: Snapshot) {
-    const text = await gzipDecompress(snapshot.content);
+    const body = await getSnapshotBody(snapshot);
+    if (body === null) return; // NAS排出済みでオフライン等、復元元の本文を取得できない
+    const text = await gzipDecompress(body);
     // 復元前に現在の内容を保全する(SPEC.md §4.3「復元時は現在の本文を先にスナップショットしてから置き換える」)
     const compressedCurrent = await gzipCompress(currentContent);
     await putSnapshot({
@@ -55,6 +59,7 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
       noteId,
       timestamp: clockNow(),
       content: compressedCurrent,
+      archived: false,
     });
     onRestore(text);
   }
@@ -75,6 +80,9 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
                 onChange={() => toggleSelect(snapshot.id)}
               />
               {new Date(snapshot.timestamp).toLocaleString()}
+              {snapshot.archived ? (
+                <span data-testid={`history-archived-${snapshot.id}`}> (NAS保管)</span>
+              ) : null}
             </label>
             <button
               type="button"

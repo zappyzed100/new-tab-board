@@ -50,7 +50,12 @@ export type Snapshot = {
   id: string;
   noteId: string;
   timestamp: number;
-  content: string;
+  /** gzip圧縮した本文。NAS排出後はローカルから削除されundefinedになりうる(SPEC.md §4.3・§5)。 */
+  content?: string;
+  /** true = NAS本archiveへ排出済み(本体はNAS)。既存データ(このフィールド追加前)はfalse扱い。 */
+  archived: boolean;
+  /** NAS上のファイルパス(排出後のみ)。 */
+  archivePath?: string;
 };
 
 export type IndexEntry = {

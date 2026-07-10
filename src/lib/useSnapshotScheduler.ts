@@ -15,7 +15,13 @@ const MAX_CAP_CHECK_INTERVAL_MS = 5_000;
 export async function forceSnapshot(noteId: string, content: string): Promise<void> {
   const compressed = await gzipCompress(content);
   const snapshotId = crypto.randomUUID();
-  await putSnapshot({ id: snapshotId, noteId, timestamp: clockNow(), content: compressed });
+  await putSnapshot({
+    id: snapshotId,
+    noteId,
+    timestamp: clockNow(),
+    content: compressed,
+    archived: false,
+  });
   await indexSnapshot(snapshotId, content);
   logOp("history", "snapshot", `note=${noteId} reason=manual`);
 }
@@ -41,7 +47,13 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
     }
     const compressed = await gzipCompress(currentContent);
     const snapshotId = crypto.randomUUID();
-    await putSnapshot({ id: snapshotId, noteId, timestamp: now, content: compressed });
+    await putSnapshot({
+      id: snapshotId,
+      noteId,
+      timestamp: now,
+      content: compressed,
+      archived: false,
+    });
     await indexSnapshot(snapshotId, currentContent);
     logOp("history", "snapshot", `note=${noteId} reason=${reason}`);
     lastSnapshotAtRef.current = now;

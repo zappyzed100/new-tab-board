@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { getSnapshot } from "../../lib/db";
 import { gzipDecompress } from "../../lib/gzip";
+import { getSnapshotBody } from "../../lib/nasArchive";
 import { searchSnapshotIds } from "../../lib/search";
 import type { Note, Snapshot } from "../../types";
 
@@ -27,7 +28,9 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
     for (const id of ids) {
       const snapshot = await getSnapshot(id);
       if (!snapshot) continue;
-      const text = await gzipDecompress(snapshot.content);
+      const body = await getSnapshotBody(snapshot);
+      if (body === null) continue; // NAS排出済みでオフライン等(degrade——検索結果からは除く)
+      const text = await gzipDecompress(body);
       const note = notes.find((n) => n.id === snapshot.noteId);
       items.push({
         snapshot,
