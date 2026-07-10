@@ -1,4 +1,7 @@
-// NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
+// NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除。SPEC.md §4.2)
+// エディタアプリのタブ(例: メモ帳)を踏襲し、削除はタブ上の×、追加はプレーンな+のみ。
+// ピン留め機能のUIは撤去済み(データ上のnote.pinned/sortedNotesの並び順ロジック自体は
+// 互換性のため維持——インポートしたデータのpinned:trueも並び順には反映され続ける)。
 import { useState } from "react";
 import {
   addNote,
@@ -29,7 +32,7 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
   return (
     <div data-testid="note-tabs">
       {sorted.map((note) => (
-        <div key={note.id} data-testid={`note-tab-${note.id}`}>
+        <div key={note.id} data-testid={`note-tab-${note.id}`} className="note-tab">
           {renamingId === note.id ? (
             <input
               aria-label="ノート名"
@@ -49,35 +52,28 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
               onClick={() => onSelect(note.id)}
               onDoubleClick={() => setRenamingId(note.id)}
             >
-              {note.pinned ? "📌 " : ""}
               {note.title}
             </button>
           )}
           <button
             type="button"
-            data-testid={`note-tab-pin-${note.id}`}
-            title={note.pinned ? "ピン留めを解除する" : "このノートをピン留めして先頭に固定する"}
-            onClick={() => onNotesChange(updateNote(notes, note.id, { pinned: !note.pinned }))}
-          >
-            📌 {note.pinned ? "ピン解除" : "ピン留め"}
-          </button>
-          <button
-            type="button"
             data-testid={`note-tab-delete-${note.id}`}
+            className="note-tab-close"
             title="このノートを削除する"
             onClick={() => onNotesChange(removeNote(notes, note.id))}
           >
-            🗑️ 削除
+            ×
           </button>
         </div>
       ))}
       <button
         type="button"
         data-testid="note-tab-add"
+        className="note-tab-add"
         title="新しいノートを作成する"
         onClick={handleAdd}
       >
-        + ノート
+        +
       </button>
     </div>
   );

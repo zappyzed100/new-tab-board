@@ -63,7 +63,7 @@
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
 - `e2e/specs/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)+オムニバーのE2E(SPEC.md §4.4・§4.5)
 - `e2e/specs/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
-- `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/ピン留め/削除E2E(SPEC.md §4.2)
+- `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-todo-backlinks.spec.ts` — search-todo-backlinks.spec.ts — 全文検索/横断TODO/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 
@@ -174,7 +174,7 @@
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
-- `src/newtab/components/notes/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
+- `src/newtab/components/notes/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除。SPEC.md §4.2)
 - `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
@@ -497,6 +497,8 @@
 - type ShortcutCombo
 - type ShortcutDef
 - const SHORTCUT_REGISTRY
+- type EditorShortcut
+- const EDITOR_SHORTCUTS
 - function matchesCombo
 - function buildNoteJumpShortcuts
 - function buildBookmarkJumpShortcuts

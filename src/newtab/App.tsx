@@ -423,7 +423,7 @@ export function App() {
                   title="Markdown記法(見出し・リスト等)を清書して表示する"
                   onClick={() => setShowPreview((v) => !v)}
                 >
-                  {showPreview ? "✏️ 編集に戻る" : "👁️ Markdownプレビュー"}
+                  {showPreview ? "編集に戻る" : "Markdownプレビュー"}
                 </button>
                 <button
                   type="button"
@@ -434,6 +434,19 @@ export function App() {
                   🕑 {showHistory ? "履歴を閉じる" : "履歴"}
                 </button>
               </div>
+              {showHistory ? (
+                <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
+                  <HistoryPanel
+                    key={`history-${activeNote.id}`}
+                    noteId={activeNote.id}
+                    currentContent={activeNote.content}
+                    onRestore={(content) => {
+                      updateNotes(updateNote(notes, activeNote.id, { content }));
+                      setRestoreCounter((c) => c + 1);
+                    }}
+                  />
+                </Suspense>
+              ) : null}
               <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
                 {showPreview ? (
                   <MarkdownPreview
@@ -449,17 +462,6 @@ export function App() {
                     }
                   />
                 )}
-                {showHistory ? (
-                  <HistoryPanel
-                    key={`history-${activeNote.id}`}
-                    noteId={activeNote.id}
-                    currentContent={activeNote.content}
-                    onRestore={(content) => {
-                      updateNotes(updateNote(notes, activeNote.id, { content }));
-                      setRestoreCounter((c) => c + 1);
-                    }}
-                  />
-                ) : null}
               </Suspense>
               <BacklinksPanel
                 notes={notes}
