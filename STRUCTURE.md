@@ -53,6 +53,7 @@
 - `docs/manual-verification.md`
 - `docs/native-messaging-protocol.md`
 - `docs/stack.md`
+- `docs/ui-parts.md`
 
 ## `e2e/`
 
