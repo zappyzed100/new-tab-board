@@ -92,6 +92,7 @@
 
 ## `src/`
 
+- `src/background/CLAUDE.md`
 - `src/background/background.test.ts` — background.test.ts — background.ts(サービスワーカー: Calendar定期ポーリング+予定前アラーム)の単体テスト
 - `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
 - `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
@@ -113,6 +114,7 @@
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/entities/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/externalIO/CLAUDE.md`
 - `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
 - `src/lib/externalIO/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
 - `src/lib/externalIO/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
@@ -143,6 +145,7 @@
 - `src/lib/runtime/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/runtime/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/runtime/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/search/CLAUDE.md`
 - `src/lib/search/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
 - `src/lib/search/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
