@@ -21,10 +21,12 @@ import {
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts";
 import { resolveTheme } from "../lib/theme";
+import { now as clockNow } from "../lib/clock";
+import { computeCountdown } from "../lib/nextEventCountdown";
 import { forceSnapshot } from "../lib/useSnapshotScheduler";
 import { useDriveSync } from "../lib/useDriveSync";
 import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
-import type { AppLaunch, Bookmark, Note, Settings } from "../types";
+import type { AppLaunch, Bookmark, LocalData, Note, Settings } from "../types";
 
 const DRIVE_SYNC_LABEL: Record<string, string> = {
   idle: "",
@@ -64,6 +66,7 @@ export function App() {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showData, setShowData] = useState(false);
+  const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
@@ -76,10 +79,20 @@ export function App() {
       setSync(syncData);
       setNotes(localData.notes);
       setActiveNoteId(localData.notes[0]?.id ?? null);
+      setNextEventCache(localData.nextEventCache);
     });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // background.tsが数分おきに更新するnextEventCacheを取り込みつつ、カウントダウン表示を
+  // 定期的に再計算させる(SPEC.md §4.9「毎秒/毎分再計算」。30秒間隔で分単位の精度は満たす)。
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void loadLocalData().then((local) => setNextEventCache(local.nextEventCache));
+    }, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
@@ -178,6 +191,8 @@ export function App() {
     setActiveNoteId(note.id);
   }
 
+  const countdown = computeCountdown(nextEventCache, clockNow());
+
   if (!sync || !notes) {
     return <div data-testid="app-loading">読み込み中…</div>;
   }
@@ -191,6 +206,14 @@ export function App() {
 
   return (
     <main data-testid="app-root">
+      {countdown.kind === "upcoming" ? (
+        <div data-testid="next-event-countdown">
+          次の予定まで {countdown.minutes}分({countdown.title})
+        </div>
+      ) : null}
+      {countdown.kind === "in-progress" ? (
+        <div data-testid="next-event-countdown">予定は進行中です</div>
+      ) : null}
       <Clock />
       <ThemeToggle
         theme={sync.settings.theme}

@@ -38,6 +38,11 @@ export type Note = {
 
 export type LocalData = {
   notes: Note[];
+  nextEventCache?: {
+    title: string;
+    startsAt: number;
+    fetchedAt: number;
+  };
 };
 
 export type Snapshot = {

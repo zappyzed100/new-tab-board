@@ -1,5 +1,5 @@
 // storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-import type { AppLaunch, Bookmark, Note, Settings } from "../types";
+import type { AppLaunch, Bookmark, LocalData, Settings } from "../types";
 import { logOp } from "./log";
 
 const SYNC_KEY = "syncData";
@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 type SyncShape = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
-type LocalShape = { notes: Note[] };
+type LocalShape = LocalData;
 
 function hasChromeStorage(area: "sync" | "local"): boolean {
   return typeof chrome !== "undefined" && !!chrome.storage?.[area];

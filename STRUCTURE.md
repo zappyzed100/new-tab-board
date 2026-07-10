@@ -81,11 +81,13 @@
 
 ## `src/`
 
-- `src/background/background.ts` — background.ts — 最小サービスワーカー(拡張機能IDのE2E解決用・インストール時ログ)
+- `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング。SPEC.md §4.9)
 - `src/lib/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
 - `src/lib/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
+- `src/lib/calendar.test.ts` — calendar.test.ts — calendar.ts(Calendar API読み取り)の単体テスト(フェイクfetchを注入)
+- `src/lib/calendar.ts` — calendar.ts — Google Calendar API(読み取り専用)から次の予定を取得する(SPEC.md §4.9)
 - `src/lib/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
 - `src/lib/calendarMonth.ts` — calendarMonth.ts — 小型カレンダーの月グリッド構築 + Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
@@ -115,6 +117,8 @@
 - `src/lib/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
+- `src/lib/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/omnibar.test.ts` — omnibar.test.ts — omnibar.ts(クイック検索バー解決)の単体テスト
@@ -329,6 +333,11 @@
 - function evaluateExpression
 - function evaluateLineIfCalculator
 
+### `src/lib/calendar.ts`
+- type FetchLike
+- type NextEvent
+- function fetchNextEvent
+
 ### `src/lib/calendarMonth.ts`
 - type CalendarDay
 - function buildMonthGrid
@@ -404,6 +413,10 @@
 
 ### `src/lib/log.ts`
 - function logOp
+
+### `src/lib/nextEventCountdown.ts`
+- type CountdownState
+- function computeCountdown
 
 ### `src/lib/notes.ts`
 - function createNote
