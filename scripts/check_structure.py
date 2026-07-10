@@ -443,8 +443,13 @@ def check_orphans(root: Path, files: list[str], texts: dict[str, str], out: list
 
     for prefixes, ext, entry_pats in rs.ORPHAN_UNIVERSES:
         for rel in files:
-            if rs.ext_of(rel) != ext or rs.is_generated(rel) or rs.is_test_file(rel):
-                continue  # テストは誰からも import されない正当な起点（孤立ではない）
+            if (
+                rs.ext_of(rel) != ext
+                or rs.is_generated(rel)
+                or rs.is_test_file(rel)
+                or rs.is_ambient_declaration(rel)
+            ):
+                continue  # テスト/アンビエント型宣言は誰からも import されない正当な起点（孤立ではない）
             if not any(rel.startswith(p) for p in prefixes):
                 continue
             if any(pat.search(rel) for pat in entry_pats):

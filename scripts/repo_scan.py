@@ -119,6 +119,13 @@ def is_test_file(rel: str) -> bool:
     return any(p.search(rel) for p in TEST_PATH_PATTERNS)
 
 
+def is_ambient_declaration(rel: str) -> bool:
+    """TypeScriptのアンビエント型宣言ファイル(.d.ts)か。tsconfigのincludeを通じて
+    暗黙に効く仕組みでimportされないのが正常なため、孤立ファイル検査の対象から
+    除外する(v2.26・G7)。"""
+    return rel.endswith(".d.ts")
+
+
 def _first_meaningful_line(text: str) -> str | None:
     for line in text.splitlines():
         s = line.strip()
@@ -301,6 +308,10 @@ _TS_EXPORT_DECL = re.compile(
     r"(function|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)"
 )
 _TS_IMPORT = re.compile(r"""^\s*(?:import|export)[^'"]*['"]([^'"]+)['"]""")
+# 動的 import() は行頭アンカーしない（非アンカー・.search()）——`const X = lazy(() =>
+# import("./Y"))` のように import( が行の途中に来る形は、変数名の長さでPrettierが
+# 改行するか否かという無関係な事情で検出結果が変わってはならない（v2.26・G7）。
+_TS_DYNAMIC_IMPORT = re.compile(r"""\bimport\s*\(\s*['"]([^'"]+)['"]""")
 _TS_RESOLVE_EXTS = (".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx")
 
 
@@ -319,6 +330,8 @@ def _ts_import_targets(rel: str, text: str, _pkg_roots: dict[str, str]) -> set[s
     base_dir = posixpath.dirname(rel)
     for line in text.splitlines():
         m = _TS_IMPORT.match(line)
+        if not m:
+            m = _TS_DYNAMIC_IMPORT.search(line)
         if not m:
             continue
         target = m.group(1)

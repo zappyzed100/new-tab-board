@@ -400,6 +400,20 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
 - ✅ `app/CLAUDE.md` ・ `engine/CLAUDE.md` の欠落
 - ✅ どこからも import/use・mod されない孤立ファイル（対象範囲・抽出器は採用列の
   `ORPHAN_UNIVERSES` / `IMPORT_TARGET_EXTRACTORS` が定義。O(N²) 実装の禁止——§7.3）
+  - **v2.26（G7）— 誤検知2件の修正**: `_ts_import_targets`（TS列）が行頭アンカーの
+    静的 import/export しか拾わず、`const X = lazy(() => import("./Y"))` のように
+    動的 `import()` が行の途中に来る形を取りこぼしていた。変数名の長さで Prettier が
+    改行を入れるか否かという無関係な事情で検出結果が変わる不安定なバグだった（実例:
+    new-tab-board の `Notepad` は1行に収まり検出漏れ、`MarkdownPreview` 等は折り返され
+    偶然行頭に来て検出されていた）。非アンカーの `_TS_DYNAMIC_IMPORT`（`.search()`）を
+    追加し、行中どこにあっても拾うよう修正。また `.d.ts` アンビエント型宣言ファイルは
+    import されず tsconfig の `include` 経由で暗黙に効くのが正常だが、
+    `is_test_file`/`is_generated` と並ぶ除外対象に入っていなかったため常に誤検知して
+    いた。`is_ambient_declaration()` を新設し `check_orphans` の除外条件へ追加。
+    HTML の `<script src>` 経由の参照（`.html` 用の抽出器が無い）は対応していない——
+    HTML解析器の新設は設計判断が要るため単純なバグ修正の範囲を超える、と切り分けた。
+    回帰は `tests/test_repo_scan_orphans.py`
+    （`uv run python tests/test_repo_scan_orphans.py`）が担保する。
 - ✅ `binding-unstamped` — バインディング刻印が未設定（Step 0 で採用列を刻印するまでの
   注意喚起 — §12.7）。刻印が**一部ファイルのみ**の状態は `HARD:binding-drift` になる
 - ✅ `hooks-not-installed` — pre-commit のシムが1つも無い（出荷直後〜Step 3 前の正常状態。
