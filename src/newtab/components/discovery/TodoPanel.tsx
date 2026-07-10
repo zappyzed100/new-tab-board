@@ -12,6 +12,7 @@ export function TodoPanel({ notes, onSelectNote }: Props) {
 
   return (
     <div data-testid="todo-panel">
+      <h2 className="panel-title">✅ 横断TODO一覧(全ノートの「- [ ] 」行を集約)</h2>
       {todos.length === 0 ? (
         <p data-testid="todo-empty">未完了のTODOはありません</p>
       ) : (

@@ -69,6 +69,8 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
 
   return (
     <div data-testid="history-panel">
+      <h2 className="panel-title">🕑 履歴(自動保存されたスナップショット)</h2>
+      <p className="hint">2件チェックすると差分(diff)を下に表示します</p>
       <ul>
         {snapshots.map((snapshot) => (
           <li key={snapshot.id} data-testid={`history-item-${snapshot.id}`}>
@@ -87,9 +89,10 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
             <button
               type="button"
               data-testid={`history-restore-${snapshot.id}`}
+              title="この時点の内容に復元する(復元前に現在の内容も保存されます)"
               onClick={() => void handleRestore(snapshot)}
             >
-              復元
+              ⏮️ 復元
             </button>
           </li>
         ))}

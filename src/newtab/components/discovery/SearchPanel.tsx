@@ -44,9 +44,11 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
 
   return (
     <div data-testid="search-panel">
+      <h2 className="panel-title">🔍 全文検索(全ノートの本文を横断)</h2>
       <input
         aria-label="全文検索"
         data-testid="search-input"
+        placeholder="検索したい単語を入力(完全一致)"
         value={query}
         onChange={(e) => void runSearch(e.target.value)}
       />

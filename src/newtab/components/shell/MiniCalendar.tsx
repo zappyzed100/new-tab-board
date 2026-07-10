@@ -31,14 +31,26 @@ export function MiniCalendar() {
 
   return (
     <div data-testid="mini-calendar">
-      <button type="button" data-testid="calendar-prev-month" onClick={goPrevMonth}>
-        前月
+      <h2 className="panel-title">📅 小型カレンダー</h2>
+      <p className="hint">日付をクリックするとGoogleカレンダーのその日を新しいタブで開きます</p>
+      <button
+        type="button"
+        data-testid="calendar-prev-month"
+        title="前の月を表示する"
+        onClick={goPrevMonth}
+      >
+        ← 前月
       </button>
       <span data-testid="calendar-month-label">
         {year}年{month + 1}月
       </span>
-      <button type="button" data-testid="calendar-next-month" onClick={goNextMonth}>
-        翌月
+      <button
+        type="button"
+        data-testid="calendar-next-month"
+        title="次の月を表示する"
+        onClick={goNextMonth}
+      >
+        翌月 →
       </button>
       <table>
         <tbody>

@@ -3,14 +3,19 @@
    テーマはApp.tsxが document.documentElement.dataset.theme へ書く"light"/"dark"で切替。 */
 
 :root {
-  --bg: #f6f6f8;
+  --bg: #f2f1fb;
+  --bg-accent: #eef2ff;
   --surface: #ffffff;
   --surface-2: #eef0f4;
   --border: #e2e4ea;
   --text: #1c1d22;
   --text-muted: #6b6f7b;
   --accent: #4f46e5;
+  --accent-strong: #4338ca;
   --accent-fg: #ffffff;
+  --accent-soft: #e0e7ff;
+  --success: #16a34a;
+  --warning: #d97706;
   --danger: #dc2626;
   --shadow: 0 1px 2px rgba(16, 17, 20, 0.06), 0 1px 8px rgba(16, 17, 20, 0.04);
   --shadow-lg: 0 12px 32px rgba(16, 17, 20, 0.18);
@@ -26,14 +31,19 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #131418;
+  --bg: #14141c;
+  --bg-accent: #1a1930;
   --surface: #1b1c22;
   --surface-2: #24262e;
   --border: #33343e;
   --text: #f1f1f4;
   --text-muted: #9a9ca8;
   --accent: #818cf8;
+  --accent-strong: #a5b4fc;
   --accent-fg: #141520;
+  --accent-soft: #2b2a52;
+  --success: #4ade80;
+  --warning: #fbbf24;
   --danger: #f87171;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 8px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -51,11 +61,26 @@ body,
 }
 
 body {
-  background: var(--bg);
+  background: linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 320px);
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 button {
@@ -90,6 +115,7 @@ button[type="button"]:active,
 button[type="submit"]:active {
   transform: translateY(1px);
 }
+
 
 input[type="text"],
 input:not([type]),
@@ -133,15 +159,18 @@ textarea:focus {
 
 [data-testid="no-notes"] {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 160px;
-  color: var(--text-muted);
-  font-size: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  gap: var(--space-2);
+  min-height: 200px;
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  background: var(--accent-soft);
+  border: 2px dashed var(--accent);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
 }
 
 .app-header {
@@ -156,6 +185,18 @@ textarea:focus {
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+.app-toolbar button[type="button"] {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-strong);
+}
+
+.app-toolbar button[type="button"]:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
 }
 
 .app-overlays {
@@ -268,9 +309,18 @@ textarea:focus {
   padding: 2px 6px;
 }
 
-[data-testid="bookmark-add"] {
-  border-style: dashed;
-  color: var(--text-muted);
+[data-testid="bookmark-add"],
+[data-testid="note-tab-add"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+[data-testid="bookmark-add"]:hover,
+[data-testid="note-tab-add"]:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 /* --- ノートタブ --- */
@@ -382,15 +432,29 @@ textarea:focus {
 }
 
 /* --- トグル可能なパネル群(検索/TODO/カレンダー/データ管理) --- */
+/* 種類ごとに左端の色を変え、ラベルだけでなく色でも見分けられるようにする */
 [data-testid="search-panel"],
 [data-testid="todo-panel"],
 [data-testid="mini-calendar"],
 [data-testid="data-panel"] {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
   border-radius: var(--radius);
   padding: var(--space-3);
   box-shadow: var(--shadow);
+}
+
+[data-testid="todo-panel"] {
+  border-left-color: var(--success);
+}
+
+[data-testid="mini-calendar"] {
+  border-left-color: var(--warning);
+}
+
+[data-testid="data-panel"] {
+  border-left-color: var(--danger);
 }
 
 [data-testid="search-input"] {

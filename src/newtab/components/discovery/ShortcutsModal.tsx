@@ -9,6 +9,7 @@ type Props = {
 export function ShortcutsModal({ registry, onClose }: Props) {
   return (
     <div data-testid="shortcuts-modal" role="dialog">
+      <h2 className="panel-title">⌨️ キーボードショートカット一覧</h2>
       <button type="button" data-testid="shortcuts-modal-close" onClick={onClose}>
         閉じる
       </button>

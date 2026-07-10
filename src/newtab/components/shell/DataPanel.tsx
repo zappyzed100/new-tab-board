@@ -2,7 +2,11 @@
 // (SPEC.md §4.3・§4.7・§4.10-a)
 import { useRef, useState } from "react";
 import { setNasDirectoryHandle } from "../../../lib/storage/db";
-import { buildExportPayload, parseImportPayload, serializeExport } from "../../../lib/fileio/exportImport";
+import {
+  buildExportPayload,
+  parseImportPayload,
+  serializeExport,
+} from "../../../lib/fileio/exportImport";
 import { exportNotesToFolder, pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { now } from "../../../lib/runtime/clock";
@@ -82,15 +86,22 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
 
   return (
     <div data-testid="data-panel">
-      <button type="button" data-testid="data-export-json" onClick={handleExport}>
-        JSONエクスポート
+      <h2 className="panel-title">🗄️ データ管理(バックアップ・取り込み・NAS設定)</h2>
+      <button
+        type="button"
+        data-testid="data-export-json"
+        title="ブックマーク/ノート/設定を全部1つのJSONファイルへ書き出す(バックアップ)"
+        onClick={handleExport}
+      >
+        ⬇️ JSONエクスポート
       </button>
       <button
         type="button"
         data-testid="data-import-json"
+        title="エクスポートしたJSONファイルから全データを復元する"
         onClick={() => fileInputRef.current?.click()}
       >
-        JSONインポート
+        ⬆️ JSONインポート
       </button>
       <input
         ref={fileInputRef}
@@ -104,25 +115,37 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           e.target.value = "";
         }}
       />
-      <button type="button" data-testid="data-open-file" onClick={() => void handleOpenFile()}>
-        ファイルを開く
+      <button
+        type="button"
+        data-testid="data-open-file"
+        title="ローカルの.txtファイルを選んで新規ノートとして読み込む"
+        onClick={() => void handleOpenFile()}
+      >
+        📂 ファイルを開く
       </button>
       <button
         type="button"
         data-testid="data-set-nas-folder"
+        title="履歴の長期保管先(NASの共有フォルダ等)を選ぶ"
         onClick={() => void handleSetNasFolder()}
       >
-        NASフォルダを設定
+        📁 NASフォルダを設定
       </button>
-      <button type="button" data-testid="data-flush-nas" onClick={() => void handleFlushNow()}>
-        今すぐNASへ書き出し
+      <button
+        type="button"
+        data-testid="data-flush-nas"
+        title="未保管の履歴を今すぐNASフォルダへ書き出す"
+        onClick={() => void handleFlushNow()}
+      >
+        📤 今すぐNASへ書き出し
       </button>
       <button
         type="button"
         data-testid="data-export-folder"
+        title="全ノートをそれぞれ.mdファイルとしてフォルダへ書き出す"
         onClick={() => void handleExportFolder()}
       >
-        フォルダへ書き出し
+        🗂️ フォルダへ書き出し
       </button>
       {message ? <p data-testid="data-panel-message">{message}</p> : null}
     </div>

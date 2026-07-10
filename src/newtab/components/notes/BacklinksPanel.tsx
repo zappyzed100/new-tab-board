@@ -13,22 +13,26 @@ export function BacklinksPanel({ notes, activeNote, onSelectNote }: Props) {
   const backlinks = index.get(activeNote.title) ?? [];
 
   if (backlinks.length === 0) {
-    return <p data-testid="backlinks-empty">このノートへのリンクはありません</p>;
+    return <p data-testid="backlinks-empty">🔗 このノートへのリンクはありません</p>;
   }
 
   return (
-    <ul data-testid="backlinks-panel">
-      {backlinks.map((link) => (
-        <li key={link.fromNoteId} data-testid={`backlink-item-${link.fromNoteId}`}>
-          <button
-            type="button"
-            data-testid={`backlink-open-${link.fromNoteId}`}
-            onClick={() => onSelectNote(link.fromNoteId)}
-          >
-            {link.fromNoteTitle}
-          </button>
-        </li>
-      ))}
-    </ul>
+    <>
+      <h2 className="panel-title">🔗 バックリンク([[{activeNote.title}]]にリンクしているノート)</h2>
+      <ul data-testid="backlinks-panel">
+        {backlinks.map((link) => (
+          <li key={link.fromNoteId} data-testid={`backlink-item-${link.fromNoteId}`}>
+            <button
+              type="button"
+              data-testid={`backlink-open-${link.fromNoteId}`}
+              title={`「${link.fromNoteTitle}」を開く`}
+              onClick={() => onSelectNote(link.fromNoteId)}
+            >
+              {link.fromNoteTitle}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

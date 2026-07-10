@@ -64,6 +64,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
               <button
                 type="button"
                 data-testid={`bookmark-open-${bookmark.id}`}
+                title={`${bookmark.label}を開く(${bookmark.url})`}
                 onClick={() => openBookmark(bookmark)}
               >
                 <BookmarkIcon bookmark={bookmark} />
@@ -72,16 +73,18 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
               <button
                 type="button"
                 data-testid={`bookmark-edit-${bookmark.id}`}
+                title="このブックマークを編集する"
                 onClick={() => setEditingId(bookmark.id)}
               >
-                編集
+                ✏️ 編集
               </button>
               <button
                 type="button"
                 data-testid={`bookmark-remove-${bookmark.id}`}
+                title="このブックマークを削除する"
                 onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
               >
-                削除
+                🗑️ 削除
               </button>
             </>
           )}
@@ -98,7 +101,12 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
           onCancel={() => setAdding(false)}
         />
       ) : (
-        <button type="button" data-testid="bookmark-add" onClick={() => setAdding(true)}>
+        <button
+          type="button"
+          data-testid="bookmark-add"
+          title="新しいブックマークを追加する"
+          onClick={() => setAdding(true)}
+        >
           + 追加
         </button>
       )}

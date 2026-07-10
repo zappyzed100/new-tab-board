@@ -1,6 +1,12 @@
 // NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
 import { useState } from "react";
-import { addNote, createNote, removeNote, sortedNotes, updateNote } from "../../../lib/entities/notes";
+import {
+  addNote,
+  createNote,
+  removeNote,
+  sortedNotes,
+  updateNote,
+} from "../../../lib/entities/notes";
 import type { Note } from "../../../types";
 
 type Props = {
@@ -39,6 +45,7 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
               type="button"
               data-testid={`note-tab-select-${note.id}`}
               aria-current={note.id === activeNoteId}
+              title="ダブルクリックでノート名を変更できます"
               onClick={() => onSelect(note.id)}
               onDoubleClick={() => setRenamingId(note.id)}
             >
@@ -49,20 +56,27 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
           <button
             type="button"
             data-testid={`note-tab-pin-${note.id}`}
+            title={note.pinned ? "ピン留めを解除する" : "このノートをピン留めして先頭に固定する"}
             onClick={() => onNotesChange(updateNote(notes, note.id, { pinned: !note.pinned }))}
           >
-            {note.pinned ? "ピン解除" : "ピン留め"}
+            📌 {note.pinned ? "ピン解除" : "ピン留め"}
           </button>
           <button
             type="button"
             data-testid={`note-tab-delete-${note.id}`}
+            title="このノートを削除する"
             onClick={() => onNotesChange(removeNote(notes, note.id))}
           >
-            削除
+            🗑️ 削除
           </button>
         </div>
       ))}
-      <button type="button" data-testid="note-tab-add" onClick={handleAdd}>
+      <button
+        type="button"
+        data-testid="note-tab-add"
+        title="新しいノートを作成する"
+        onClick={handleAdd}
+      >
         + ノート
       </button>
     </div>

@@ -246,16 +246,21 @@ export function App() {
   return (
     <main data-testid="app-root">
       {countdown.kind === "upcoming" ? (
-        <div data-testid="next-event-countdown">
-          次の予定まで {countdown.minutes}分({countdown.title})
+        <div data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
+          📆 次の予定まで {countdown.minutes}分({countdown.title})
         </div>
       ) : null}
       {countdown.kind === "in-progress" ? (
-        <div data-testid="next-event-countdown">予定は進行中です</div>
+        <div data-testid="next-event-countdown">📆 予定は進行中です</div>
       ) : null}
       {alarmActive ? (
-        <button type="button" data-testid="stop-pre-event-alarm" onClick={stopPreEventAlarm}>
-          アラーム停止
+        <button
+          type="button"
+          data-testid="stop-pre-event-alarm"
+          title="予定10分前アラームの音を止める"
+          onClick={stopPreEventAlarm}
+        >
+          🔔 アラーム停止
         </button>
       ) : null}
 
@@ -273,38 +278,58 @@ export function App() {
       </header>
 
       <nav className="app-toolbar">
-        <button type="button" data-testid="toggle-search" onClick={() => setShowSearch((v) => !v)}>
-          {showSearch ? "検索を閉じる" : "検索⌘F"}
+        <button
+          type="button"
+          data-testid="toggle-search"
+          title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
+          onClick={() => setShowSearch((v) => !v)}
+        >
+          🔍 {showSearch ? "検索を閉じる" : "検索⌘F"}
         </button>
-        <button type="button" data-testid="toggle-todos" onClick={() => setShowTodos((v) => !v)}>
-          {showTodos ? "TODOを閉じる" : "TODO一覧"}
+        <button
+          type="button"
+          data-testid="toggle-todos"
+          title="全ノートの「- [ ] 未完了タスク」を一覧表示する"
+          onClick={() => setShowTodos((v) => !v)}
+        >
+          ✅ {showTodos ? "TODOを閉じる" : "TODO一覧"}
         </button>
         <button
           type="button"
           data-testid="open-command-palette"
+          title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
           onClick={() => setShowCommandPalette(true)}
         >
-          コマンド⌘K
+          ⌘ コマンド⌘K
         </button>
         <button
           type="button"
           data-testid="open-shortcuts-modal"
+          title="使えるキーボードショートカットの一覧を表示する"
           onClick={() => setShowShortcutsModal(true)}
         >
-          ショートカット一覧(?)
+          ⌨️ ショートカット一覧(?)
         </button>
         <button
           type="button"
           data-testid="toggle-calendar"
+          title="月表示の小型カレンダーを開く(日付クリックでGoogleカレンダーへ)"
           onClick={() => setShowCalendar((v) => !v)}
         >
-          {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
+          📅 {showCalendar ? "カレンダーを閉じる" : "カレンダー"}
         </button>
-        <button type="button" data-testid="toggle-data" onClick={() => setShowData((v) => !v)}>
-          {showData ? "データ管理を閉じる" : "データ管理"}
+        <button
+          type="button"
+          data-testid="toggle-data"
+          title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
+          onClick={() => setShowData((v) => !v)}
+        >
+          🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
         </button>
         {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-          <span data-testid="drive-sync-status">{DRIVE_SYNC_LABEL[driveSyncStatus]}</span>
+          <span data-testid="drive-sync-status" title="このノートのGoogle Drive自動同期の状態">
+            {DRIVE_SYNC_LABEL[driveSyncStatus]}
+          </span>
         ) : null}
       </nav>
 
@@ -379,16 +404,18 @@ export function App() {
                 <button
                   type="button"
                   data-testid="toggle-preview"
+                  title="Markdown記法(見出し・リスト等)を清書して表示する"
                   onClick={() => setShowPreview((v) => !v)}
                 >
-                  {showPreview ? "編集に戻る" : "プレビュー"}
+                  {showPreview ? "✏️ 編集に戻る" : "👁️ Markdownプレビュー"}
                 </button>
                 <button
                   type="button"
                   data-testid="toggle-history"
+                  title="過去のスナップショット一覧・差分表示・復元"
                   onClick={() => setShowHistory((v) => !v)}
                 >
-                  {showHistory ? "履歴を閉じる" : "履歴🕑"}
+                  🕑 {showHistory ? "履歴を閉じる" : "履歴"}
                 </button>
               </div>
               <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
@@ -425,7 +452,9 @@ export function App() {
               />
             </div>
           ) : (
-            <div data-testid="no-notes">ノートがありません</div>
+            <div data-testid="no-notes">
+              📝 ノートがありません。上の「+ ノート」ボタンを押すと書き始められます
+            </div>
           )}
         </section>
       </div>
