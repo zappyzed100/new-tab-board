@@ -10,6 +10,7 @@ import { NoteTabs } from "./components/notes/NoteTabs";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { SnapshotScheduler } from "./components/notes/SnapshotScheduler";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
+import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { pickAndReadTextFile } from "../lib/fileio/fileSystem";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
@@ -27,7 +28,7 @@ import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
 import { useDriveSync } from "../lib/drive/useDriveSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
-import type { AppLaunch, Bookmark, LocalData, Note, Settings } from "../types";
+import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
 
 const DRIVE_SYNC_LABEL: Record<string, string> = {
   idle: "",
@@ -53,21 +54,19 @@ const HistoryPanel = lazy(() =>
 const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
-const TodoPanel = lazy(() =>
-  import("./components/discovery/TodoPanel").then((m) => ({ default: m.TodoPanel })),
-);
 
 export function App() {
   const [sync, setSync] = useState<SyncState | null>(null);
   const [notes, setNotes] = useState<Note[] | null>(null);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  // 検索/データ管理は同時に複数表示すると関係性が分かりにくいため、
-  // 独立したbooleanではなく単一の「今どのタブが選ばれているか」で管理する
-  // (タブ切替と同じ挙動——別のタブを開くと前のタブは自動で閉じる)。
-  // カレンダー/TODOはこの排他タブ制から外し、常時表示のサイドバー部品にした(下記app-widgets)。
-  const [activePanel, setActivePanel] = useState<"search" | "data" | null>(null);
+  // 検索はノート編集エリア内のトグル(プレビュー/履歴と同じ並び)——ホーム画面レベルの
+  // 概念ではなく「今開いているノートに対する操作」として編集エリア側に置く。
+  const [showSearch, setShowSearch] = useState(false);
+  // データ管理はホーム画面レベルのトグル(アプリ全体のバックアップ/取り込み)。
+  const [showData, setShowData] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
@@ -91,6 +90,7 @@ export function App() {
       if (cancelled) return;
       setSync(syncData);
       setNotes(localData.notes);
+      setTodos(localData.todos ?? []);
       setActiveNoteId(localData.notes[0]?.id ?? null);
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
@@ -168,7 +168,7 @@ export function App() {
 
   useGlobalShortcuts(shortcutRegistry, {
     commandPalette: () => setShowCommandPalette(true),
-    toggleSearch: () => setActivePanel((p) => (p === "search" ? null : "search")),
+    toggleSearch: () => setShowSearch((v) => !v),
     cheatSheet: () => setShowShortcutsModal(true),
     immediateSnapshot: () => {
       if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
@@ -208,10 +208,18 @@ export function App() {
 
   function updateNotes(nextNotes: Note[]) {
     setNotes(nextNotes);
-    void saveLocalData({ notes: nextNotes });
+    // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
+    // (todos/nextEventCache/alarmActive)を巻き込まないよう現在値を明示的に含めて保存する
+    // (含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が消えてしまう)。
+    void saveLocalData({ notes: nextNotes, todos, nextEventCache, alarmActive });
     if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
       setActiveNoteId(nextNotes[0]?.id ?? null);
     }
+  }
+
+  function updateTodos(nextTodos: Todo[]) {
+    setTodos(nextTodos);
+    void saveLocalData({ notes: notes ?? [], todos: nextTodos, nextEventCache, alarmActive });
   }
 
   function updateSettings(patch: Partial<Settings>) {
@@ -226,7 +234,7 @@ export function App() {
     setNotes(data.notes);
     setActiveNoteId(data.notes[0]?.id ?? null);
     void saveSyncData(data.sync);
-    void saveLocalData({ notes: data.notes });
+    void saveLocalData({ notes: data.notes, todos, nextEventCache, alarmActive });
   }
 
   function openFileAsNote(title: string, content: string) {
@@ -279,28 +287,15 @@ export function App() {
       </header>
 
       <nav className="app-toolbar">
-        <div className="app-tabs" role="tablist" aria-label="表示パネルの切替">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanel === "search"}
-            data-testid="toggle-search"
-            title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
-            onClick={() => setActivePanel((p) => (p === "search" ? null : "search"))}
-          >
-            🔍 {activePanel === "search" ? "検索を閉じる" : "検索(Ctrl+F)"}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanel === "data"}
-            data-testid="toggle-data"
-            title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
-            onClick={() => setActivePanel((p) => (p === "data" ? null : "data"))}
-          >
-            🗄️ {activePanel === "data" ? "データ管理を閉じる" : "データ管理"}
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-pressed={showData}
+          data-testid="toggle-data"
+          title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
+          onClick={() => setShowData((v) => !v)}
+        >
+          🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
+        </button>
 
         <div className="app-actions">
           <button
@@ -309,7 +304,7 @@ export function App() {
             title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
             onClick={() => setShowCommandPalette(true)}
           >
-            コマンド(Ctrl+K)
+            🚀 クイックオープン(Ctrl+K)
           </button>
           <button
             type="button"
@@ -329,24 +324,13 @@ export function App() {
       </nav>
 
       <div className="app-overlays">
-        {activePanel === "data" ? (
+        {showData ? (
           <DataPanel
             sync={sync}
             notes={notes}
             onImportData={importData}
             onOpenFileAsNote={openFileAsNote}
           />
-        ) : null}
-        {activePanel === "search" ? (
-          <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-            <SearchPanel
-              notes={notes}
-              onSelectNote={(noteId) => {
-                selectNote(noteId);
-                setActivePanel(null);
-              }}
-            />
-          </Suspense>
         ) : null}
       </div>
 
@@ -376,12 +360,8 @@ export function App() {
             openIn={sync.settings.openIn}
             onBookmarksChange={updateBookmarks}
           />
-          <div className="app-widgets">
-            <MiniCalendar />
-            <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
-              <TodoPanel notes={notes} onSelectNote={selectNote} />
-            </Suspense>
-          </div>
+          <MiniCalendar />
+          <TodoList todos={todos} onTodosChange={updateTodos} />
         </div>
         <section className="app-notes">
           <NoteTabs
@@ -414,7 +394,27 @@ export function App() {
                 >
                   🕑 {showHistory ? "履歴を閉じる" : "履歴"}
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={showSearch}
+                  data-testid="toggle-search"
+                  title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
+                  onClick={() => setShowSearch((v) => !v)}
+                >
+                  🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
+                </button>
               </div>
+              {showSearch ? (
+                <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+                  <SearchPanel
+                    notes={notes}
+                    onSelectNote={(noteId) => {
+                      selectNote(noteId);
+                      setShowSearch(false);
+                    }}
+                  />
+                </Suspense>
+              ) : null}
               {showHistory ? (
                 <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
                   <HistoryPanel

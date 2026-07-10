@@ -70,22 +70,24 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
                 <BookmarkIcon bookmark={bookmark} />
               </button>
               <span data-testid={`bookmark-label-${bookmark.id}`}>{bookmark.label}</span>
-              <button
-                type="button"
-                data-testid={`bookmark-edit-${bookmark.id}`}
-                title="このブックマークを編集する"
-                onClick={() => setEditingId(bookmark.id)}
-              >
-                ✏️ 編集
-              </button>
-              <button
-                type="button"
-                data-testid={`bookmark-remove-${bookmark.id}`}
-                title="このブックマークを削除する"
-                onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
-              >
-                🗑️ 削除
-              </button>
+              <div className="bookmark-actions">
+                <button
+                  type="button"
+                  data-testid={`bookmark-edit-${bookmark.id}`}
+                  title="このブックマークを編集する"
+                  onClick={() => setEditingId(bookmark.id)}
+                >
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  data-testid={`bookmark-remove-${bookmark.id}`}
+                  title="このブックマークを削除する"
+                  onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
+                >
+                  🗑️
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -101,14 +103,17 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
           onCancel={() => setAdding(false)}
         />
       ) : (
-        <button
-          type="button"
-          data-testid="bookmark-add"
-          title="新しいブックマークを追加する"
-          onClick={() => setAdding(true)}
-        >
-          + ブックマーク追加
-        </button>
+        <div className="bookmark-cell-add">
+          <button
+            type="button"
+            data-testid="bookmark-add"
+            title="新しいブックマークを追加する"
+            onClick={() => setAdding(true)}
+          >
+            +
+          </button>
+          <span>サイトを追加</span>
+        </div>
       )}
     </div>
   );

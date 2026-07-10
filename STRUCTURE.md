@@ -64,8 +64,9 @@
 - `e2e/specs/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)のE2E(SPEC.md §4.5)
 - `e2e/specs/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
-- `e2e/specs/search-todo-backlinks.spec.ts` — search-todo-backlinks.spec.ts — 全文検索/横断TODO/バックリンクのE2E(SPEC.md §7 v1確定)
+- `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
+- `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
 
 ## `public/`
 
@@ -115,6 +116,8 @@
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/entities/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/entities/todos.test.ts` — todos.test.ts — todos.ts の純粋関数の単体テスト
+- `src/lib/entities/todos.ts` — todos.ts — 単体TODOリストの純粋な状態更新関数(I/Oを持たない。TodoMVC相当・ノート非依存)
 - `src/lib/externalIO/CLAUDE.md`
 - `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
 - `src/lib/externalIO/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
@@ -134,8 +137,6 @@
 - `src/lib/linking/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
 - `src/lib/linking/links.test.ts` — links.test.ts — links.ts([[リンク]]パース・バックリンク索引)の単体テスト
 - `src/lib/linking/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
-- `src/lib/linking/todo.test.ts` — todo.test.ts — todo.ts(横断TODO集約)の単体テスト
-- `src/lib/linking/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
 - `src/lib/nextEvent/calendar.test.ts` — calendar.test.ts — calendar.ts(Calendar API読み取り)の単体テスト(フェイクfetchを注入)
 - `src/lib/nextEvent/calendar.ts` — calendar.ts — Google Calendar API(読み取り専用)から次の予定を取得する(SPEC.md §4.9)
 - `src/lib/nextEvent/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
@@ -166,7 +167,6 @@
 - `src/newtab/components/discovery/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
-- `src/newtab/components/discovery/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
@@ -179,6 +179,7 @@
 - `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
 - `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
+- `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/newtab/styles.css`
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
@@ -397,6 +398,13 @@
 ### `src/lib/entities/tags.ts`
 - function extractTags
 
+### `src/lib/entities/todos.ts`
+- function createTodo
+- function addTodo
+- function toggleTodo
+- function removeTodo
+- function sortedTodos
+
 ### `src/lib/externalIO/nasArchive.ts`
 - function probeNasReachable
 - function flushSnapshotToNas
@@ -446,12 +454,6 @@
 - type Backlink
 - type LinkableNote
 - function buildBacklinkIndex
-
-### `src/lib/linking/todo.ts`
-- type AggregatedTodo
-- type TodoNote
-- function extractTodos
-- function aggregateTodos
 
 ### `src/lib/nextEvent/calendar.ts`
 - type FetchLike
@@ -533,9 +535,6 @@
 ### `src/newtab/components/discovery/ShortcutsModal.tsx`
 - function ShortcutsModal
 
-### `src/newtab/components/discovery/TodoPanel.tsx`
-- function TodoPanel
-
 ### `src/newtab/components/notes/BacklinksPanel.tsx`
 - function BacklinksPanel
 
@@ -572,12 +571,16 @@
 ### `src/newtab/components/shell/ThemeToggle.tsx`
 - function ThemeToggle
 
+### `src/newtab/components/shell/TodoList.tsx`
+- function TodoList
+
 ### `src/types.ts`
 - type Bookmark
 - type AppLaunch
 - type Settings
 - type SyncData
 - type Note
+- type Todo
 - type LocalData
 - type Snapshot
 - type IndexEntry

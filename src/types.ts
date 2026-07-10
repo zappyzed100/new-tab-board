@@ -36,8 +36,18 @@ export type Note = {
   lastSyncedAt?: number;
 };
 
+/** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス
+ * 横断集約とは別物——ユーザーフィードバックにより横断集約は撤去し単体リストへ差し替え)。 */
+export type Todo = {
+  id: string;
+  text: string;
+  done: boolean;
+  order: number;
+};
+
 export type LocalData = {
   notes: Note[];
+  todos?: Todo[];
   nextEventCache?: {
     title: string;
     startsAt: number;

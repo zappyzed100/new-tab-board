@@ -58,19 +58,26 @@ const editingKeymap = [
   { key: "Mod-d", run: selectNextOccurrence },
 ];
 
-// カーソル位置(文書先頭からの絶対文字数)/全文字数(SPEC.md §8想定のメモ帳風表示)。
-type CursorInfo = { pos: number; length: number };
+// 行/列(メモ帳風)+カーソル位置(文書先頭からの絶対文字数)/全文字数の両方を表示する。
+type CursorInfo = { line: number; col: number; pos: number; length: number };
 
 export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
-  const [cursor, setCursor] = useState<CursorInfo>({ pos: 0, length: content.length });
+  const [cursor, setCursor] = useState<CursorInfo>({
+    line: 1,
+    col: 1,
+    pos: 0,
+    length: content.length,
+  });
 
   useEffect(() => {
     if (!containerRef.current) return;
     function readCursor(state: EditorState): CursorInfo {
-      return { pos: state.selection.main.head, length: state.doc.length };
+      const pos = state.selection.main.head;
+      const line = state.doc.lineAt(pos);
+      return { line: line.number, col: pos - line.from + 1, pos, length: state.doc.length };
     }
     const editState = EditorState.create({
       doc: content,
@@ -109,7 +116,7 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
     <div>
       <div data-testid="notepad-editor" ref={containerRef} />
       <div data-testid="notepad-status-bar">
-        {cursor.pos}文字/全{cursor.length}文字
+        行 {cursor.line}、列 {cursor.col}、{cursor.pos}文字/全{cursor.length}文字
       </div>
     </div>
   );
