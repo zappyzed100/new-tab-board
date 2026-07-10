@@ -1,5 +1,5 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { BacklinksPanel } from "./components/BacklinksPanel";
 import { BookmarkGrid } from "./components/BookmarkGrid";
 import { Clock } from "./components/Clock";
@@ -24,6 +24,7 @@ import { resolveTheme } from "../lib/theme";
 import { now as clockNow } from "../lib/clock";
 import { computeCountdown } from "../lib/nextEventCountdown";
 import { flushAllToNas } from "../lib/nasArchive";
+import { pullPendingFile } from "../lib/nativeMessaging";
 import { forceSnapshot } from "../lib/useSnapshotScheduler";
 import { useDriveSync } from "../lib/useDriveSync";
 import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
@@ -95,6 +96,18 @@ export function App() {
   useEffect(() => {
     void flushAllToNas();
   }, []);
+
+  // 新規タブページが開くたびにFlow Launcher(native messaging host)へ接続し、
+  // 保留中のファイルがあれば新規ノートとして取り込む(SPEC.md §4.10-d「pull型」)。
+  // notesの初回ロード完了を待ってから1回だけ実行する(pulledRefで再発火を防ぐ)。
+  const pulledFileRef = useRef(false);
+  useEffect(() => {
+    if (!notes || pulledFileRef.current) return;
+    pulledFileRef.current = true;
+    void pullPendingFile().then((result) => {
+      if (result) openFileAsNote(result.name.replace(/\.txt$/i, ""), result.content);
+    });
+  }, [notes]);
 
   // background.tsが数分おきに更新するnextEventCacheを取り込みつつ、カウントダウン表示を
   // 定期的に再計算させる(SPEC.md §4.9「毎秒/毎分再計算」。30秒間隔で分単位の精度は満たす)。

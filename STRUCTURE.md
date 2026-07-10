@@ -50,6 +50,7 @@
 - `docs/guardrails/CUSTOMIZE.md`
 - `docs/guardrails/GOALS.md`
 - `docs/guardrails/GUARDRAILS.md`
+- `docs/native-messaging-protocol.md`
 - `docs/stack.md`
 
 ## `e2e/`
@@ -122,6 +123,8 @@
 - `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
 - `src/lib/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
 - `src/lib/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
+- `src/lib/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
+- `src/lib/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
 - `src/lib/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
 - `src/lib/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
 - `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
@@ -432,6 +435,11 @@
 - function flushAllToNas
 - function readArchivedSnapshot
 - function getSnapshotBody
+
+### `src/lib/nativeMessaging.ts`
+- const NATIVE_HOST_NAME
+- type ConnectNativeFn
+- function pullPendingFile
 
 ### `src/lib/nextEventCountdown.ts`
 - type CountdownState
