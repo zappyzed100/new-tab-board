@@ -188,6 +188,7 @@
 - `tests/guard_corpus.tsv`
 - `tests/test_check_commit_msg.py` — test_check_commit_msg.py — check_commit_msg.pyの検査2(fix-without-test)回帰テスト
 - `tests/test_check_commit_msg_history.py` — test_check_commit_msg_history.py — check_commit_msg_history.pyの回帰テスト
+- `tests/test_check_structure_path_bindings.py` — test_check_structure_path_bindings.py — パス型バインディングの死活検査(path-binding-dead)の回帰テスト
 - `tests/test_repo_scan_orphans.py` — test_repo_scan_orphans.py — 孤立ファイル検出(orphan-file)の回帰テスト
 - `tests/test_repo_scan_test_patterns.py` — test_repo_scan_test_patterns.py — TEST_PATH_PATTERNSのキット自身デフォルトの回帰テスト
 - `tests/test_session_baseline.py` — test_session_baseline.py — session_baseline.py(SessionStartのsource分岐)の回帰テスト
@@ -299,6 +300,7 @@
 - def check_context_doc_size
 - def check_hooks_installed
 - def check_binding_dead_patterns
+- def check_path_binding_dead_patterns
 - def check_binding_source
 - def check_soft_limits
 - def check_orphans
@@ -592,6 +594,9 @@
 - def commit
 - def run_history
 - class CheckCommitMsgHistoryTest
+
+### `tests/test_check_structure_path_bindings.py`
+- class PathBindingDeadTest
 
 ### `tests/test_repo_scan_orphans.py`
 - class DynamicImportMidLineTest

@@ -392,6 +392,19 @@ pre-commit の「フックがファイルを変更したら失敗扱い」機構
   迂回の静的検出。解除はユーザー端末で `git config --unset core.hooksPath` — §2 参照）
 - ✅ `binding-dead-pattern` — 充填したパターン辞書のキー拡張子が CODE_EXTS /
   HEADER_REQUIRED_EXTS に無く、その検査が永久に不発（列充填の取りこぼし＝fail-open の検出）
+- ✅ `path-binding-dead`（v2.27・G9）— `binding-dead-pattern` の姉妹検査。パスを値に持つ
+  バインディング（`LOG_EXIT_FILES`/`BINDING_STAMP_FILES` の完全一致パス集合、
+  `PLAN_LAYER_ROOTS`/`LOG_EXIT_PREFIXES`/`DIR_COUNT_EXEMPT` のディレクトリ接頭辞）が
+  tracked files に1件もマッチしなくなっていたら検出する。**実例**: このリポジトリで
+  `src/lib/log.ts` を `src/lib/runtime/log.ts` へ移した際、`LOG_EXIT_FILES` の追随忘れに
+  気付けたのは `eslint` の `no-console` エラーが偶然（別経路で）先に落ちたからで、
+  `check-structure` 自体にはこの種の drift を捉える機構が無かった。`ORPHAN_UNIVERSES` の
+  `entry_pats`（正規表現）はこの検査の対象外——エントリ対象が改名されると代わりに新規の
+  `orphan-file` 警告が**うるさく**発生する自己修復的な失敗モードのため（静かに消えるのは
+  完全一致パス／接頭辞の方だけ）。列の値が最初から空（未充填）なのは正常な初期状態であり
+  対象外——「かつてマッチしていたのに改名で消えた」regression だけを検出する。回帰は
+  `tests/test_check_structure_path_bindings.py`
+  （`uv run python tests/test_check_structure_path_bindings.py`）が担保する。
 
 **soft（警告のみ・コミットは通る）**:
 - ✅ 1ファイル500行超

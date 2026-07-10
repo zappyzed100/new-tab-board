@@ -362,6 +362,45 @@ def check_binding_dead_patterns(out: list[Finding]) -> None:
                         "（充填時に CODE_EXTS へ拡張子を足す — §3.3）"))
 
 
+def check_path_binding_dead_patterns(tracked: set[str], out: list[Finding]) -> None:
+    """パス型バインディングの死活検査(binding-dead-patternの姉妹検査 — v2.27・G9)。
+
+    binding-dead-patternは拡張子キーの辞書しか見ておらず、パスを値に持つバインディング
+    (完全一致パス集合・ディレクトリ接頭辞のリスト)はレイヤー直下の改名/削除で
+    tracked filesに1件もマッチしなくなっても検査が音もなく不発になる穴があった
+    (例: log.tsを移動した際にLOG_EXIT_FILESが追随せず古いパスのままでも誰も気付けない)。
+    列の値が最初から空(未充填)なのは正常な初期状態であり対象外——「かつてマッチして
+    いたのに改名で消えた」regressionだけを検出する。
+    """
+
+    def has_prefix_match(prefix: str) -> bool:
+        if prefix == "":
+            return True  # ルート直下は常に何かある
+        p = prefix.rstrip("/") + "/"
+        return any(rel.startswith(p) for rel in tracked)
+
+    for name, paths in (
+        ("LOG_EXIT_FILES", sorted(rs.LOG_EXIT_FILES)),
+        ("BINDING_STAMP_FILES", list(rs.BINDING_STAMP_FILES)),
+    ):
+        for path in paths:
+            if path not in tracked:
+                out.append(("HARD", "path-binding-dead", f"scripts/repo_scan.py ({name})",
+                            f"{path!r} が tracked files に存在しない"
+                            "（ファイルが移動/削除された可能性——設定を追随させる — §3.3）"))
+
+    for name, prefixes in (
+        ("PLAN_LAYER_ROOTS", list(rs.PLAN_LAYER_ROOTS)),
+        ("LOG_EXIT_PREFIXES", list(rs.LOG_EXIT_PREFIXES)),
+        ("DIR_COUNT_EXEMPT", list(rs.DIR_COUNT_EXEMPT)),
+    ):
+        for prefix in prefixes:
+            if not has_prefix_match(prefix):
+                out.append(("HARD", "path-binding-dead", f"scripts/repo_scan.py ({name})",
+                            f"接頭辞 {prefix!r} に tracked files が1件もマッチしない"
+                            "（該当レイヤー/ディレクトリが改名/削除された可能性 — §3.3）"))
+
+
 def check_binding_source(root: Path, tracked: set[str], out: list[Finding]) -> None:
     """バインディング刻印の整合（§12.7）。刻印は列ID@版・全対象ファイルで一致していること。
 
@@ -489,6 +528,7 @@ def main() -> int:
     check_context_doc_size(root, files, findings)
     check_hooks_installed(root, tracked, findings)
     check_binding_dead_patterns(findings)
+    check_path_binding_dead_patterns(tracked, findings)
     check_binding_source(root, tracked, findings)
     check_soft_limits(files, texts, findings)
     check_orphans(root, files, texts, findings)
