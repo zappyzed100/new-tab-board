@@ -15,9 +15,9 @@ test("ブックマークの追加→編集→削除が一連で動く", async ({
 
   // --- 編集 ---
   await page.locator('[data-testid^="bookmark-edit-"]').click();
-  const labelInput = page.locator('[data-testid$="-label"]').last();
+  const labelInput = page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-label"]');
   await labelInput.fill("サンプル改");
-  await page.locator('[data-testid$="-save"]').last().click();
+  await page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-save"]').click();
   await expect(page.getByTestId("bookmark-grid")).toContainText("サンプル改");
 
   // --- 削除 ---

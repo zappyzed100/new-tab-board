@@ -1,6 +1,19 @@
 // notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 import type { Note } from "../../types";
 
+const NOTE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/** 「ノートA」〜「ノートZ」のうち既存タイトルと重複しない最初の1つを返す。
+ * 全26文字が使用中ならnull(呼び出し側は新規作成を拒否しポップアップを出す)。 */
+export function nextNoteLetterTitle(existingTitles: string[]): string | null {
+  const used = new Set(existingTitles);
+  for (const letter of NOTE_LETTERS) {
+    const title = `ノート${letter}`;
+    if (!used.has(title)) return title;
+  }
+  return null;
+}
+
 export function createNote(title: string, order: number): Note {
   return {
     id: crypto.randomUUID(),

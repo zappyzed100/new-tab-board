@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   addNote,
   createNote,
+  nextNoteLetterTitle,
   removeNote,
   sortedNotes,
   updateNote,
@@ -24,7 +25,12 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
   const sorted = sortedNotes(notes);
 
   function handleAdd() {
-    const note = createNote("無題のノート", sorted.length);
+    const title = nextNoteLetterTitle(notes.map((n) => n.title));
+    if (title === null) {
+      window.alert("ノートを開きすぎです!(ノートA〜Zの26件が上限です)");
+      return;
+    }
+    const note = createNote(title, sorted.length);
     onNotesChange(addNote(notes, note));
     onSelect(note.id);
   }

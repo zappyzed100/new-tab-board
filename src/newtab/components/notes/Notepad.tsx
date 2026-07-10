@@ -22,6 +22,9 @@ import { evaluateLineIfCalculator } from "../../../lib/linking/calculator";
 type Props = {
   content: string;
   onContentChange: (content: string) => void;
+  /** trueならマウント時にエディタへフォーカスする(既定true)。新規タブを開いた直後の
+   * 自動選択では、代わりにオムニバーへフォーカスさせたいためApp.tsx側でfalseを渡す。 */
+  autoFocus?: boolean;
 };
 
 // インライン電卓(SPEC.md §7 v1確定): 行末が`= `で終わる算術式で改行すると、
@@ -55,23 +58,19 @@ const editingKeymap = [
   { key: "Mod-d", run: selectNextOccurrence },
 ];
 
-type CursorInfo = { line: number; col: number; length: number };
+// カーソル位置(文書先頭からの絶対文字数)/全文字数(SPEC.md §8想定のメモ帳風表示)。
+type CursorInfo = { pos: number; length: number };
 
-export function Notepad({ content, onContentChange }: Props) {
+export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
-  const [cursor, setCursor] = useState<CursorInfo>(() => {
-    const nlIndex = content.length; // 初期表示は先頭(1行目・1列目)扱いで十分
-    return { line: 1, col: 1, length: nlIndex };
-  });
+  const [cursor, setCursor] = useState<CursorInfo>({ pos: 0, length: content.length });
 
   useEffect(() => {
     if (!containerRef.current) return;
     function readCursor(state: EditorState): CursorInfo {
-      const pos = state.selection.main.head;
-      const line = state.doc.lineAt(pos);
-      return { line: line.number, col: pos - line.from + 1, length: state.doc.length };
+      return { pos: state.selection.main.head, length: state.doc.length };
     }
     const editState = EditorState.create({
       doc: content,
@@ -98,7 +97,9 @@ export function Notepad({ content, onContentChange }: Props) {
     setCursor(readCursor(editState));
     // ノート切替(key propによる再マウント)のたびに即フォーカスし、選択の1クリックで
     // すぐ入力できるようにする(フォーカスが無いと本文クリックがもう1回要る——実害あり)。
-    view.focus();
+    // ただし新規タブを開いた直後の自動選択ではオムニバー側にフォーカスさせたいので、
+    // 呼び出し側がautoFocus=falseを渡した時だけ奪わない。
+    if (autoFocus) view.focus();
     return () => view.destroy();
     // content/onContentChangeは初回マウント時のみ使用する(意図的な依存配列省略——
     // ノート切替時はkey propで再マウントされるため、ここでの再実行は不要)。
@@ -108,7 +109,7 @@ export function Notepad({ content, onContentChange }: Props) {
     <div>
       <div data-testid="notepad-editor" ref={containerRef} />
       <div data-testid="notepad-status-bar">
-        行 {cursor.line}、列 {cursor.col} ・ {cursor.length}文字
+        {cursor.pos}文字/全{cursor.length}文字
       </div>
     </div>
   );

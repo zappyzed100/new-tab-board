@@ -13,7 +13,7 @@ test("ノートタブの追加→リネーム→削除が一連で動く", async
   await page.getByTestId("note-tab-add").click();
   await expect(page.locator('[data-testid^="note-tab-select-"]')).toHaveCount(beforeCount + 1);
   const newTab = page.locator('[data-testid^="note-tab-select-"]').last();
-  await expect(newTab).toContainText("無題のノート");
+  await expect(newTab).toContainText(/^ノート[A-Z]$/);
 
   // --- リネーム(ダブルクリックで入力欄に切替→blurで確定) ---
   await newTab.dblclick();

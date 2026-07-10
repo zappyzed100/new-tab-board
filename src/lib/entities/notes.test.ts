@@ -1,6 +1,14 @@
 // notes.test.ts — notes.ts の純粋関数の単体テスト
 import { describe, expect, it } from "vitest";
-import { addNote, createNote, removeNote, reorderNotes, sortedNotes, updateNote } from "./notes";
+import {
+  addNote,
+  createNote,
+  nextNoteLetterTitle,
+  removeNote,
+  reorderNotes,
+  sortedNotes,
+  updateNote,
+} from "./notes";
 
 describe("createNote / addNote", () => {
   it("空の内容で新しいノートを作る", () => {
@@ -46,5 +54,28 @@ describe("reorderNotes", () => {
     const after = reorderNotes([a, b, c], 0, 2);
     expect(after.map((n) => n.title)).toEqual(["B", "C", "A"]);
     expect(after.map((n) => n.order)).toEqual([0, 1, 2]);
+  });
+});
+
+describe("nextNoteLetterTitle", () => {
+  it("空なら「ノートA」を返す", () => {
+    expect(nextNoteLetterTitle([])).toBe("ノートA");
+  });
+
+  it("既存のタイトルを避けて次の文字を返す", () => {
+    expect(nextNoteLetterTitle(["ノートA", "ノートB"])).toBe("ノートC");
+  });
+
+  it("途中が空いていれば(削除等で)そこを埋める", () => {
+    expect(nextNoteLetterTitle(["ノートA", "ノートC"])).toBe("ノートB");
+  });
+
+  it("ノートA〜Zが全て使用中ならnull(拒否対象)", () => {
+    const all26 = Array.from({ length: 26 }, (_, i) => `ノート${String.fromCharCode(65 + i)}`);
+    expect(nextNoteLetterTitle(all26)).toBeNull();
+  });
+
+  it("ノートA〜Z以外のタイトルは無視して判定する", () => {
+    expect(nextNoteLetterTitle(["会議メモ", "ノートA"])).toBe("ノートB");
   });
 });

@@ -1,4 +1,4 @@
-// command-palette.spec.ts — コマンドパレット(Cmd+K)+オムニバーのE2E(SPEC.md §4.4・§4.5)
+// command-palette.spec.ts — コマンドパレット(Cmd+K)のE2E(SPEC.md §4.5)
 import { expect, test } from "../fixtures";
 
 test("コマンドパレットでノートを検索して切り替えられる", async ({ context, newTabUrl }) => {
@@ -31,22 +31,4 @@ test("コマンドパレットでノートを検索して切り替えられる",
   await expect(
     page.locator('[aria-current="true"][data-testid^="note-tab-select-"]'),
   ).toContainText("買い物リスト");
-});
-
-test("オムニバーでブックマークのエイリアスへ遷移できる", async ({ context, newTabUrl }) => {
-  const page = await context.newPage();
-  await page.goto(newTabUrl);
-  await expect(page.getByTestId("app-root")).toBeVisible();
-
-  await page.getByTestId("bookmark-add").click();
-  await page.getByTestId("bookmark-add-form-url").fill("https://example.com/");
-  await page.getByTestId("bookmark-add-form-label").fill("サンプル");
-  await page.getByTestId("bookmark-add-form-alias").fill("ex");
-  await page.getByTestId("bookmark-add-form-save").click();
-  await expect(page.getByTestId("bookmark-grid")).toContainText("サンプル");
-
-  await page.getByTestId("omnibar-input").fill("ex");
-  await page.getByTestId("omnibar-input").press("Enter");
-  await page.waitForURL("https://example.com/**");
-  await expect(page).toHaveURL(/example\.com/);
 });

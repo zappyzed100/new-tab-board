@@ -7,7 +7,6 @@ import { CommandPalette } from "./components/discovery/CommandPalette";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteTabs } from "./components/notes/NoteTabs";
-import { Omnibar } from "./components/discovery/Omnibar";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { SnapshotScheduler } from "./components/notes/SnapshotScheduler";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
@@ -64,12 +63,11 @@ export function App() {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  // 検索/TODO/カレンダー/データ管理は同時に複数表示すると関係性が分かりにくいため、
+  // 検索/データ管理は同時に複数表示すると関係性が分かりにくいため、
   // 独立したbooleanではなく単一の「今どのタブが選ばれているか」で管理する
   // (タブ切替と同じ挙動——別のタブを開くと前のタブは自動で閉じる)。
-  const [activePanel, setActivePanel] = useState<"search" | "todos" | "calendar" | "data" | null>(
-    null,
-  );
+  // カレンダー/TODOはこの排他タブ制から外し、常時表示のサイドバー部品にした(下記app-widgets)。
+  const [activePanel, setActivePanel] = useState<"search" | "data" | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
@@ -78,6 +76,14 @@ export function App() {
   // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
   // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
   const [restoreCounter, setRestoreCounter] = useState(0);
+  // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
+  // 「ユーザーが自分でノートを選んだ」時だけノート本文へオートフォーカスする
+  // (それ以外=起動直後の自動選択ではフォーカスを奪わない)。
+  const userSelectedNoteRef = useRef(false);
+  function selectNote(noteId: string) {
+    userSelectedNoteRef.current = true;
+    setActiveNoteId(noteId);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -168,9 +174,7 @@ export function App() {
       if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
       syncDriveNow(true);
     },
-    ...Object.fromEntries(
-      orderedNotes.map((n, i) => [`noteJump-${i}`, () => setActiveNoteId(n.id)]),
-    ),
+    ...Object.fromEntries(orderedNotes.map((n, i) => [`noteJump-${i}`, () => selectNote(n.id)])),
     ...Object.fromEntries(
       orderedBookmarks.map((b, i) => [
         `bookmarkJump-${i}`,
@@ -229,7 +233,7 @@ export function App() {
     if (!notes) return;
     const note = createNote(title, sortedNotes(notes).length);
     updateNotes(addNote(notes, { ...note, content }));
-    setActiveNoteId(note.id);
+    selectNote(note.id);
   }
 
   const countdown = computeCountdown(nextEventCache, clockNow());
@@ -242,7 +246,7 @@ export function App() {
     // このコンポーネントはnotesがnullの間は上のearly returnで描画されないため、
     // ここに到達する時点でnotesは必ず非nullだが、クロージャ内ではTSが型を絞り込めない。
     const found = notes?.find((n) => n.title === title);
-    if (found) setActiveNoteId(found.id);
+    if (found) selectNote(found.id);
   }
 
   return (
@@ -268,11 +272,6 @@ export function App() {
 
       <header className="app-header">
         <Clock />
-        <Omnibar
-          bookmarks={sync.bookmarks}
-          appLaunches={sync.appLaunches}
-          settings={sync.settings}
-        />
         <ThemeToggle
           theme={sync.settings.theme}
           onThemeChange={(theme) => updateSettings({ theme })}
@@ -289,27 +288,7 @@ export function App() {
             title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
             onClick={() => setActivePanel((p) => (p === "search" ? null : "search"))}
           >
-            🔍 {activePanel === "search" ? "検索を閉じる" : "検索⌘F"}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanel === "todos"}
-            data-testid="toggle-todos"
-            title="全ノートの「- [ ] 未完了タスク」を一覧表示する"
-            onClick={() => setActivePanel((p) => (p === "todos" ? null : "todos"))}
-          >
-            ✅ {activePanel === "todos" ? "TODOを閉じる" : "TODO一覧"}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activePanel === "calendar"}
-            data-testid="toggle-calendar"
-            title="月表示の小型カレンダーを開く(日付クリックでGoogleカレンダーへ)"
-            onClick={() => setActivePanel((p) => (p === "calendar" ? null : "calendar"))}
-          >
-            📅 {activePanel === "calendar" ? "カレンダーを閉じる" : "カレンダー"}
+            🔍 {activePanel === "search" ? "検索を閉じる" : "検索(Ctrl+F)"}
           </button>
           <button
             type="button"
@@ -330,7 +309,7 @@ export function App() {
             title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
             onClick={() => setShowCommandPalette(true)}
           >
-            ⌘ コマンド⌘K
+            コマンド(Ctrl+K)
           </button>
           <button
             type="button"
@@ -350,7 +329,6 @@ export function App() {
       </nav>
 
       <div className="app-overlays">
-        {activePanel === "calendar" ? <MiniCalendar /> : null}
         {activePanel === "data" ? (
           <DataPanel
             sync={sync}
@@ -364,15 +342,10 @@ export function App() {
             <SearchPanel
               notes={notes}
               onSelectNote={(noteId) => {
-                setActiveNoteId(noteId);
+                selectNote(noteId);
                 setActivePanel(null);
               }}
             />
-          </Suspense>
-        ) : null}
-        {activePanel === "todos" ? (
-          <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
-            <TodoPanel notes={notes} onSelectNote={setActiveNoteId} />
           </Suspense>
         ) : null}
       </div>
@@ -383,7 +356,7 @@ export function App() {
           bookmarks={sync.bookmarks}
           appLaunches={sync.appLaunches}
           openIn={sync.settings.openIn}
-          onSelectNote={setActiveNoteId}
+          onSelectNote={selectNote}
           onOpenFile={() =>
             void pickAndReadTextFile().then(
               (r) => r && openFileAsNote(r.name.replace(/\.txt$/i, ""), r.content),
@@ -397,17 +370,25 @@ export function App() {
       ) : null}
 
       <div className="app-main">
-        <BookmarkGrid
-          bookmarks={sync.bookmarks}
-          openIn={sync.settings.openIn}
-          onBookmarksChange={updateBookmarks}
-        />
+        <div className="app-sidebar">
+          <BookmarkGrid
+            bookmarks={sync.bookmarks}
+            openIn={sync.settings.openIn}
+            onBookmarksChange={updateBookmarks}
+          />
+          <div className="app-widgets">
+            <MiniCalendar />
+            <Suspense fallback={<div data-testid="todos-loading">TODOを読み込み中…</div>}>
+              <TodoPanel notes={notes} onSelectNote={selectNote} />
+            </Suspense>
+          </div>
+        </div>
         <section className="app-notes">
           <NoteTabs
             notes={notes}
             activeNoteId={activeNoteId}
             onNotesChange={updateNotes}
-            onSelect={setActiveNoteId}
+            onSelect={selectNote}
           />
           {activeNote ? (
             <div data-testid="note-editor-area">
@@ -457,17 +438,14 @@ export function App() {
                   <Notepad
                     key={`editor-${activeNote.id}-${restoreCounter}`}
                     content={activeNote.content}
+                    autoFocus={userSelectedNoteRef.current}
                     onContentChange={(content) =>
                       updateNotes(updateNote(notes, activeNote.id, { content }))
                     }
                   />
                 )}
               </Suspense>
-              <BacklinksPanel
-                notes={notes}
-                activeNote={activeNote}
-                onSelectNote={setActiveNoteId}
-              />
+              <BacklinksPanel notes={notes} activeNote={activeNote} onSelectNote={selectNote} />
             </div>
           ) : (
             <div data-testid="no-notes">

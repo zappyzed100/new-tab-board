@@ -107,7 +107,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
           title="新しいブックマークを追加する"
           onClick={() => setAdding(true)}
         >
-          + 追加
+          + ブックマーク追加
         </button>
       )}
     </div>

@@ -17,8 +17,15 @@
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
-  --shadow: 0 1px 2px rgba(16, 17, 20, 0.06), 0 1px 8px rgba(16, 17, 20, 0.04);
-  --shadow-lg: 0 12px 32px rgba(16, 17, 20, 0.18);
+  /* 層状シャドウ(単色黒でなく暗い藍色を薄く重ねる — Josh Comeau方式で「浮いて見える」深みを出す) */
+  --shadow: 0 1px 1px rgba(30, 27, 75, 0.04), 0 2px 2px rgba(30, 27, 75, 0.04),
+    0 4px 4px rgba(30, 27, 75, 0.04), 0 8px 8px rgba(30, 27, 75, 0.03);
+  --shadow-lg: 0 2px 2px rgba(30, 27, 75, 0.08), 0 6px 6px rgba(30, 27, 75, 0.07),
+    0 14px 14px rgba(30, 27, 75, 0.06), 0 28px 28px rgba(30, 27, 75, 0.05);
+  --shadow-btn: 0 1px 0 rgba(30, 27, 75, 0.06), 0 2px 1px rgba(30, 27, 75, 0.05),
+    0 4px 3px rgba(30, 27, 75, 0.04);
+  --shadow-btn-hover: 0 2px 0 rgba(30, 27, 75, 0.07), 0 4px 4px rgba(30, 27, 75, 0.06),
+    0 8px 8px rgba(30, 27, 75, 0.05);
   --radius: 14px;
   --radius-sm: 8px;
   --space-1: 4px;
@@ -45,8 +52,14 @@
   --success: #4ade80;
   --warning: #fbbf24;
   --danger: #f87171;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 8px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 2px 2px rgba(0, 0, 0, 0.25),
+    0 4px 4px rgba(0, 0, 0, 0.2), 0 8px 8px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 2px 2px rgba(0, 0, 0, 0.35), 0 6px 6px rgba(0, 0, 0, 0.3),
+    0 14px 14px rgba(0, 0, 0, 0.25), 0 28px 28px rgba(0, 0, 0, 0.2);
+  --shadow-btn: 0 1px 0 rgba(0, 0, 0, 0.3), 0 2px 1px rgba(0, 0, 0, 0.25),
+    0 4px 3px rgba(0, 0, 0, 0.2);
+  --shadow-btn-hover: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 4px rgba(0, 0, 0, 0.28),
+    0 8px 8px rgba(0, 0, 0, 0.22);
 }
 
 * {
@@ -87,7 +100,9 @@ button {
   font-family: inherit;
 }
 
-/* --- 汎用部品(button/input/select/form) --- */
+/* --- 汎用部品(button/input/select/form) ---
+   立体感: 静止時も薄く浮かせ(--shadow-btn)、hoverで少し持ち上がり(-1px+影を強める)、
+   activeで実際に押し込む(元位置へ沈み込み影を最小化)——物理ボタンの押下を模す。 */
 button[type="button"],
 button[type="submit"] {
   appearance: none;
@@ -99,21 +114,26 @@ button[type="submit"] {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
+  box-shadow: var(--shadow-btn);
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease,
-    transform 0.05s ease;
+    transform 0.1s ease,
+    box-shadow 0.15s ease;
 }
 
 button[type="button"]:hover,
 button[type="submit"]:hover {
   background: var(--surface-2);
   border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-btn-hover);
 }
 
 button[type="button"]:active,
 button[type="submit"]:active {
   transform: translateY(1px);
+  box-shadow: none;
 }
 
 
@@ -235,11 +255,30 @@ textarea:focus {
 
 .app-main {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
+  grid-template-columns: minmax(320px, 420px) 1fr;
   gap: var(--space-4);
   flex: 1;
   min-height: 0;
   align-items: start;
+}
+
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* カレンダー/TODOは常時表示・横並びの小型ウィジェット(トグルパネルではない) */
+.app-widgets {
+  display: flex;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.app-widgets > * {
+  flex: 1;
+  min-width: 0;
 }
 
 .app-notes {
@@ -265,18 +304,6 @@ textarea:focus {
 [data-testid="clock-date"] {
   font-size: 12px;
   color: var(--text-muted);
-}
-
-/* --- オムニバー --- */
-[data-testid="omnibar-form"] {
-  flex: 1;
-  min-width: 200px;
-}
-
-[data-testid="omnibar-input"] {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border-radius: 999px;
 }
 
 /* --- ブックマークグリッド --- */
@@ -343,6 +370,11 @@ textarea:focus {
   border-color: var(--accent);
   color: var(--accent-fg);
   font-weight: 600;
+}
+
+[data-testid="bookmark-add"] {
+  grid-column: span 2;
+  white-space: nowrap;
 }
 
 [data-testid="bookmark-add"]:hover,
@@ -504,11 +536,9 @@ textarea:focus {
   white-space: pre-wrap;
 }
 
-/* --- トグル可能なパネル群(検索/TODO/カレンダー/データ管理) --- */
+/* --- トグルパネル(検索/データ管理) --- */
 /* 種類ごとに左端の色を変え、ラベルだけでなく色でも見分けられるようにする */
 [data-testid="search-panel"],
-[data-testid="todo-panel"],
-[data-testid="mini-calendar"],
 [data-testid="data-panel"] {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -516,14 +546,6 @@ textarea:focus {
   border-radius: var(--radius);
   padding: var(--space-3);
   box-shadow: var(--shadow);
-}
-
-[data-testid="todo-panel"] {
-  border-left-color: var(--success);
-}
-
-[data-testid="mini-calendar"] {
-  border-left-color: var(--warning);
 }
 
 [data-testid="data-panel"] {
@@ -534,25 +556,44 @@ textarea:focus {
   width: 100%;
 }
 
+/* --- 常時表示の小型ウィジェット(カレンダー/TODO。app-widgets内で横並び) --- */
+[data-testid="todo-panel"],
+[data-testid="mini-calendar"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+
+[data-testid="todo-panel"] {
+  border-left-color: var(--success);
+  max-height: 220px;
+  overflow: auto;
+}
+
 [data-testid="mini-calendar"] table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 [data-testid="mini-calendar"] td {
   text-align: center;
-  padding: 4px;
+  padding: 1px;
 }
 
 [data-testid="mini-calendar"] a {
   display: inline-block;
-  width: 28px;
-  height: 28px;
-  line-height: 28px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
   border-radius: 999px;
   color: var(--text);
   text-decoration: none;
+  font-size: 10px;
 }
 
 [data-testid="mini-calendar"] a:hover {
@@ -577,6 +618,14 @@ textarea:focus {
   color: var(--text-muted);
 }
 
+/* --- モーダル背景(外側クリックで閉じる用の透明タップ領域) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+
 /* --- モーダル(コマンドパレット/ショートカット一覧) --- */
 [data-testid="command-palette"],
 [data-testid="shortcuts-modal"] {
@@ -593,6 +642,19 @@ textarea:focus {
   padding: var(--space-3);
   box-shadow: var(--shadow-lg);
   z-index: 50;
+}
+
+.modal-close-circle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  line-height: 1;
+  font-size: 16px;
+  background: var(--surface-2);
 }
 
 [data-testid="command-palette-input"] {

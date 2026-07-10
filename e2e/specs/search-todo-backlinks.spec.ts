@@ -30,10 +30,8 @@ test("検索・TODO集約・バックリンクが連動して動く", async ({ c
   await expect(page.locator('[data-testid^="search-result-open-"]')).toContainText("会議メモ");
   await page.getByTestId("toggle-search").click();
 
-  // --- TODO一覧: 未完了のTODOが集約される ---
-  await page.getByTestId("toggle-todos").click();
+  // --- TODO一覧: 常時表示のサイドバーウィジェットに未完了のTODOが集約される ---
   await expect(page.getByTestId("todo-panel")).toContainText("買い出しに行く");
-  await page.getByTestId("toggle-todos").click();
 
   // --- バックリンク: 「買い物リスト」に切り替えると「会議メモ」からのリンクが見える ---
   await note2Tab.click();
