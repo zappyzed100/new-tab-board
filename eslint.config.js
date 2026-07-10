@@ -20,7 +20,7 @@ export default tseslint.config(
   },
   {
     // ログの単一出口(GUARDRAILS.md §8.2)のみ console 呼び出しを許可する
-    files: ["src/lib/log.ts"],
+    files: ["src/lib/runtime/log.ts"],
     rules: { "no-console": "off" },
   },
   {

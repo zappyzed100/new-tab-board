@@ -578,7 +578,7 @@ PRINT_CALL_PATTERNS[".ts"] = _TS_PRINT
 PRINT_CALL_PATTERNS[".tsx"] = _TS_PRINT
 # print 系を呼んでよい唯一の出口（§8.2。列充填）
 LOG_EXIT_FILES: set[str] = set()
-LOG_EXIT_FILES |= {"src/lib/log.ts"}
+LOG_EXIT_FILES |= {"src/lib/runtime/log.ts"}
 # 出口検査の除外プレフィックス。scripts/ はキット自身の出力契約（§3.3 の1違反1行・
 # §12.1 の `[dev] 動詞:` 形式）が stdout/stderr 直書きを規定するため既定で除外——
 # これが無いと python 系の列を採用した瞬間、キット自身が log-direct-call で落ちる（G13）。

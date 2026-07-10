@@ -1,33 +1,33 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { BacklinksPanel } from "./components/BacklinksPanel";
-import { BookmarkGrid } from "./components/BookmarkGrid";
-import { Clock } from "./components/Clock";
-import { CommandPalette } from "./components/CommandPalette";
-import { DataPanel } from "./components/DataPanel";
-import { MiniCalendar } from "./components/MiniCalendar";
-import { NoteTabs } from "./components/NoteTabs";
-import { Omnibar } from "./components/Omnibar";
-import { ShortcutsModal } from "./components/ShortcutsModal";
-import { SnapshotScheduler } from "./components/SnapshotScheduler";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { sortedBookmarks } from "../lib/bookmarks";
-import { pickAndReadTextFile } from "../lib/fileSystem";
-import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage";
-import { addNote, createNote, sortedNotes, updateNote } from "../lib/notes";
+import { BacklinksPanel } from "./components/notes/BacklinksPanel";
+import { BookmarkGrid } from "./components/shell/BookmarkGrid";
+import { Clock } from "./components/shell/Clock";
+import { CommandPalette } from "./components/discovery/CommandPalette";
+import { DataPanel } from "./components/shell/DataPanel";
+import { MiniCalendar } from "./components/shell/MiniCalendar";
+import { NoteTabs } from "./components/notes/NoteTabs";
+import { Omnibar } from "./components/discovery/Omnibar";
+import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
+import { SnapshotScheduler } from "./components/notes/SnapshotScheduler";
+import { ThemeToggle } from "./components/shell/ThemeToggle";
+import { sortedBookmarks } from "../lib/entities/bookmarks";
+import { pickAndReadTextFile } from "../lib/fileio/fileSystem";
+import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
+import { addNote, createNote, sortedNotes, updateNote } from "../lib/entities/notes";
 import {
   buildBookmarkJumpShortcuts,
   buildNoteJumpShortcuts,
   SHORTCUT_REGISTRY,
-} from "../lib/shortcuts";
-import { resolveTheme } from "../lib/theme";
-import { now as clockNow } from "../lib/clock";
-import { computeCountdown } from "../lib/nextEventCountdown";
-import { flushAllToNas } from "../lib/nasArchive";
-import { pullPendingFile } from "../lib/nativeMessaging";
-import { forceSnapshot } from "../lib/useSnapshotScheduler";
-import { useDriveSync } from "../lib/useDriveSync";
-import { useGlobalShortcuts } from "../lib/useGlobalShortcuts";
+} from "../lib/shortcuts/shortcuts";
+import { resolveTheme } from "../lib/display/theme";
+import { now as clockNow } from "../lib/runtime/clock";
+import { computeCountdown } from "../lib/nextEvent/nextEventCountdown";
+import { flushAllToNas } from "../lib/externalIO/nasArchive";
+import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
+import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
+import { useDriveSync } from "../lib/drive/useDriveSync";
+import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings } from "../types";
 
 const DRIVE_SYNC_LABEL: Record<string, string> = {
@@ -42,18 +42,18 @@ type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Se
 
 // CodeMirror本体はサイズが大きいため動的importで分割し、初期描画をブロックしない
 // (SPEC.md §8「新規タブは即座に描画」)。プレビュー用のmarkdown-it/DOMPurifyも同様。
-const Notepad = lazy(() => import("./components/Notepad").then((m) => ({ default: m.Notepad })));
+const Notepad = lazy(() => import("./components/notes/Notepad").then((m) => ({ default: m.Notepad })));
 const MarkdownPreview = lazy(() =>
-  import("./components/MarkdownPreview").then((m) => ({ default: m.MarkdownPreview })),
+  import("./components/notes/MarkdownPreview").then((m) => ({ default: m.MarkdownPreview })),
 );
 const HistoryPanel = lazy(() =>
-  import("./components/HistoryPanel").then((m) => ({ default: m.HistoryPanel })),
+  import("./components/notes/HistoryPanel").then((m) => ({ default: m.HistoryPanel })),
 );
 const SearchPanel = lazy(() =>
-  import("./components/SearchPanel").then((m) => ({ default: m.SearchPanel })),
+  import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
 const TodoPanel = lazy(() =>
-  import("./components/TodoPanel").then((m) => ({ default: m.TodoPanel })),
+  import("./components/discovery/TodoPanel").then((m) => ({ default: m.TodoPanel })),
 );
 
 export function App() {

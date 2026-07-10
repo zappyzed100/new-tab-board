@@ -586,7 +586,7 @@ pre-push/CI: `cargo clippy --all-targets -- -D warnings`・`cargo test`・`cargo
 **構成（表B）**: レイヤーは `src/lib`（外部I/O・ログ・時刻の**シーム**——依存の起点にしない）
 と `src/newtab`（UI。`lib` に依存してよい）の一方向のみ（`newtab → lib`。`lib` が `newtab`
 を import するのは禁止）。必須ディレクトリ: `src`・`src/lib`・`src/newtab`・`e2e`。
-確率的コンポーネント: **無**。外部I/O: **chrome.storage.local のみ**（`src/lib/storage.ts`
+確率的コンポーネント: **無**。外部I/O: **chrome.storage.local のみ**（`src/lib/storage/storage.ts`
 がシーム。ネットワーク呼び出しは無し——`test-network` パターンは将来の混入に備え防御的に有効化）。
 
 | 行 | 値 |
@@ -594,11 +594,11 @@ pre-push/CI: `cargo clippy --all-targets -- -D warnings`・`cargo test`・`cargo
 | 整形（冪等） | `npx prettier --write <file>` |
 | 編集直後 lint | `npx --no-install eslint --max-warnings=0 <file>`（rc=1 のみブロック。下の paste-block） |
 | 静的解析 | `npx tsc --noEmit` ＋ `npx eslint .` |
-| lint昇格 | eslint: `no-console: error`（`src/lib/log.ts` のみ off）・`no-empty: error` |
+| lint昇格 | eslint: `no-console: error`（`src/lib/runtime/log.ts` のみ off）・`no-empty: error` |
 | テスト | `npx vitest run` |
 | E2E | `npx playwright test`（`e2e/fixtures.ts` が `dist/` をビルド済み拡張として persistent context にロード——headed 必須・CI は `xvfb-run`） |
-| print系直呼び | `console.log(` `console.info(` `console.debug(`（出口: `src/lib/log.ts`） |
-| ログ単一出口 | `src/lib/log.ts` の `logOp(tag, op, detail, {error, elapsedMs})`（形式は AGENTS.md §7） |
+| print系直呼び | `console.log(` `console.info(` `console.debug(`（出口: `src/lib/runtime/log.ts`） |
+| ログ単一出口 | `src/lib/runtime/log.ts` の `logOp(tag, op, detail, {error, elapsedMs})`（形式は AGENTS.md §7） |
 | ログ境界パターン | `chrome\.storage\.(local|sync)\.(get|set)\(`（外部I/O）・`^\s*catch\b`（エラーハンドラ） |
 | ログ呼び出しパターン | `logOp\(` |
 | テスト内 非決定 | `Date.now(` ・ `new Date()`（引数なし）・ `Math.random(`（Clock/seed注入で代替） |
@@ -612,12 +612,12 @@ pre-push/CI: `cargo clippy --all-targets -- -D warnings`・`cargo test`・`cargo
 | `up` | `npm run build -- --watch`（vite が `dist/` を継続ビルド。`chrome://extensions` で読み込み） |
 | `reset` | `node scripts/reset-e2e-profile.mjs`（E2E persistent context のプロファイルディレクトリを削除——次回起動は空の chrome.storage から） |
 | `seed` | `node scripts/seed-board.mjs`（persistent context を起動し `chrome.storage.local` に固定フィクスチャの board を書き込んで閉じる） |
-| `time` | `node scripts/set-time-freeze.mjs {args}`（`.time-freeze.json` を書換/削除。`e2e/fixtures.ts` が起動時に読み `window.__TIME_FREEZE__` を注入。`src/lib/clock.ts` がこれを読む — §12.2） |
+| `time` | `node scripts/set-time-freeze.mjs {args}`（`.time-freeze.json` を書換/削除。`e2e/fixtures.ts` が起動時に読み `window.__TIME_FREEZE__` を注入。`src/lib/runtime/clock.ts` がこれを読む — §12.2） |
 | `db` | `node scripts/dump-storage.mjs`（persistent context で `chrome.storage.local.get(null)` を評価しJSON出力——観察レール） |
-| 操作レール | **Playwright MCP** を `npm run dev`（Vite dev server・`localhost`）へ向ける。`src/lib/storage.ts` は `chrome.*` 不在時 `localStorage` にフォールバックするため、MCP は特別な起動オプション無しで新しいタブUIを直接操作できる（アクセシビリティスナップショットで読む — §12.4） |
+| 操作レール | **Playwright MCP** を `npm run dev`（Vite dev server・`localhost`）へ向ける。`src/lib/storage/storage.ts` は `chrome.*` 不在時 `localStorage` にフォールバックするため、MCP は特別な起動オプション無しで新しいタブUIを直接操作できる（アクセシビリティスナップショットで読む — §12.4） |
 | 観察レール | Playwright MCP のコンソール/ネットワーク読取・`dev.py db`（実拡張の chrome.storage 読取） |
 | UIテストID | 対象 `\.tsx$`・要素 `<(button|a|input|select|textarea|[A-Z]\w*)\b[^>]*on(Click|Submit|Change)=[^>]*>`・属性 `data-testid\s*=` |
-| 外部I/Oシーム | `src/lib/storage.ts`（chrome.storage.local ⇔ localStorage フォールバックを1箇所に集約。UI 層は直接 `chrome.storage` / `localStorage` を叩かない） |
+| 外部I/Oシーム | `src/lib/storage/storage.ts`(chrome.storage.local ⇔ localStorage フォールバックを1箇所に集約。UI 層は直接 `chrome.storage` / `localStorage` を叩かない) |
 
 **paste-block（`scripts/repo_scan.py` BINDING へ）**:
 
@@ -635,7 +635,7 @@ _TS_NET = [(re.compile(r"\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b"), "fetch/axi
 TEST_NETWORK_PATTERNS[".ts"] = _TS_NET; TEST_NETWORK_PATTERNS[".tsx"] = _TS_NET
 _TS_PRINT = [(re.compile(r"\bconsole\.(log|info|debug)\s*\("), "console.*(")]
 PRINT_CALL_PATTERNS[".ts"] = _TS_PRINT; PRINT_CALL_PATTERNS[".tsx"] = _TS_PRINT
-LOG_EXIT_FILES |= {"src/lib/log.ts"}
+LOG_EXIT_FILES |= {"src/lib/runtime/log.ts"}
 _TS_LOG_BOUNDARY = [(re.compile(r"\bchrome\.storage\.(?:local|sync)\.(?:get|set)\s*\("), "chrome.storage I/O"),
                     (re.compile(r"^\s*catch\b"), "エラーハンドラ")]
 LOG_BOUNDARY_PATTERNS[".ts"] = _TS_LOG_BOUNDARY; LOG_BOUNDARY_PATTERNS[".tsx"] = _TS_LOG_BOUNDARY

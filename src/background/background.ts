@@ -1,11 +1,11 @@
 // background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
 // 予定前アラーム。SPEC.md §4.9・§4.11)
-import { logOp } from "../lib/log";
-import { getAuthToken } from "../lib/googleAuth";
-import { fetchNextEvent } from "../lib/calendar";
-import { resolveAlarmTime } from "../lib/preEventAlarm";
-import { loadLocalData, saveLocalData } from "../lib/storage";
-import { now as clockNow } from "../lib/clock";
+import { logOp } from "../lib/runtime/log";
+import { getAuthToken } from "../lib/drive/googleAuth";
+import { fetchNextEvent } from "../lib/nextEvent/calendar";
+import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
+import { loadLocalData, saveLocalData } from "../lib/storage/storage";
+import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
 const POLL_INTERVAL_MINUTES = 5;

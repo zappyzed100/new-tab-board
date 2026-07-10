@@ -57,14 +57,14 @@
 ## `e2e/`
 
 - `e2e/README.md`
-- `e2e/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
-- `e2e/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
-- `e2e/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)+オムニバーのE2E(SPEC.md §4.4・§4.5)
-- `e2e/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
-- `e2e/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/ピン留め/削除E2E(SPEC.md §4.2)
-- `e2e/search-todo-backlinks.spec.ts` — search-todo-backlinks.spec.ts — 全文検索/横断TODO/バックリンクのE2E(SPEC.md §7 v1確定)
-- `e2e/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
+- `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
+- `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)+オムニバーのE2E(SPEC.md §4.4・§4.5)
+- `e2e/specs/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
+- `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/ピン留め/削除E2E(SPEC.md §4.2)
+- `e2e/specs/search-todo-backlinks.spec.ts` — search-todo-backlinks.spec.ts — 全文検索/横断TODO/バックリンクのE2E(SPEC.md §7 v1確定)
+- `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 
 ## `public/`
 
@@ -94,90 +94,90 @@
 
 - `src/background/background.test.ts` — background.test.ts — background.ts(サービスワーカー: Calendar定期ポーリング+予定前アラーム)の単体テスト
 - `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
-- `src/lib/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
-- `src/lib/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
-- `src/lib/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
-- `src/lib/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
-- `src/lib/calendar.test.ts` — calendar.test.ts — calendar.ts(Calendar API読み取り)の単体テスト(フェイクfetchを注入)
-- `src/lib/calendar.ts` — calendar.ts — Google Calendar API(読み取り専用)から次の予定を取得する(SPEC.md §4.9)
-- `src/lib/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
-- `src/lib/calendarMonth.ts` — calendarMonth.ts — 小型カレンダーの月グリッド構築 + Google カレンダーURL生成(純関数。SPEC.md §4.9)
-- `src/lib/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
-- `src/lib/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
-- `src/lib/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
-- `src/lib/clockFormat.ts` — clockFormat.ts — 時計/日付表示用のフォーマット(純関数。SPEC.md §4.8)
-- `src/lib/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
-- `src/lib/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
-- `src/lib/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
-- `src/lib/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
-- `src/lib/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
-- `src/lib/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
-- `src/lib/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
-- `src/lib/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
-- `src/lib/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
-- `src/lib/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
-- `src/lib/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
-- `src/lib/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
-- `src/lib/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(File System Access APIラッパー)の単体テスト
-- `src/lib/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
-- `src/lib/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
-- `src/lib/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
-- `src/lib/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
-- `src/lib/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
-- `src/lib/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
-- `src/lib/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
-- `src/lib/links.test.ts` — links.test.ts — links.ts([[リンク]]パース・バックリンク索引)の単体テスト
-- `src/lib/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
-- `src/lib/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
-- `src/lib/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
-- `src/lib/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
-- `src/lib/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
-- `src/lib/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
-- `src/lib/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
-- `src/lib/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
-- `src/lib/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
-- `src/lib/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
-- `src/lib/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
-- `src/lib/omnibar.test.ts` — omnibar.test.ts — omnibar.ts(クイック検索バー解決)の単体テスト
-- `src/lib/omnibar.ts` — omnibar.ts — クイック検索バーの解決ロジック(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
-- `src/lib/preEventAlarm.test.ts` — preEventAlarm.test.ts — preEventAlarm.ts(予定前アラームのスケジュール計算)の単体テスト
-- `src/lib/preEventAlarm.ts` — preEventAlarm.ts — 予定前アラームのスケジュール計算(純関数。SPEC.md §4.11)
-- `src/lib/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
-- `src/lib/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
-- `src/lib/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
-- `src/lib/shortcuts.ts` — shortcuts.ts — キーボードショートカットの単一レジストリ(SPEC.md §4.6・§6)
-- `src/lib/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
-- `src/lib/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
-- `src/lib/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
-- `src/lib/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
-- `src/lib/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
-- `src/lib/theme.ts` — theme.ts — テーマ設定(light/dark/auto)の解決(純関数。SPEC.md §4.8)
-- `src/lib/todo.test.ts` — todo.test.ts — todo.ts(横断TODO集約)の単体テスト
-- `src/lib/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
-- `src/lib/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
-- `src/lib/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
-- `src/lib/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
-- `src/lib/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
-- `src/lib/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
-- `src/lib/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
+- `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
+- `src/lib/display/calendarMonth.ts` — calendarMonth.ts — 小型カレンダーの月グリッド構築 + Google カレンダーURL生成(純関数。SPEC.md §4.9)
+- `src/lib/display/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
+- `src/lib/display/clockFormat.ts` — clockFormat.ts — 時計/日付表示用のフォーマット(純関数。SPEC.md §4.8)
+- `src/lib/display/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
+- `src/lib/display/theme.ts` — theme.ts — テーマ設定(light/dark/auto)の解決(純関数。SPEC.md §4.8)
+- `src/lib/drive/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
+- `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
+- `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
+- `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
+- `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
+- `src/lib/drive/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
+- `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
+- `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
+- `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
+- `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
+- `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
+- `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
+- `src/lib/entities/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
+- `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
+- `src/lib/externalIO/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
+- `src/lib/externalIO/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
+- `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
+- `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
+- `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
+- `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(File System Access APIラッパー)の単体テスト
+- `src/lib/fileio/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
+- `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
+- `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
+- `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
+- `src/lib/history/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
+- `src/lib/history/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
+- `src/lib/history/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
+- `src/lib/linking/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
+- `src/lib/linking/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
+- `src/lib/linking/links.test.ts` — links.test.ts — links.ts([[リンク]]パース・バックリンク索引)の単体テスト
+- `src/lib/linking/links.ts` — links.ts — [[ノート名]]リンクのパースとバックリンクインデックス構築(純粋関数。SPEC.md §7 v1確定)
+- `src/lib/linking/todo.test.ts` — todo.test.ts — todo.ts(横断TODO集約)の単体テスト
+- `src/lib/linking/todo.ts` — todo.ts — 全ノート横断のTODO(チェックボックス)集約(純粋関数。SPEC.md §7 v1確定)
+- `src/lib/nextEvent/calendar.test.ts` — calendar.test.ts — calendar.ts(Calendar API読み取り)の単体テスト(フェイクfetchを注入)
+- `src/lib/nextEvent/calendar.ts` — calendar.ts — Google Calendar API(読み取り専用)から次の予定を取得する(SPEC.md §4.9)
+- `src/lib/nextEvent/nextEventCountdown.test.ts` — nextEventCountdown.test.ts — nextEventCountdown.ts(カウントダウン算出)の単体テスト
+- `src/lib/nextEvent/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
+- `src/lib/nextEvent/preEventAlarm.test.ts` — preEventAlarm.test.ts — preEventAlarm.ts(予定前アラームのスケジュール計算)の単体テスト
+- `src/lib/nextEvent/preEventAlarm.ts` — preEventAlarm.ts — 予定前アラームのスケジュール計算(純関数。SPEC.md §4.11)
+- `src/lib/runtime/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
+- `src/lib/runtime/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
+- `src/lib/runtime/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
+- `src/lib/runtime/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/search/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
+- `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
+- `src/lib/search/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
+- `src/lib/search/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
+- `src/lib/search/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
+- `src/lib/search/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
+- `src/lib/shortcuts/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
+- `src/lib/shortcuts/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
+- `src/lib/shortcuts/omnibar.test.ts` — omnibar.test.ts — omnibar.ts(クイック検索バー解決)の単体テスト
+- `src/lib/shortcuts/omnibar.ts` — omnibar.ts — クイック検索バーの解決ロジック(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
+- `src/lib/shortcuts/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
+- `src/lib/shortcuts/shortcuts.ts` — shortcuts.ts — キーボードショートカットの単一レジストリ(SPEC.md §4.6・§6)
+- `src/lib/shortcuts/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
+- `src/lib/storage/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
+- `src/lib/storage/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
+- `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
+- `src/lib/storage/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-- `src/newtab/components/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
-- `src/newtab/components/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
-- `src/newtab/components/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
-- `src/newtab/components/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
-- `src/newtab/components/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
-- `src/newtab/components/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
-- `src/newtab/components/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
-- `src/newtab/components/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
-- `src/newtab/components/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
-- `src/newtab/components/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
-- `src/newtab/components/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
-- `src/newtab/components/Omnibar.tsx` — Omnibar.tsx — クイック検索バー(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
-- `src/newtab/components/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
-- `src/newtab/components/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
-- `src/newtab/components/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
-- `src/newtab/components/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
-- `src/newtab/components/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
+- `src/newtab/components/discovery/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
+- `src/newtab/components/discovery/Omnibar.tsx` — Omnibar.tsx — クイック検索バー(ブックマーク/アプリ起動/検索エンジンの順で解決。SPEC.md §4.4)
+- `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
+- `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
+- `src/newtab/components/discovery/TodoPanel.tsx` — TodoPanel.tsx — 全ノート横断のTODO集約表示(SPEC.md §7 v1確定)
+- `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
+- `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
+- `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
+- `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
+- `src/newtab/components/notes/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/ピン留め。SPEC.md §4.2)
+- `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
+- `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
+- `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
+- `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
+- `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
+- `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
+- `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージ・APIのアンビエント宣言
@@ -342,7 +342,36 @@
 - def dart_package_roots
 - def is_kit_source_repo
 
-### `src/lib/bookmarks.ts`
+### `src/lib/display/calendarMonth.ts`
+- type CalendarDay
+- function buildMonthGrid
+- function buildGCalUrl
+
+### `src/lib/display/clockFormat.ts`
+- function formatClock
+
+### `src/lib/display/theme.ts`
+- function resolveTheme
+
+### `src/lib/drive/drive.ts`
+- type FetchLike
+- function findFileForNote
+- function uploadNote
+
+### `src/lib/drive/driveSync.ts`
+- type SyncResult
+- type SyncDeps
+- function syncNoteToDrive
+
+### `src/lib/drive/googleAuth.ts`
+- function getAuthToken
+- function invalidateToken
+
+### `src/lib/drive/useDriveSync.ts`
+- type DriveSyncStatus
+- function useDriveSync
+
+### `src/lib/entities/bookmarks.ts`
 - function createBookmark
 - function addBookmark
 - function updateBookmark
@@ -350,32 +379,124 @@
 - function sortedBookmarks
 - function reorderBookmarks
 
-### `src/lib/calculator.ts`
+### `src/lib/entities/notes.ts`
+- function createNote
+- function addNote
+- function updateNote
+- function removeNote
+- function sortedNotes
+- function reorderNotes
+
+### `src/lib/entities/tags.ts`
+- function extractTags
+
+### `src/lib/externalIO/nasArchive.ts`
+- function probeNasReachable
+- function flushSnapshotToNas
+- function flushAllToNas
+- function readArchivedSnapshot
+- function getSnapshotBody
+
+### `src/lib/externalIO/nativeMessaging.ts`
+- const NATIVE_HOST_NAME
+- type ConnectNativeFn
+- function pullPendingFile
+
+### `src/lib/fileio/exportImport.ts`
+- const EXPORT_VERSION
+- type ExportPayload
+- function buildExportPayload
+- function serializeExport
+- function parseImportPayload
+
+### `src/lib/fileio/fileSystem.ts`
+- function pickAndReadTextFile
+- function exportNotesToFolder
+
+### `src/lib/history/gzip.ts`
+- function gzipCompress
+- function gzipDecompress
+
+### `src/lib/history/history.ts`
+- const MIN_FLOOR_MS
+- const MAX_CAP_MS
+- const CHANGE_THRESHOLD_CHARS
+- type SnapshotGateInput
+- function shouldSnapshot
+- function exceedsChangeThreshold
+- function exceedsMaxCap
+
+### `src/lib/history/useSnapshotScheduler.ts`
+- function forceSnapshot
+- function useSnapshotScheduler
+
+### `src/lib/linking/calculator.ts`
 - function evaluateExpression
 - function evaluateLineIfCalculator
 
-### `src/lib/calendar.ts`
+### `src/lib/linking/links.ts`
+- function extractLinkedTitles
+- type Backlink
+- type LinkableNote
+- function buildBacklinkIndex
+
+### `src/lib/linking/todo.ts`
+- type AggregatedTodo
+- type TodoNote
+- function extractTodos
+- function aggregateTodos
+
+### `src/lib/nextEvent/calendar.ts`
 - type FetchLike
 - type NextEvent
 - function fetchNextEvent
 
-### `src/lib/calendarMonth.ts`
-- type CalendarDay
-- function buildMonthGrid
-- function buildGCalUrl
+### `src/lib/nextEvent/nextEventCountdown.ts`
+- type CountdownState
+- function computeCountdown
 
-### `src/lib/clock.ts`
+### `src/lib/nextEvent/preEventAlarm.ts`
+- function resolveAlarmTime
+
+### `src/lib/runtime/clock.ts`
 - function now
 
-### `src/lib/clockFormat.ts`
-- function formatClock
+### `src/lib/runtime/log.ts`
+- function logOp
 
-### `src/lib/commandPalette.ts`
+### `src/lib/search/diff.ts`
+- type DiffPart
+- function computeDiff
+
+### `src/lib/search/search.ts`
+- function indexSnapshot
+- function searchSnapshotIds
+
+### `src/lib/search/tokenize.ts`
+- function tokenize
+
+### `src/lib/shortcuts/commandPalette.ts`
 - type CommandItem
 - function buildCommandItems
 - function filterCommandItems
 
-### `src/lib/db.ts`
+### `src/lib/shortcuts/omnibar.ts`
+- type OmnibarResult
+- function resolveOmnibarQuery
+
+### `src/lib/shortcuts/shortcuts.ts`
+- type ShortcutCombo
+- type ShortcutDef
+- const SHORTCUT_REGISTRY
+- function matchesCombo
+- function buildNoteJumpShortcuts
+- function buildBookmarkJumpShortcuts
+- function comboLabel
+
+### `src/lib/shortcuts/useGlobalShortcuts.ts`
+- function useGlobalShortcuts
+
+### `src/lib/storage/db.ts`
 - function putSnapshot
 - function getSnapshotsByNote
 - function getAllSnapshots
@@ -388,187 +509,66 @@
 - function getNasDirectoryHandle
 - function setNasDirectoryHandle
 
-### `src/lib/diff.ts`
-- type DiffPart
-- function computeDiff
-
-### `src/lib/drive.ts`
-- type FetchLike
-- function findFileForNote
-- function uploadNote
-
-### `src/lib/driveSync.ts`
-- type SyncResult
-- type SyncDeps
-- function syncNoteToDrive
-
-### `src/lib/exportImport.ts`
-- const EXPORT_VERSION
-- type ExportPayload
-- function buildExportPayload
-- function serializeExport
-- function parseImportPayload
-
-### `src/lib/fileSystem.ts`
-- function pickAndReadTextFile
-- function exportNotesToFolder
-
-### `src/lib/googleAuth.ts`
-- function getAuthToken
-- function invalidateToken
-
-### `src/lib/gzip.ts`
-- function gzipCompress
-- function gzipDecompress
-
-### `src/lib/history.ts`
-- const MIN_FLOOR_MS
-- const MAX_CAP_MS
-- const CHANGE_THRESHOLD_CHARS
-- type SnapshotGateInput
-- function shouldSnapshot
-- function exceedsChangeThreshold
-- function exceedsMaxCap
-
-### `src/lib/links.ts`
-- function extractLinkedTitles
-- type Backlink
-- type LinkableNote
-- function buildBacklinkIndex
-
-### `src/lib/log.ts`
-- function logOp
-
-### `src/lib/nasArchive.ts`
-- function probeNasReachable
-- function flushSnapshotToNas
-- function flushAllToNas
-- function readArchivedSnapshot
-- function getSnapshotBody
-
-### `src/lib/nativeMessaging.ts`
-- const NATIVE_HOST_NAME
-- type ConnectNativeFn
-- function pullPendingFile
-
-### `src/lib/nextEventCountdown.ts`
-- type CountdownState
-- function computeCountdown
-
-### `src/lib/notes.ts`
-- function createNote
-- function addNote
-- function updateNote
-- function removeNote
-- function sortedNotes
-- function reorderNotes
-
-### `src/lib/omnibar.ts`
-- type OmnibarResult
-- function resolveOmnibarQuery
-
-### `src/lib/preEventAlarm.ts`
-- function resolveAlarmTime
-
-### `src/lib/search.ts`
-- function indexSnapshot
-- function searchSnapshotIds
-
-### `src/lib/shortcuts.ts`
-- type ShortcutCombo
-- type ShortcutDef
-- const SHORTCUT_REGISTRY
-- function matchesCombo
-- function buildNoteJumpShortcuts
-- function buildBookmarkJumpShortcuts
-- function comboLabel
-
-### `src/lib/storage.ts`
+### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS
 - function loadSyncData
 - function saveSyncData
 - function loadLocalData
 - function saveLocalData
 
-### `src/lib/tags.ts`
-- function extractTags
-
-### `src/lib/theme.ts`
-- function resolveTheme
-
-### `src/lib/todo.ts`
-- type AggregatedTodo
-- type TodoNote
-- function extractTodos
-- function aggregateTodos
-
-### `src/lib/tokenize.ts`
-- function tokenize
-
-### `src/lib/useDriveSync.ts`
-- type DriveSyncStatus
-- function useDriveSync
-
-### `src/lib/useGlobalShortcuts.ts`
-- function useGlobalShortcuts
-
-### `src/lib/useSnapshotScheduler.ts`
-- function forceSnapshot
-- function useSnapshotScheduler
-
 ### `src/newtab/App.tsx`
 - function App
 
-### `src/newtab/components/BacklinksPanel.tsx`
-- function BacklinksPanel
-
-### `src/newtab/components/BookmarkGrid.tsx`
-- function BookmarkGrid
-
-### `src/newtab/components/Clock.tsx`
-- function Clock
-
-### `src/newtab/components/CommandPalette.tsx`
+### `src/newtab/components/discovery/CommandPalette.tsx`
 - function CommandPalette
 
-### `src/newtab/components/DataPanel.tsx`
-- function DataPanel
-
-### `src/newtab/components/DiffView.tsx`
-- function DiffView
-
-### `src/newtab/components/HistoryPanel.tsx`
-- function HistoryPanel
-
-### `src/newtab/components/MarkdownPreview.tsx`
-- function MarkdownPreview
-
-### `src/newtab/components/MiniCalendar.tsx`
-- function MiniCalendar
-
-### `src/newtab/components/NoteTabs.tsx`
-- function NoteTabs
-
-### `src/newtab/components/Notepad.tsx`
-- function Notepad
-
-### `src/newtab/components/Omnibar.tsx`
+### `src/newtab/components/discovery/Omnibar.tsx`
 - function Omnibar
 
-### `src/newtab/components/SearchPanel.tsx`
+### `src/newtab/components/discovery/SearchPanel.tsx`
 - function SearchPanel
 
-### `src/newtab/components/ShortcutsModal.tsx`
+### `src/newtab/components/discovery/ShortcutsModal.tsx`
 - function ShortcutsModal
 
-### `src/newtab/components/SnapshotScheduler.tsx`
+### `src/newtab/components/discovery/TodoPanel.tsx`
+- function TodoPanel
+
+### `src/newtab/components/notes/BacklinksPanel.tsx`
+- function BacklinksPanel
+
+### `src/newtab/components/notes/DiffView.tsx`
+- function DiffView
+
+### `src/newtab/components/notes/HistoryPanel.tsx`
+- function HistoryPanel
+
+### `src/newtab/components/notes/MarkdownPreview.tsx`
+- function MarkdownPreview
+
+### `src/newtab/components/notes/NoteTabs.tsx`
+- function NoteTabs
+
+### `src/newtab/components/notes/Notepad.tsx`
+- function Notepad
+
+### `src/newtab/components/notes/SnapshotScheduler.tsx`
 - function SnapshotScheduler
 
-### `src/newtab/components/ThemeToggle.tsx`
-- function ThemeToggle
+### `src/newtab/components/shell/BookmarkGrid.tsx`
+- function BookmarkGrid
 
-### `src/newtab/components/TodoPanel.tsx`
-- function TodoPanel
+### `src/newtab/components/shell/Clock.tsx`
+- function Clock
+
+### `src/newtab/components/shell/DataPanel.tsx`
+- function DataPanel
+
+### `src/newtab/components/shell/MiniCalendar.tsx`
+- function MiniCalendar
+
+### `src/newtab/components/shell/ThemeToggle.tsx`
+- function ThemeToggle
 
 ### `src/types.ts`
 - type Bookmark

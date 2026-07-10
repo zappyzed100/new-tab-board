@@ -8,12 +8,12 @@
 // getAuthToken/fetchNextEventは外部I/O(OAuth・Calendar API)のためvi.mockでフェイクに差し替える
 // (AGENTS.md §9.5 非決定/外部I/Oの検疫と同じ設計)。
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAuthToken } from "../lib/googleAuth";
-import { fetchNextEvent } from "../lib/calendar";
+import { getAuthToken } from "../lib/drive/googleAuth";
+import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import type { LocalData } from "../types";
 
-vi.mock("../lib/googleAuth", () => ({ getAuthToken: vi.fn() }));
-vi.mock("../lib/calendar", () => ({ fetchNextEvent: vi.fn() }));
+vi.mock("../lib/drive/googleAuth", () => ({ getAuthToken: vi.fn() }));
+vi.mock("../lib/nextEvent/calendar", () => ({ fetchNextEvent: vi.fn() }));
 
 const FIXED_NOW = 1_700_000_000_000;
 const POLL_ALARM_NAME = "next-event-poll";
