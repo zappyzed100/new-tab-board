@@ -97,8 +97,8 @@ body {
 
 .app-main {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) 1fr;
-  gap: var(--space-4);
+  grid-template-columns: 240px 1fr;
+  gap: var(--space-3);
   flex: 1;
   min-height: 0;
   align-items: start;
@@ -479,9 +479,10 @@ button.note-tab-add {
 }
 
 /* --- TODOリスト(TodoMVC参考: 入力欄+チェックボックス行+hover時のみ×) --- */
-/* 外枠はCard(TodoList.tsx)に任せる。 */
+/* 外枠はCard(TodoList.tsx)に任せる。小型カレンダーと横幅を揃える。 */
 [data-testid="todo-list"] {
   font-size: 12px;
+  max-width: 240px;
 }
 
 [data-testid="todo-new-input"] {
@@ -536,7 +537,7 @@ button.note-tab-add {
   width: 26px;
   height: 26px;
   padding: 0;
-  font-size: 16px;
+  font-size: 22px;
   line-height: 1;
   opacity: 0.4;
 }
