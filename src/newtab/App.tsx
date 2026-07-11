@@ -74,8 +74,6 @@ export function App() {
   // 検索はノート編集エリア内のトグル(プレビュー/履歴と同じ並び)——ホーム画面レベルの
   // 概念ではなく「今開いているノートに対する操作」として編集エリア側に置く。
   const [showSearch, setShowSearch] = useState(false);
-  // データ管理はホーム画面レベルのトグル(アプリ全体のバックアップ/取り込み)。
-  const [showData, setShowData] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
@@ -344,26 +342,13 @@ export function App() {
               <nav>
                 <Button
                   type="button"
-                  variant={showData ? "solid" : "soft"}
-                  aria-pressed={showData}
-                  data-testid="toggle-data"
-                  title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
-                  onClick={() => setShowData((v) => !v)}
+                  variant="soft"
+                  data-testid="open-shortcuts-modal"
+                  title="使えるキーボードショートカットの一覧を表示する"
+                  onClick={() => setShowShortcutsModal(true)}
                 >
-                  🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
+                  ⌨️ ショートカット一覧(?)
                 </Button>
-
-                <Flex gap="2" pl="3" style={{ borderLeft: "1px solid var(--gray-a5)" }}>
-                  <Button
-                    type="button"
-                    variant="soft"
-                    data-testid="open-shortcuts-modal"
-                    title="使えるキーボードショートカットの一覧を表示する"
-                    onClick={() => setShowShortcutsModal(true)}
-                  >
-                    ⌨️ ショートカット一覧(?)
-                  </Button>
-                </Flex>
 
                 {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
                   <Text
@@ -378,15 +363,13 @@ export function App() {
               </nav>
             </Flex>
 
-            {showData ? (
-              <DataPanel
-                sync={sync}
-                notes={notes}
-                onImportData={importData}
-                onOpenFileAsNote={openFileAsNote}
-                jsonBackupStatusLabel={JSON_BACKUP_STATUS_LABEL[jsonBackupStatus]}
-              />
-            ) : null}
+            <DataPanel
+              sync={sync}
+              notes={notes}
+              onImportData={importData}
+              onOpenFileAsNote={openFileAsNote}
+              jsonBackupStatusLabel={JSON_BACKUP_STATUS_LABEL[jsonBackupStatus]}
+            />
             {showShortcutsModal ? (
               <ShortcutsModal
                 registry={shortcutRegistry}
