@@ -1,5 +1,12 @@
 # plan.md — 設計根拠
 
+## UI層をRadix Themesへ全面移行 (2026-07-11)
+「最小依存・自前実装優先」の方針(docs/stack.md)から転換し、`@radix-ui/themes`を
+UIコンポーネントの標準として全面採用した(ユーザー指示)。詳細な根拠・ハイブリッド
+構成(Radixに置き換えた部分/自前CSSを残した部分/生radix-uiを使った1ファイル)は
+docs/stack.mdの該当節を参照。新規ディレクトリは作っていない(既存コンポーネント
+ファイルの内部実装差し替えのみ)。
+
 ## src/offscreen/ (M12・2026-07-11)
 予定前アラーム(SPEC.md §4.11)はMV3のservice workerが音声を再生できないため、
 `chrome.offscreen`(reason: AUDIO_PLAYBACK)でオフスクリーンドキュメントを作り、
