@@ -1,6 +1,9 @@
 // MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
 // カレンダーのデータは拡張に取り込まない。日クリックはGoogleカレンダーへのURL遷移のみ(一方向)。
+// Radix Themesに月カレンダーグリッド相当のコンポーネントは無いため、<table>構造・
+// 円形の日付ピル自体は自前CSSのまま温存し、周辺のボタン/ラベルのみRadix化している。
 import { useState } from "react";
+import { Button, Flex, Text } from "@radix-ui/themes";
 import { buildGCalUrl, buildMonthGrid } from "../../../lib/display/calendarMonth";
 import { now } from "../../../lib/runtime/clock";
 
@@ -34,27 +37,29 @@ export function MiniCalendar() {
       data-testid="mini-calendar"
       title="日付をクリックするとGoogleカレンダーのその日を新しいタブで開きます"
     >
-      <div className="calendar-nav">
-        <button
+      <Flex className="calendar-nav" align="center" justify="between">
+        <Button
           type="button"
+          variant="soft"
           data-testid="calendar-prev-month"
           title="前の月を表示する"
           onClick={goPrevMonth}
         >
           ← 前月
-        </button>
-        <span data-testid="calendar-month-label">
+        </Button>
+        <Text as="span" weight="bold" data-testid="calendar-month-label">
           {year}年{month + 1}月
-        </span>
-        <button
+        </Text>
+        <Button
           type="button"
+          variant="soft"
           data-testid="calendar-next-month"
           title="次の月を表示する"
           onClick={goNextMonth}
         >
           翌月 →
-        </button>
-      </div>
+        </Button>
+      </Flex>
       <table>
         <tbody>
           {weeks.map((week, i) => (
