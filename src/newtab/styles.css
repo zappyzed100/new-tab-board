@@ -420,17 +420,14 @@ button[data-testid="note-tab-add"]:hover {
   border-color: var(--accent-strong);
 }
 
-/* --- ノートタブ ---
-   OSS実装 adamschwartz/chrome-tabs (MIT, https://github.com/adamschwartz/chrome-tabs)の
-   css/chrome-tabs.css・svg/tab.svgを実物移植した「本物のChromeタブ」の曲線シェイプ。
-   台形状の切り欠き(左右対称pathをscale(-1,1)で反転複製)は<use>2個で作り、非アクティブは
-   背景を透明にして沈ませ、hover/activeで--surfaceが覗く"地続き"の錯覚を作る(元実装の
-   z-index積層による重なり表現は、本プロジェクトのタブがD&D並べ替えを持たない単純なflex
-   一列のため簡略化し、opacity切替のみで再現している)。 */
+/* --- ノートタブ(生radix-uiの<Tabs>へ全面移行。曲線シェイプ(旧: chrome-tabs OSS移植)は
+   撤去し、フラットなタブ見た目を自前CSSで組んでいる。D&D並べ替え用のセレクタとして
+   .note-tabクラス名を使い、閉じるボタン(span)のhover表示のみ最小限に調整している。
+   asChild経由のためRadix ThemesのようなrtクラスUIは付かず、レイアウトは全て自前CSS。 */
 [data-testid="note-tabs"] {
   display: flex;
   align-items: flex-end;
-  gap: 0;
+  gap: 4px;
   flex-wrap: wrap;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -439,152 +436,59 @@ button[data-testid="note-tab-add"]:hover {
   padding: var(--space-2) var(--space-1) 0;
 }
 
-.note-tab {
-  --tab-content-margin: 9px;
-  position: relative;
+.note-tab-list {
   display: flex;
-  align-items: stretch;
-  height: 34px;
-  min-width: 84px;
-  max-width: 200px;
+  align-items: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.note-tab {
   cursor: pointer;
-}
-
-.note-tab-background {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.note-tab:hover .note-tab-background {
-  opacity: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  color: var(--text-muted);
 }
 
 .note-tab[data-active] {
-  z-index: 1;
-}
-
-.note-tab[data-active] .note-tab-background {
-  opacity: 1;
-}
-
-.note-tab-geometry-svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.note-tab-geometry {
-  fill: var(--border);
-}
-
-.note-tab[data-active] .note-tab-geometry {
-  fill: var(--surface);
-}
-
-.note-tab-dividers {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: var(--tab-content-margin);
-  right: var(--tab-content-margin);
-  pointer-events: none;
-}
-
-.note-tab-dividers::before,
-.note-tab-dividers::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
-  transition: opacity 0.15s ease;
-}
-
-.note-tab-dividers::before {
-  left: 0;
-}
-
-.note-tab-dividers::after {
-  right: 0;
-}
-
-.note-tab:first-child .note-tab-dividers::before,
-.note-tab:hover .note-tab-dividers::before,
-.note-tab:hover .note-tab-dividers::after,
-.note-tab[data-active] .note-tab-dividers::before,
-.note-tab[data-active] .note-tab-dividers::after {
-  opacity: 0;
-}
-
-.note-tab-content {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  padding: 0 var(--tab-content-margin);
-  gap: 2px;
-}
-
-button[data-testid^="note-tab-select-"] {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  text-align: left;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 2px 0;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-button[data-testid^="note-tab-select-"]:hover {
-  background: transparent;
-  transform: none;
-  box-shadow: none;
-}
-
-button[data-testid^="note-tab-select-"][aria-current="true"] {
+  background: var(--surface);
   color: var(--accent-strong);
   font-weight: 600;
 }
 
-button.note-tab-close {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 999px;
+.note-tab-close {
+  margin-left: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 18px;
   height: 18px;
-  padding: 0;
+  border-radius: 999px;
+  font-size: 13px;
   line-height: 1;
   color: var(--text-muted);
-  font-size: 13px;
   opacity: 0;
-  transition: opacity 0.1s ease, background-color 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    background-color 0.1s ease,
+    color 0.1s ease;
 }
 
 .note-tab:hover .note-tab-close,
-.note-tab[data-active] .note-tab-close {
-  opacity: 0.8;
+.note-tab[data-state="active"] .note-tab-close {
+  opacity: 0.7;
 }
 
-button.note-tab-close:hover {
-  opacity: 1 !important;
+.note-tab-close:hover {
+  opacity: 1;
   background: var(--danger);
-  border-color: transparent;
   color: #fff;
-  transform: none;
-  box-shadow: none;
 }
 
 button.note-tab-add {
