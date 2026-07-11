@@ -447,6 +447,7 @@ button[data-testid="note-tab-add"]:hover {
   height: 34px;
   min-width: 84px;
   max-width: 200px;
+  cursor: pointer;
 }
 
 .note-tab-background {

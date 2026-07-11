@@ -4,6 +4,9 @@
 // scale(-1,1)で反転複製し、隣接タブと地続きに見える台形状の切り欠きを作る手法)。
 // 本家はドラッグ物理演算にdraggabillyを使うが、本プロジェクトは新規依存を避け、
 // BookmarkGrid.tsxと同じ自前のHTML5 native drag-and-dropパターンで並べ替えを実装している。
+// 選択はタイトルのラベル部分だけでなくタブ全体(.note-tab)をクリック対象にしている
+// (閉じるボタン×だけはstopPropagationで親のonSelectをブロックし、削除と選択の
+// 同時発火を防ぐ)。
 // ピン留め機能のUIは撤去済み(データ上のnote.pinned/sortedNotesの並び順ロジック自体は
 // 互換性のため維持——インポートしたデータのpinned:trueも並び順には反映され続ける)。
 import { useState } from "react";
@@ -73,6 +76,7 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
             onDragStart={() => setDragIndex(index)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => handleDrop(index)}
+            onClick={() => onSelect(note.id)}
           >
             <div className="note-tab-background" aria-hidden="true">
               <svg preserveAspectRatio="none" className="note-tab-geometry-svg">
@@ -127,7 +131,10 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
                 data-testid={`note-tab-delete-${note.id}`}
                 className="note-tab-close"
                 title="このノートを削除する"
-                onClick={() => onNotesChange(removeNote(notes, note.id))}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNotesChange(removeNote(notes, note.id));
+                }}
               >
                 ×
               </button>
