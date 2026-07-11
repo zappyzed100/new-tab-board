@@ -95,8 +95,8 @@
 - `src/background/CLAUDE.md`
 - `src/background/background.test.ts` — background.test.ts — background.ts(サービスワーカー: Calendar定期ポーリング+予定前アラーム)の単体テスト
 - `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
-- `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(月グリッド・GCal URL)の単体テスト
-- `src/lib/display/calendarMonth.ts` — calendarMonth.ts — 小型カレンダーの月グリッド構築 + Google カレンダーURL生成(純関数。SPEC.md §4.9)
+- `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(GCal URL生成)の単体テスト
+- `src/lib/display/calendarMonth.ts` — calendarMonth.ts — Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/display/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
 - `src/lib/display/clockFormat.ts` — clockFormat.ts — 時計/日付表示用のフォーマット(純関数。SPEC.md §4.8)
 - `src/lib/display/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
@@ -177,7 +177,7 @@
 - `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
-- `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
+- `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(react-day-picker + GCal URL連携。SPEC.md §4.9)
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
@@ -350,8 +350,6 @@
 - def is_kit_source_repo
 
 ### `src/lib/display/calendarMonth.ts`
-- type CalendarDay
-- function buildMonthGrid
 - function buildGCalUrl
 
 ### `src/lib/display/clockFormat.ts`
@@ -486,6 +484,7 @@
 
 ### `src/lib/runtime/clock.ts`
 - function now
+- function msUntilNextInterval
 
 ### `src/lib/runtime/log.ts`
 - function logOp

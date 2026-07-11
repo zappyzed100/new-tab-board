@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { formatClock } from "./clockFormat";
 
 describe("formatClock", () => {
-  it("時刻をHH:MM:SSでゼロ埋めする", () => {
+  it("時刻をHH:MMでゼロ埋めする(秒は表示しない)", () => {
     const t = new Date(2026, 0, 4, 9, 5, 3).getTime(); // 2026-01-04 09:05:03, 日曜
-    expect(formatClock(t).time).toBe("09:05:03");
+    expect(formatClock(t).time).toBe("09:05");
   });
 
   it("日付をYYYY-MM-DD(曜日)でゼロ埋めする", () => {
