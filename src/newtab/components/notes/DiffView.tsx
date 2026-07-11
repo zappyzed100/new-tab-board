@@ -1,10 +1,11 @@
 // DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
+import { Text } from "@radix-ui/themes";
 import { computeDiff } from "../../../lib/search/diff";
 
 export function DiffView({ before, after }: { before: string; after: string }) {
   const parts = computeDiff(before, after);
   return (
-    <div data-testid="diff-view">
+    <Text as="div" data-testid="diff-view">
       {parts.map((part, i) => {
         if (part.type === "insert") {
           return (
@@ -22,6 +23,6 @@ export function DiffView({ before, after }: { before: string; after: string }) {
         }
         return <span key={i}>{part.text}</span>;
       })}
-    </div>
+    </Text>
   );
 }

@@ -1,5 +1,6 @@
 // HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 import { useEffect, useState } from "react";
+import { Button, Checkbox, Flex, Heading, Text } from "@radix-ui/themes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { getSnapshotsByNote, putSnapshot } from "../../../lib/storage/db";
 import { gzipCompress, gzipDecompress } from "../../../lib/history/gzip";
@@ -69,31 +70,37 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
 
   return (
     <div data-testid="history-panel">
-      <h2 className="panel-title">🕑 履歴(自動保存されたスナップショット)</h2>
-      <p className="hint">2件チェックすると差分(diff)を下に表示します</p>
+      <Heading as="h2" size="3" className="panel-title">
+        🕑 履歴(自動保存されたスナップショット)
+      </Heading>
+      <Text as="p" size="2" color="gray" className="hint">
+        2件チェックすると差分(diff)を下に表示します
+      </Text>
       <ul>
         {snapshots.map((snapshot) => (
           <li key={snapshot.id} data-testid={`history-item-${snapshot.id}`}>
-            <label>
-              <input
-                type="checkbox"
-                data-testid={`history-select-${snapshot.id}`}
-                checked={selectedIds.includes(snapshot.id)}
-                onChange={() => toggleSelect(snapshot.id)}
-              />
-              {new Date(snapshot.timestamp).toLocaleString()}
-              {snapshot.archived ? (
-                <span data-testid={`history-archived-${snapshot.id}`}> (NAS保管)</span>
-              ) : null}
-            </label>
-            <button
+            <Flex asChild align="center" gap="2">
+              <Text as="label">
+                <Checkbox
+                  data-testid={`history-select-${snapshot.id}`}
+                  checked={selectedIds.includes(snapshot.id)}
+                  onCheckedChange={() => toggleSelect(snapshot.id)}
+                />
+                {new Date(snapshot.timestamp).toLocaleString()}
+                {snapshot.archived ? (
+                  <span data-testid={`history-archived-${snapshot.id}`}> (NAS保管)</span>
+                ) : null}
+              </Text>
+            </Flex>
+            <Button
               type="button"
+              variant="soft"
               data-testid={`history-restore-${snapshot.id}`}
               title="この時点の内容に復元する(復元前に現在の内容も保存されます)"
               onClick={() => void handleRestore(snapshot)}
             >
               ⏮️ 復元
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

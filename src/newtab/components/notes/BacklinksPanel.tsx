@@ -1,4 +1,5 @@
 // BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
+import { Button, Heading, Text } from "@radix-ui/themes";
 import { buildBacklinkIndex } from "../../../lib/linking/links";
 import type { Note } from "../../../types";
 
@@ -13,23 +14,30 @@ export function BacklinksPanel({ notes, activeNote, onSelectNote }: Props) {
   const backlinks = index.get(activeNote.title) ?? [];
 
   if (backlinks.length === 0) {
-    return <p data-testid="backlinks-empty">🔗 このノートへのリンクはありません</p>;
+    return (
+      <Text as="p" data-testid="backlinks-empty" color="gray">
+        🔗 このノートへのリンクはありません
+      </Text>
+    );
   }
 
   return (
     <>
-      <h2 className="panel-title">🔗 バックリンク([[{activeNote.title}]]にリンクしているノート)</h2>
+      <Heading as="h2" size="3" className="panel-title">
+        🔗 バックリンク([[{activeNote.title}]]にリンクしているノート)
+      </Heading>
       <ul data-testid="backlinks-panel">
         {backlinks.map((link) => (
           <li key={link.fromNoteId} data-testid={`backlink-item-${link.fromNoteId}`}>
-            <button
+            <Button
               type="button"
+              variant="soft"
               data-testid={`backlink-open-${link.fromNoteId}`}
               title={`「${link.fromNoteTitle}」を開く`}
               onClick={() => onSelectNote(link.fromNoteId)}
             >
               {link.fromNoteTitle}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

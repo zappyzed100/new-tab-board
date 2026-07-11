@@ -1,5 +1,6 @@
 // SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 import { useState } from "react";
+import { Button, Flex, Heading, TextField } from "@radix-ui/themes";
 import { getSnapshot } from "../../../lib/storage/db";
 import { gzipDecompress } from "../../../lib/history/gzip";
 import { getSnapshotBody } from "../../../lib/externalIO/nasArchive";
@@ -44,8 +45,10 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
 
   return (
     <div data-testid="search-panel">
-      <h2 className="panel-title">🔍 全文検索(全ノートの本文を横断)</h2>
-      <input
+      <Heading as="h2" size="3" className="panel-title">
+        🔍 全文検索(全ノートの本文を横断)
+      </Heading>
+      <TextField.Root
         aria-label="全文検索"
         data-testid="search-input"
         placeholder="検索したい単語を入力(完全一致)"
@@ -55,14 +58,17 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
       <ul>
         {results.map((item) => (
           <li key={item.snapshot.id} data-testid={`search-result-${item.snapshot.id}`}>
-            <button
+            <Button
               type="button"
+              variant="soft"
               data-testid={`search-result-open-${item.snapshot.id}`}
               onClick={() => onSelectNote(item.snapshot.noteId)}
             >
-              {item.noteTitle} — {new Date(item.snapshot.timestamp).toLocaleString()}:{" "}
-              {item.preview}
-            </button>
+              <Flex as="span" direction="column" align="start">
+                {item.noteTitle} — {new Date(item.snapshot.timestamp).toLocaleString()}:{" "}
+                {item.preview}
+              </Flex>
+            </Button>
           </li>
         ))}
       </ul>

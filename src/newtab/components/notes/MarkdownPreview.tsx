@@ -5,6 +5,7 @@ import type { MouseEvent } from "react";
 import MarkdownIt from "markdown-it";
 import taskLists from "markdown-it-task-lists";
 import DOMPurify from "dompurify";
+import { Box } from "@radix-ui/themes";
 
 const md = new MarkdownIt().use(taskLists, { enabled: true, label: true });
 const WIKI_LINK_PATTERN = /\[\[([^[\]]+)\]\]/g;
@@ -34,7 +35,7 @@ export function MarkdownPreview({ content, onNavigateToNote }: Props) {
   }
 
   return (
-    <div
+    <Box
       data-testid="markdown-preview"
       onClick={handleClick}
       dangerouslySetInnerHTML={{ __html: html }}

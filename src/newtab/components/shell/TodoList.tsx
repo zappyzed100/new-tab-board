@@ -1,5 +1,6 @@
 // TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 import { useState, type KeyboardEvent } from "react";
+import { Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
 import {
   addTodo,
   createTodo,
@@ -28,7 +29,7 @@ export function TodoList({ todos, onTodosChange }: Props) {
 
   return (
     <div data-testid="todo-list">
-      <input
+      <TextField.Root
         type="text"
         data-testid="todo-new-input"
         placeholder="何をする?"
@@ -43,22 +44,25 @@ export function TodoList({ todos, onTodosChange }: Props) {
             data-testid={`todo-item-${todo.id}`}
             className={todo.done ? "todo-done" : ""}
           >
-            <input
-              type="checkbox"
-              data-testid={`todo-toggle-${todo.id}`}
-              checked={todo.done}
-              onChange={() => onTodosChange(toggleTodo(todos, todo.id))}
-            />
-            <span>{todo.text}</span>
-            <button
-              type="button"
-              data-testid={`todo-remove-${todo.id}`}
-              className="todo-remove"
-              title="このTODOを削除する"
-              onClick={() => onTodosChange(removeTodo(todos, todo.id))}
-            >
-              ×
-            </button>
+            <Flex align="center" gap="2">
+              <Checkbox
+                data-testid={`todo-toggle-${todo.id}`}
+                checked={todo.done}
+                onCheckedChange={() => onTodosChange(toggleTodo(todos, todo.id))}
+              />
+              <Text as="span">{todo.text}</Text>
+              <IconButton
+                type="button"
+                data-testid={`todo-remove-${todo.id}`}
+                className="todo-remove"
+                variant="ghost"
+                color="red"
+                title="このTODOを削除する"
+                onClick={() => onTodosChange(removeTodo(todos, todo.id))}
+              >
+                ×
+              </IconButton>
+            </Flex>
           </li>
         ))}
       </ul>
