@@ -61,7 +61,6 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
-- `e2e/specs/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
@@ -108,7 +107,12 @@
 - `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
 - `src/lib/drive/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
+- `src/lib/drive/jsonBackup.test.ts` — jsonBackup.test.ts — jsonBackup.ts(全データJSONバックアップのDrive APIクライアント)の
+- `src/lib/drive/jsonBackup.ts` — jsonBackup.ts — 全データJSONバックアップのGoogle Drive API v3クライアント(SPEC.md §4.7)
+- `src/lib/drive/jsonBackupSync.test.ts` — jsonBackupSync.test.ts — jsonBackupSync.ts(全データJSONバックアップのDrive同期
+- `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
+- `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
@@ -172,7 +176,7 @@
 - `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
-- `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
+- `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
 - `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(月グリッド+GCal URL連携。SPEC.md §4.9)
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
@@ -370,9 +374,26 @@
 - function getAuthToken
 - function invalidateToken
 
+### `src/lib/drive/jsonBackup.ts`
+- type FetchLike
+- function findBackupFile
+- function uploadBackup
+- function downloadBackup
+
+### `src/lib/drive/jsonBackupSync.ts`
+- type JsonBackupSyncResult
+- type JsonBackupRestoreResult
+- type JsonBackupSyncDeps
+- function syncJsonBackupToDrive
+- function restoreJsonBackupFromDrive
+
 ### `src/lib/drive/useDriveSync.ts`
 - type DriveSyncStatus
 - function useDriveSync
+
+### `src/lib/drive/useJsonBackupSync.ts`
+- type JsonBackupSyncStatus
+- function useJsonBackupSync
 
 ### `src/lib/entities/bookmarks.ts`
 - function createBookmark

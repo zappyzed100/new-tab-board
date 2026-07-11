@@ -18,6 +18,9 @@ export type Settings = {
   openIn: "same" | "new";
   theme: "light" | "dark" | "auto";
   searchEngine: string;
+  /** 全データJSONバックアップ(jsonBackup.ts)のDrive上のファイルID。一度作成した後は
+   * 同じファイルへ上書きし続けるためのキャッシュ(chrome.storage.syncに乗るため複数端末で共有される)。 */
+  jsonBackupFileId?: string;
 };
 
 export type SyncData = {

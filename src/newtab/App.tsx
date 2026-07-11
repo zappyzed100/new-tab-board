@@ -14,6 +14,7 @@ import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
 import { addNote, createNote, sortedNotes, updateNote } from "../lib/entities/notes";
+import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
   buildNoteJumpShortcuts,
@@ -26,6 +27,7 @@ import { flushAllToNas } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
 import { useDriveSync } from "../lib/drive/useDriveSync";
+import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
 
@@ -35,6 +37,14 @@ const DRIVE_SYNC_LABEL: Record<string, string> = {
   synced: "☁同期済",
   unauthenticated: "Drive未認証",
   error: "同期エラー",
+};
+
+const JSON_BACKUP_STATUS_LABEL: Record<string, string> = {
+  idle: "",
+  syncing: "バックアップ中…",
+  synced: "☁バックアップ済",
+  unauthenticated: "Drive未認証",
+  error: "バックアップエラー",
 };
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
@@ -157,6 +167,19 @@ export function App() {
         updateNotes(updateNote(notes, activeNote.id, { driveFileId, lastSyncedAt }));
       }
     },
+  );
+
+  // 全データ(ブックマーク/ノート/設定/TODO)のJSONバックアップをdebounce付きで自動的に
+  // Driveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
+  // exportedAtは常に変わるため、sync/notesが変化した時だけ再計算してdebounceを安定させる。
+  const backupJson = useMemo(() => {
+    if (!sync || !notes) return null;
+    return serializeExport(buildExportPayload(sync, notes, clockNow()));
+  }, [sync, notes]);
+  const { status: jsonBackupStatus } = useJsonBackupSync(
+    backupJson,
+    sync?.settings.jsonBackupFileId,
+    (fileId) => updateSettings({ jsonBackupFileId: fileId }),
   );
 
   const shortcutRegistry = useMemo(
@@ -361,6 +384,7 @@ export function App() {
                 notes={notes}
                 onImportData={importData}
                 onOpenFileAsNote={openFileAsNote}
+                jsonBackupStatusLabel={JSON_BACKUP_STATUS_LABEL[jsonBackupStatus]}
               />
             ) : null}
             {showShortcutsModal ? (

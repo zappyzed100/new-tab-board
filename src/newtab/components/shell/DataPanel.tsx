@@ -1,16 +1,15 @@
-// DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
-// (SPEC.md §4.3・§4.7・§4.10-a)
-import { useRef, useState } from "react";
+// DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
+// ファイル操作・NASアーカイブ設定(SPEC.md §4.3・§4.7・§4.10-a)
+// JSONエクスポート/インポートは、ボタン操作不要の自動Driveバックアップ(App.tsxの
+// useJsonBackupSync)に置き換えた——このパネルの「Driveから復元」は明示的なクリック
+// 操作のままにしている(自動復元はローカル未同期の変更を問答無用で上書きする危険があるため)。
+import { useState } from "react";
 import { Button, Card, Flex, Heading, Text } from "@radix-ui/themes";
 import { setNasDirectoryHandle } from "../../../lib/storage/db";
-import {
-  buildExportPayload,
-  parseImportPayload,
-  serializeExport,
-} from "../../../lib/fileio/exportImport";
+import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { exportNotesToFolder, pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
-import { now } from "../../../lib/runtime/clock";
+import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import type { AppLaunch, Bookmark, Note, Settings } from "../../../types";
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
@@ -20,28 +19,36 @@ type Props = {
   notes: Note[];
   onImportData: (data: { sync: SyncState; notes: Note[] }) => void;
   onOpenFileAsNote: (title: string, content: string) => void;
+  /** App.tsx側のuseJsonBackupSyncの状態をラベル化したもの(JSON_BACKUP_STATUS_LABEL経由)。 */
+  jsonBackupStatusLabel: string;
 };
 
-export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props) {
+export function DataPanel({
+  sync,
+  notes,
+  onImportData,
+  onOpenFileAsNote,
+  jsonBackupStatusLabel,
+}: Props) {
   const [message, setMessage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleExport() {
-    const payload = buildExportPayload(sync, notes, now());
-    const blob = new Blob([serializeExport(payload)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `new-tab-board-export-${payload.exportedAt}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function handleImportFile(file: File) {
-    const text = await file.text();
-    const payload = parseImportPayload(text);
+  async function handleRestoreFromDrive() {
+    const result = await restoreJsonBackupFromDrive(true, sync.settings.jsonBackupFileId);
+    if (result.status === "unauthenticated") {
+      setMessage("Googleアカウントにログインできませんでした");
+      return;
+    }
+    if (result.status === "not-found") {
+      setMessage("Drive上にバックアップがまだありません(何か変更すると自動作成されます)");
+      return;
+    }
+    if (result.status === "error") {
+      setMessage("Driveからの読み込みに失敗しました");
+      return;
+    }
+    const payload = parseImportPayload(result.json);
     if (!payload) {
-      setMessage("インポート失敗: JSONの形式が不正です");
+      setMessage("復元失敗: バックアップの形式が不正です");
       return;
     }
     onImportData({
@@ -52,7 +59,7 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
       },
       notes: payload.notes,
     });
-    setMessage("インポートしました");
+    setMessage("Driveから復元しました");
   }
 
   async function handleOpenFile() {
@@ -87,40 +94,24 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
 
   return (
     <Card data-testid="data-panel">
-      <Heading as="h2" size="3" mb="3">
+      <Heading as="h2" size="3" mb="1">
         🗄️ データ管理(バックアップ・取り込み・NAS設定)
       </Heading>
+      {jsonBackupStatusLabel ? (
+        <Text as="p" size="1" color="gray" data-testid="json-backup-status" mb="2">
+          {jsonBackupStatusLabel}(ブックマーク/ノート/設定は自動でDriveへバックアップされます)
+        </Text>
+      ) : null}
       <Flex wrap="wrap" gap="2">
         <Button
           type="button"
           variant="soft"
-          data-testid="data-export-json"
-          title="ブックマーク/ノート/設定を全部1つのJSONファイルへ書き出す(バックアップ)"
-          onClick={handleExport}
+          data-testid="data-restore-from-drive"
+          title="Google Drive上の自動バックアップから全データを復元する"
+          onClick={() => void handleRestoreFromDrive()}
         >
-          ⬇️ JSONエクスポート
+          ☁️ Driveから復元
         </Button>
-        <Button
-          type="button"
-          variant="soft"
-          data-testid="data-import-json"
-          title="エクスポートしたJSONファイルから全データを復元する"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          ⬆️ JSONインポート
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          data-testid="data-import-file-input"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void handleImportFile(file);
-            e.target.value = "";
-          }}
-        />
         <Button
           type="button"
           variant="soft"
@@ -128,7 +119,7 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           title="ローカルの.txtファイルを選んで新規ノートとして読み込む"
           onClick={() => void handleOpenFile()}
         >
-          📂 ファイルを開く
+          📄 ファイルを開く
         </Button>
         <Button
           type="button"
