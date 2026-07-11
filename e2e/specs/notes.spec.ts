@@ -47,3 +47,32 @@ test("ノートタブはドラッグ&ドロップで並べ替えられる", asyn
   await expect(selects.nth(count - 2)).toHaveText(secondTitle ?? "");
   await expect(selects.nth(count - 1)).toHaveText(firstTitle ?? "");
 });
+
+test("ダークモード時、ノート本文のカーソル色が黒固定にならずテーマに追従する", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  // ノートが1件も無い初期状態でも動くよう、明示的に1件用意してから開く。
+  await page.getByTestId("note-tab-add").click();
+  await expect(page.locator('[data-testid="notepad-editor"]')).toBeVisible();
+
+  await page.getByTestId("theme-select").click();
+  await page.getByRole("option", { name: "ダーク" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.locator('[data-testid="notepad-editor"] .cm-content').click();
+
+  const cursorColor = await page.evaluate(() => {
+    const cursor = document.querySelector(".cm-cursor");
+    return cursor ? getComputedStyle(cursor).borderLeftColor : null;
+  });
+  // CM6のネイティブキャレットはcaret-colorが常にblack固定でダークモードで見えなく
+  // なるバグがあった(drawSelection()導入+.cm-cursorへのvar(--text)指定で修正)。
+  // 黒(rgb(0, 0, 0))固定へ回帰していないことを確認する。
+  expect(cursorColor).not.toBeNull();
+  expect(cursorColor).not.toBe("rgb(0, 0, 0)");
+});

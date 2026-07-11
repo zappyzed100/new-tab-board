@@ -358,6 +358,13 @@ button.note-tab-add {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
+/* CM6のdrawSelection()拡張が描画するカーソル。ネイティブキャレット(caret-color)は
+   常に黒固定でダークモードで見えなくなるため、border-leftで自前描画する.cm-cursorへ
+   切り替え、色をテーマ連動の--textに合わせている(Notepad.tsx参照)。 */
+[data-testid="notepad-editor"] .cm-cursor {
+  border-left: 1.4px solid var(--text);
+}
+
 /* Windowsメモ帳風のステータスバー(行/列・文字数) */
 [data-testid="notepad-status-bar"] {
   border: 1px solid var(--border);

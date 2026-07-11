@@ -4,7 +4,7 @@
 // (CM6のEditorStateとReactのcontentプロパティを双方向同期する複雑さを避けるため)。
 import { useEffect, useRef, useState } from "react";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { EditorView, keymap, type Command } from "@codemirror/view";
+import { drawSelection, EditorView, keymap, type Command } from "@codemirror/view";
 import {
   copyLineDown,
   copyLineUp,
@@ -83,6 +83,10 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
       doc: content,
       extensions: [
         history(),
+        // ネイティブブラウザキャレットはブラウザ間で挙動が不安定(位置追従が乱れる・
+        // caret-colorがテーマ色に連動しない)ため、CM6自前描画のカーソル/選択に
+        // 切り替える(見た目は.cm-cursorをstyles.cssでテーマ連動色に上書きしている)。
+        drawSelection(),
         keymap.of([
           { key: "Enter", run: calculatorEnter },
           ...editingKeymap,
