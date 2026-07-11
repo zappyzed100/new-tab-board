@@ -336,6 +336,14 @@ export function App() {
 
             <Flex asChild align="center" gap="3" wrap="wrap">
               <nav>
+                <DataPanel
+                  sync={sync}
+                  notes={notes}
+                  onImportData={importData}
+                  onOpenFileAsNote={openFileAsNote}
+                />
+
+                {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
                 <Button
                   type="button"
                   variant="soft"
@@ -345,13 +353,6 @@ export function App() {
                 >
                   ⌨️ ショートカット一覧(?)
                 </Button>
-
-                <DataPanel
-                  sync={sync}
-                  notes={notes}
-                  onImportData={importData}
-                  onOpenFileAsNote={openFileAsNote}
-                />
 
                 {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
                   <Text

@@ -305,7 +305,7 @@ button[data-testid="note-tab-add"]:hover {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 18px;
   line-height: 1;
   color: var(--text-muted);
   opacity: 0;

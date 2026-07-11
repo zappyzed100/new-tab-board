@@ -86,17 +86,10 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
 
   return (
     <>
+      {/* 使用頻度順(左ほどよく使う): 日常のノート運用に絡む操作(開く/書き出し)を左、
+          初期設定・災害復旧向けの稀な操作を右へ(ユーザー指示)。 */}
       <Flex asChild wrap="wrap" gap="2">
         <div data-testid="data-panel">
-          <Button
-            type="button"
-            variant="soft"
-            data-testid="data-restore-from-drive"
-            title="Google Drive上の自動バックアップから全データを復元する"
-            onClick={() => void handleRestoreFromDrive()}
-          >
-            ☁️ Driveから復元
-          </Button>
           <Button
             type="button"
             variant="soft"
@@ -109,11 +102,11 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           <Button
             type="button"
             variant="soft"
-            data-testid="data-set-nas-folder"
-            title="履歴の長期保管先(NASの共有フォルダ等)を選ぶ"
-            onClick={() => void handleSetNasFolder()}
+            data-testid="data-export-folder"
+            title="全ノートをそれぞれ.mdファイルとしてフォルダへ書き出す"
+            onClick={() => void handleExportFolder()}
           >
-            📁 NASフォルダを設定
+            🗂️ フォルダへ書き出し
           </Button>
           <Button
             type="button"
@@ -127,11 +120,20 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           <Button
             type="button"
             variant="soft"
-            data-testid="data-export-folder"
-            title="全ノートをそれぞれ.mdファイルとしてフォルダへ書き出す"
-            onClick={() => void handleExportFolder()}
+            data-testid="data-restore-from-drive"
+            title="Google Drive上の自動バックアップから全データを復元する"
+            onClick={() => void handleRestoreFromDrive()}
           >
-            🗂️ フォルダへ書き出し
+            ☁️ Driveから復元
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid="data-set-nas-folder"
+            title="履歴の長期保管先(NASの共有フォルダ等)を選ぶ"
+            onClick={() => void handleSetNasFolder()}
+          >
+            📁 NASフォルダを設定
           </Button>
         </div>
       </Flex>
