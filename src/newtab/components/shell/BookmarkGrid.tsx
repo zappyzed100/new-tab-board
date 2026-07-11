@@ -2,7 +2,7 @@
 // 数字キー1-9でのジャンプはApp.tsxのshortcuts.ts単一レジストリ側に統合済み(SPEC.md §4.6)。
 // D&D並べ替えは自前のHTML5 native drag-and-dropロジック(Radixに代替が無いため温存)。
 import { useState } from "react";
-import { Button, Flex, Grid, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Button, Card, Flex, Grid, IconButton, Text, TextField } from "@radix-ui/themes";
 import {
   addBookmark,
   createBookmark,
@@ -42,93 +42,95 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
   }
 
   return (
-    <Grid data-testid="bookmark-grid" columns="repeat(auto-fill, 64px)" gap="2">
-      {sorted.map((bookmark, index) => (
-        <div
-          key={bookmark.id}
-          draggable
-          data-testid={`bookmark-cell-${bookmark.id}`}
-          onDragStart={() => setDragIndex(index)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => handleDrop(index)}
-        >
-          {editingId === bookmark.id ? (
-            <BookmarkEditForm
-              bookmark={bookmark}
-              onSave={(patch) => {
-                onChange(updateBookmark(bookmarks, bookmark.id, patch));
-                setEditingId(null);
-              }}
-              onCancel={() => setEditingId(null)}
-            />
-          ) : (
-            <Flex direction="column" align="center" gap="1">
-              <IconButton
-                type="button"
-                variant="soft"
-                data-testid={`bookmark-open-${bookmark.id}`}
-                title={`${bookmark.label}を開く(${bookmark.url})`}
-                onClick={() => openBookmark(bookmark)}
-              >
-                <BookmarkIcon bookmark={bookmark} />
-              </IconButton>
-              <Text as="span" size="1" data-testid={`bookmark-label-${bookmark.id}`}>
-                {bookmark.label}
-              </Text>
-              <Flex className="bookmark-actions" gap="1">
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  size="1"
-                  data-testid={`bookmark-edit-${bookmark.id}`}
-                  title="このブックマークを編集する"
-                  onClick={() => setEditingId(bookmark.id)}
-                >
-                  ✏️
-                </IconButton>
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  size="1"
-                  color="red"
-                  data-testid={`bookmark-remove-${bookmark.id}`}
-                  title="このブックマークを削除する"
-                  onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
-                >
-                  🗑️
-                </IconButton>
-              </Flex>
-            </Flex>
-          )}
-        </div>
-      ))}
-
-      {adding ? (
-        <BookmarkEditForm
-          onSave={({ url, label, alias }) => {
-            if (!url || !label) return;
-            onChange(addBookmark(bookmarks, createBookmark(url, label, sorted.length, alias)));
-            setAdding(false);
-          }}
-          onCancel={() => setAdding(false)}
-        />
-      ) : (
-        <Flex direction="column" align="center" gap="1" className="bookmark-cell-add">
-          <IconButton
-            type="button"
-            variant="soft"
-            data-testid="bookmark-add"
-            title="新しいブックマークを追加する"
-            onClick={() => setAdding(true)}
+    <Card data-testid="bookmark-grid">
+      <Grid columns="repeat(auto-fill, 64px)" gap="2">
+        {sorted.map((bookmark, index) => (
+          <div
+            key={bookmark.id}
+            draggable
+            data-testid={`bookmark-cell-${bookmark.id}`}
+            onDragStart={() => setDragIndex(index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleDrop(index)}
           >
-            +
-          </IconButton>
-          <Text as="span" size="1">
-            サイトを追加
-          </Text>
-        </Flex>
-      )}
-    </Grid>
+            {editingId === bookmark.id ? (
+              <BookmarkEditForm
+                bookmark={bookmark}
+                onSave={(patch) => {
+                  onChange(updateBookmark(bookmarks, bookmark.id, patch));
+                  setEditingId(null);
+                }}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <Flex direction="column" align="center" gap="1">
+                <IconButton
+                  type="button"
+                  variant="soft"
+                  data-testid={`bookmark-open-${bookmark.id}`}
+                  title={`${bookmark.label}を開く(${bookmark.url})`}
+                  onClick={() => openBookmark(bookmark)}
+                >
+                  <BookmarkIcon bookmark={bookmark} />
+                </IconButton>
+                <Text as="span" size="1" data-testid={`bookmark-label-${bookmark.id}`}>
+                  {bookmark.label}
+                </Text>
+                <Flex className="bookmark-actions" gap="1">
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    size="1"
+                    data-testid={`bookmark-edit-${bookmark.id}`}
+                    title="このブックマークを編集する"
+                    onClick={() => setEditingId(bookmark.id)}
+                  >
+                    ✏️
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    size="1"
+                    color="red"
+                    data-testid={`bookmark-remove-${bookmark.id}`}
+                    title="このブックマークを削除する"
+                    onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
+                  >
+                    🗑️
+                  </IconButton>
+                </Flex>
+              </Flex>
+            )}
+          </div>
+        ))}
+
+        {adding ? (
+          <BookmarkEditForm
+            onSave={({ url, label, alias }) => {
+              if (!url || !label) return;
+              onChange(addBookmark(bookmarks, createBookmark(url, label, sorted.length, alias)));
+              setAdding(false);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        ) : (
+          <Flex direction="column" align="center" gap="1" className="bookmark-cell-add">
+            <IconButton
+              type="button"
+              variant="soft"
+              data-testid="bookmark-add"
+              title="新しいブックマークを追加する"
+              onClick={() => setAdding(true)}
+            >
+              +
+            </IconButton>
+            <Text as="span" size="1">
+              サイトを追加
+            </Text>
+          </Flex>
+        )}
+      </Grid>
+    </Card>
   );
 }
 

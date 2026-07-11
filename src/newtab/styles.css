@@ -73,184 +73,26 @@ body,
   margin: 0;
 }
 
+/* body自体の背景・文字色はRadixの<Theme>コンポーネント(.radix-themesクラス)が
+   var(--color-background)/var(--gray-12)相当を適用するため、ここでは最小限
+   (フォント継承)のみ指定する。旧来の自前グラデーション背景・色トークンは撤去。 */
 body {
-  background: linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 320px);
-  color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-2);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-strong);
 }
 
 .hint {
-  color: var(--text-muted);
+  color: var(--gray-a10);
   font-size: 12px;
 }
 
-button {
-  font-family: inherit;
-}
-
-/* --- 汎用部品(button/input/select/form) ---
-   立体感: 静止時も薄く浮かせ(--shadow-btn)、hoverで少し持ち上がり(-1px+影を強める)、
-   activeで実際に押し込む(元位置へ沈み込み影を最小化)——物理ボタンの押下を模す。 */
-button[type="button"],
-button[type="submit"] {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: var(--shadow-btn);
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.1s ease,
-    box-shadow 0.15s ease;
-}
-
-button[type="button"]:hover,
-button[type="submit"]:hover {
-  background: var(--surface-2);
-  border-color: var(--accent);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-btn-hover);
-}
-
-button[type="button"]:active,
-button[type="submit"]:active {
-  transform: translateY(1px);
-  box-shadow: none;
-}
-
-
-input[type="text"],
-input:not([type]),
-select,
-textarea {
-  font-family: inherit;
-  font-size: 13px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-}
-
-input[type="text"]:focus,
-input:not([type]):focus,
-select:focus,
-textarea:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* --- ルートレイアウト --- */
-[data-testid="app-root"] {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-height: 100vh;
-  width: 100%;
-  padding: var(--space-4) var(--space-5);
-}
-
 [data-testid="app-loading"] {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100vh;
-  color: var(--text-muted);
+  color: var(--gray-a10);
   font-size: 15px;
-}
-
-[data-testid="no-notes"] {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-height: 200px;
-  color: var(--accent-strong);
-  font-size: 15px;
-  font-weight: 500;
-  text-align: center;
-  background: var(--accent-soft);
-  border: 2px dashed var(--accent);
-  border-radius: var(--radius);
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.app-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.app-toolbar button[type="button"] {
-  background: var(--accent-soft);
-  border-color: transparent;
-  color: var(--accent-strong);
-}
-
-.app-toolbar button[type="button"]:hover {
-  background: var(--accent);
-  color: var(--accent-fg);
-  border-color: var(--accent);
-}
-
-/* 検索/TODO/カレンダー/データ管理は「同時に1つだけ選べるタブ」として
-   1つの連結したセグメントに見せる(隙間なし・角丸は両端だけ)。 */
-.app-tabs {
-  display: flex;
-  gap: 1px;
-  background: var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1px;
-}
-
-.app-tabs button[type="button"] {
-  border-radius: 6px;
-}
-
-.app-tabs button[role="tab"][aria-selected="true"] {
-  background: var(--accent);
-  color: var(--accent-fg);
-}
-
-/* コマンドパレット/ショートカット一覧はタブ(切替表示)ではなく単発のオーバーレイ
-   起動ボタンなので、タブ群とは視覚的に区切って隣に置く。 */
-.app-actions {
-  display: flex;
-  gap: var(--space-2);
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
-}
-
-.app-overlays {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
 .app-main {
@@ -294,19 +136,8 @@ textarea:focus {
   color: var(--text-muted);
 }
 
-/* --- ブックマークグリッド(角丸スクエアタイル+下にラベル。編集/削除はhover時のみ表示) --- */
-[data-testid="bookmark-grid"] {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  box-shadow: var(--shadow);
-  align-content: start;
-}
-
+/* --- ブックマークグリッド(角丸スクエアタイル+下にラベル。編集/削除はhover時のみ表示) ---
+   外枠はCard(bookmark-grid.tsx)に任せ、ここではタイル内部の見た目だけ調整する。 */
 [data-testid^="bookmark-cell-"] {
   position: relative;
   display: flex;
@@ -502,19 +333,11 @@ button.note-tab-add {
   border-radius: 999px;
 }
 
-/* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク) --- */
+/* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク)
+   外枠はCard(App.tsx)に任せ、伸縮指定だけここで持つ。 --- */
 [data-testid="note-editor-area"] {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
   flex: 1;
   min-height: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  padding: var(--space-3);
-  box-shadow: var(--shadow);
 }
 
 [data-testid="notepad-editor"] {
@@ -577,13 +400,9 @@ button.note-tab-add {
   padding-left: 0;
 }
 
-/* 履歴ボタンの直下に「ドロップダウンで伸びる」ように見せる(編集エリアより先に配置) */
+/* 履歴ボタンの直下に「ドロップダウンで伸びる」ように見せる(編集エリアより先に配置)。
+   外枠はCard(HistoryPanel.tsx)に任せ、高さ制限だけここで持つ。 */
 [data-testid="history-panel"] {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-  margin-bottom: var(--space-3);
   max-height: 260px;
   overflow: auto;
 }
@@ -597,34 +416,15 @@ button.note-tab-add {
   white-space: pre-wrap;
 }
 
-/* --- トグルパネル(検索/データ管理) --- */
-/* 種類ごとに左端の色を変え、ラベルだけでなく色でも見分けられるようにする */
-[data-testid="search-panel"],
-[data-testid="data-panel"] {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--accent);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  box-shadow: var(--shadow);
-}
-
-[data-testid="data-panel"] {
-  border-left-color: var(--danger);
-}
-
+/* --- トグルパネル(検索/データ管理) ---
+   外枠はCard(SearchPanel.tsx/DataPanel.tsx)に任せる。 */
 [data-testid="search-input"] {
   width: 100%;
 }
 
-/* --- 常時表示の小型カレンダー(サイドバー全幅) --- */
+/* --- 常時表示の小型カレンダー(サイドバー全幅)
+   外枠はCard(MiniCalendar.tsx)に任せる。 --- */
 [data-testid="mini-calendar"] {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--warning);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  box-shadow: var(--shadow);
   font-size: 12px;
 }
 
@@ -680,24 +480,14 @@ button.note-tab-add {
 }
 
 /* --- TODOリスト(TodoMVC参考: 入力欄+チェックボックス行+hover時のみ×) --- */
+/* 外枠はCard(TodoList.tsx)に任せる。 */
 [data-testid="todo-list"] {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--success);
-  border-radius: var(--radius);
-  padding: var(--space-2) var(--space-3);
-  box-shadow: var(--shadow);
   font-size: 12px;
 }
 
 [data-testid="todo-new-input"] {
   width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  padding: var(--space-1) 2px var(--space-2);
-  background: transparent;
-  font-style: italic;
+  margin-bottom: var(--space-2);
 }
 
 [data-testid="todo-new-input"]:focus {

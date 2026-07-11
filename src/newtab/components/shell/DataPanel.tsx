@@ -1,7 +1,7 @@
 // DataPanel.tsx — JSON全データ書き出し/取り込み・ローカルファイル操作・NASアーカイブ設定
 // (SPEC.md §4.3・§4.7・§4.10-a)
 import { useRef, useState } from "react";
-import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+import { Button, Card, Flex, Heading, Text } from "@radix-ui/themes";
 import { setNasDirectoryHandle } from "../../../lib/storage/db";
 import {
   buildExportPayload,
@@ -86,8 +86,8 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
   }
 
   return (
-    <div data-testid="data-panel">
-      <Heading as="h2" size="3" className="panel-title">
+    <Card data-testid="data-panel">
+      <Heading as="h2" size="3" mb="3">
         🗄️ データ管理(バックアップ・取り込み・NAS設定)
       </Heading>
       <Flex wrap="wrap" gap="2">
@@ -163,6 +163,6 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           {message}
         </Text>
       ) : null}
-    </div>
+    </Card>
   );
 }

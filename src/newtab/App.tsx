@@ -1,6 +1,6 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Theme } from "@radix-ui/themes";
+import { Button, Card, Container, Flex, Text, Theme } from "@radix-ui/themes";
 import { BacklinksPanel } from "./components/notes/BacklinksPanel";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
@@ -255,7 +255,13 @@ export function App() {
 
   if (!sync || !notes) {
     return (
-      <Theme appearance={resolvedTheme} accentColor="indigo" radius="medium">
+      <Theme
+        appearance={resolvedTheme}
+        accentColor="indigo"
+        grayColor="slate"
+        radius="large"
+        panelBackground="solid"
+      >
         <div data-testid="app-loading">読み込み中…</div>
       </Theme>
     );
@@ -269,207 +275,251 @@ export function App() {
   }
 
   return (
-    <Theme appearance={resolvedTheme} accentColor="indigo" radius="medium">
-      <main data-testid="app-root">
-        {countdown.kind === "upcoming" ? (
-          <div data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
-            📆 次の予定まで {countdown.minutes}分({countdown.title})
-          </div>
-        ) : null}
-        {countdown.kind === "in-progress" ? (
-          <div data-testid="next-event-countdown">📆 予定は進行中です</div>
-        ) : null}
-        {alarmActive ? (
-          <button
-            type="button"
-            data-testid="stop-pre-event-alarm"
-            title="予定10分前アラームの音を止める"
-            onClick={stopPreEventAlarm}
-          >
-            🔔 アラーム停止
-          </button>
-        ) : null}
+    <Theme
+      appearance={resolvedTheme}
+      accentColor="indigo"
+      grayColor="slate"
+      radius="large"
+      panelBackground="solid"
+    >
+      <Container size="4" p={{ initial: "3", sm: "5" }}>
+        <Flex asChild direction="column" gap="4">
+          <main data-testid="app-root">
+            {countdown.kind === "upcoming" ? (
+              <Card data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
+                <Text size="3" weight="medium">
+                  📆 次の予定まで {countdown.minutes}分({countdown.title})
+                </Text>
+              </Card>
+            ) : null}
+            {countdown.kind === "in-progress" ? (
+              <Card data-testid="next-event-countdown">
+                <Text size="3" weight="medium">
+                  📆 予定は進行中です
+                </Text>
+              </Card>
+            ) : null}
+            {alarmActive ? (
+              <Button
+                type="button"
+                color="red"
+                data-testid="stop-pre-event-alarm"
+                title="予定10分前アラームの音を止める"
+                onClick={stopPreEventAlarm}
+              >
+                🔔 アラーム停止
+              </Button>
+            ) : null}
 
-        <header className="app-header">
-          <Clock />
-          <ThemeToggle
-            theme={sync.settings.theme}
-            onThemeChange={(theme) => updateSettings({ theme })}
-          />
-        </header>
-
-        <nav className="app-toolbar">
-          <button
-            type="button"
-            aria-pressed={showData}
-            data-testid="toggle-data"
-            title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
-            onClick={() => setShowData((v) => !v)}
-          >
-            🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
-          </button>
-
-          <div className="app-actions">
-            <button
-              type="button"
-              data-testid="open-command-palette"
-              title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
-              onClick={() => setShowCommandPalette(true)}
-            >
-              🚀 クイックオープン(Ctrl+K)
-            </button>
-            <button
-              type="button"
-              data-testid="open-shortcuts-modal"
-              title="使えるキーボードショートカットの一覧を表示する"
-              onClick={() => setShowShortcutsModal(true)}
-            >
-              ⌨️ ショートカット一覧(?)
-            </button>
-          </div>
-
-          {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-            <span data-testid="drive-sync-status" title="このノートのGoogle Drive自動同期の状態">
-              {DRIVE_SYNC_LABEL[driveSyncStatus]}
-            </span>
-          ) : null}
-        </nav>
-
-        <div className="app-overlays">
-          {showData ? (
-            <DataPanel
-              sync={sync}
-              notes={notes}
-              onImportData={importData}
-              onOpenFileAsNote={openFileAsNote}
-            />
-          ) : null}
-        </div>
-
-        {showCommandPalette ? (
-          <CommandPalette
-            notes={notes}
-            bookmarks={sync.bookmarks}
-            appLaunches={sync.appLaunches}
-            openIn={sync.settings.openIn}
-            onSelectNote={selectNote}
-            onOpenFile={() =>
-              void pickAndReadTextFile().then(
-                (r) => r && openFileAsNote(r.name.replace(/\.txt$/i, ""), r.content),
-              )
-            }
-            onClose={() => setShowCommandPalette(false)}
-          />
-        ) : null}
-        {showShortcutsModal ? (
-          <ShortcutsModal
-            registry={shortcutRegistry}
-            onClose={() => setShowShortcutsModal(false)}
-          />
-        ) : null}
-
-        <div className="app-main">
-          <div className="app-sidebar">
-            <BookmarkGrid
-              bookmarks={sync.bookmarks}
-              openIn={sync.settings.openIn}
-              onBookmarksChange={updateBookmarks}
-            />
-            <MiniCalendar />
-            <TodoList todos={todos} onTodosChange={updateTodos} />
-          </div>
-          <section className="app-notes">
-            <NoteTabs
-              notes={notes}
-              activeNoteId={activeNoteId}
-              onNotesChange={updateNotes}
-              onSelect={selectNote}
-            />
-            {activeNote ? (
-              <div data-testid="note-editor-area">
-                <SnapshotScheduler
-                  key={activeNote.id}
-                  noteId={activeNote.id}
-                  content={activeNote.content}
+            <Flex asChild align="center" gap="4" wrap="wrap">
+              <header>
+                <Clock />
+                <ThemeToggle
+                  theme={sync.settings.theme}
+                  onThemeChange={(theme) => updateSettings({ theme })}
                 />
-                <div className="app-toolbar">
-                  <button
+              </header>
+            </Flex>
+
+            <Flex asChild align="center" gap="3" wrap="wrap">
+              <nav>
+                <Button
+                  type="button"
+                  variant={showData ? "solid" : "soft"}
+                  aria-pressed={showData}
+                  data-testid="toggle-data"
+                  title="全データのJSON書き出し/取り込み・ローカルファイル操作・NAS設定"
+                  onClick={() => setShowData((v) => !v)}
+                >
+                  🗄️ {showData ? "データ管理を閉じる" : "データ管理"}
+                </Button>
+
+                <Flex gap="2" pl="3" style={{ borderLeft: "1px solid var(--gray-a5)" }}>
+                  <Button
                     type="button"
-                    data-testid="toggle-preview"
-                    title="Markdown記法(見出し・リスト等)を清書して表示する"
-                    onClick={() => setShowPreview((v) => !v)}
+                    variant="soft"
+                    data-testid="open-command-palette"
+                    title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
+                    onClick={() => setShowCommandPalette(true)}
                   >
-                    {showPreview ? "編集に戻る" : "Markdownプレビュー"}
-                  </button>
-                  <button
+                    🚀 クイックオープン(Ctrl+K)
+                  </Button>
+                  <Button
                     type="button"
-                    data-testid="toggle-history"
-                    title="過去のスナップショット一覧・差分表示・復元"
-                    onClick={() => setShowHistory((v) => !v)}
+                    variant="soft"
+                    data-testid="open-shortcuts-modal"
+                    title="使えるキーボードショートカットの一覧を表示する"
+                    onClick={() => setShowShortcutsModal(true)}
                   >
-                    🕑 {showHistory ? "履歴を閉じる" : "履歴"}
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={showSearch}
-                    data-testid="toggle-search"
-                    title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
-                    onClick={() => setShowSearch((v) => !v)}
+                    ⌨️ ショートカット一覧(?)
+                  </Button>
+                </Flex>
+
+                {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
+                  <Text
+                    size="1"
+                    color="gray"
+                    data-testid="drive-sync-status"
+                    title="このノートのGoogle Drive自動同期の状態"
                   >
-                    🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
-                  </button>
-                </div>
-                {showSearch ? (
-                  <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-                    <SearchPanel
-                      notes={notes}
-                      onSelectNote={(noteId) => {
-                        selectNote(noteId);
-                        setShowSearch(false);
-                      }}
-                    />
-                  </Suspense>
+                    {DRIVE_SYNC_LABEL[driveSyncStatus]}
+                  </Text>
                 ) : null}
-                {showHistory ? (
-                  <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
-                    <HistoryPanel
-                      key={`history-${activeNote.id}`}
-                      noteId={activeNote.id}
-                      currentContent={activeNote.content}
-                      onRestore={(content) => {
-                        updateNotes(updateNote(notes, activeNote.id, { content }));
-                        setRestoreCounter((c) => c + 1);
-                      }}
-                    />
-                  </Suspense>
-                ) : null}
-                <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
-                  {showPreview ? (
-                    <MarkdownPreview
-                      content={activeNote.content}
-                      onNavigateToNote={selectNoteByTitle}
-                    />
-                  ) : (
-                    <Notepad
-                      key={`editor-${activeNote.id}-${restoreCounter}`}
-                      content={activeNote.content}
-                      autoFocus={userSelectedNoteRef.current}
-                      onContentChange={(content) =>
-                        updateNotes(updateNote(notes, activeNote.id, { content }))
-                      }
-                    />
-                  )}
-                </Suspense>
-                <BacklinksPanel notes={notes} activeNote={activeNote} onSelectNote={selectNote} />
+              </nav>
+            </Flex>
+
+            {showData ? (
+              <DataPanel
+                sync={sync}
+                notes={notes}
+                onImportData={importData}
+                onOpenFileAsNote={openFileAsNote}
+              />
+            ) : null}
+
+            {showCommandPalette ? (
+              <CommandPalette
+                notes={notes}
+                bookmarks={sync.bookmarks}
+                appLaunches={sync.appLaunches}
+                openIn={sync.settings.openIn}
+                onSelectNote={selectNote}
+                onOpenFile={() =>
+                  void pickAndReadTextFile().then(
+                    (r) => r && openFileAsNote(r.name.replace(/\.txt$/i, ""), r.content),
+                  )
+                }
+                onClose={() => setShowCommandPalette(false)}
+              />
+            ) : null}
+            {showShortcutsModal ? (
+              <ShortcutsModal
+                registry={shortcutRegistry}
+                onClose={() => setShowShortcutsModal(false)}
+              />
+            ) : null}
+
+            <div className="app-main">
+              <div className="app-sidebar">
+                <BookmarkGrid
+                  bookmarks={sync.bookmarks}
+                  openIn={sync.settings.openIn}
+                  onBookmarksChange={updateBookmarks}
+                />
+                <MiniCalendar />
+                <TodoList todos={todos} onTodosChange={updateTodos} />
               </div>
-            ) : (
-              <div data-testid="no-notes">
-                📝 ノートがありません。上の「+ ノート」ボタンを押すと書き始められます
-              </div>
-            )}
-          </section>
-        </div>
-      </main>
+              <section className="app-notes">
+                <NoteTabs
+                  notes={notes}
+                  activeNoteId={activeNoteId}
+                  onNotesChange={updateNotes}
+                  onSelect={selectNote}
+                />
+                {activeNote ? (
+                  <Card data-testid="note-editor-area">
+                    <Flex direction="column" gap="3">
+                      <SnapshotScheduler
+                        key={activeNote.id}
+                        noteId={activeNote.id}
+                        content={activeNote.content}
+                      />
+                      <Flex align="center" gap="3" wrap="wrap">
+                        <Button
+                          type="button"
+                          variant={showPreview ? "solid" : "soft"}
+                          data-testid="toggle-preview"
+                          title="Markdown記法(見出し・リスト等)を清書して表示する"
+                          onClick={() => setShowPreview((v) => !v)}
+                        >
+                          {showPreview ? "編集に戻る" : "Markdownプレビュー"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={showHistory ? "solid" : "soft"}
+                          data-testid="toggle-history"
+                          title="過去のスナップショット一覧・差分表示・復元"
+                          onClick={() => setShowHistory((v) => !v)}
+                        >
+                          🕑 {showHistory ? "履歴を閉じる" : "履歴"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={showSearch ? "solid" : "soft"}
+                          aria-pressed={showSearch}
+                          data-testid="toggle-search"
+                          title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
+                          onClick={() => setShowSearch((v) => !v)}
+                        >
+                          🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
+                        </Button>
+                      </Flex>
+                      {showSearch ? (
+                        <Suspense
+                          fallback={<div data-testid="search-loading">検索を読み込み中…</div>}
+                        >
+                          <SearchPanel
+                            notes={notes}
+                            onSelectNote={(noteId) => {
+                              selectNote(noteId);
+                              setShowSearch(false);
+                            }}
+                          />
+                        </Suspense>
+                      ) : null}
+                      {showHistory ? (
+                        <Suspense
+                          fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}
+                        >
+                          <HistoryPanel
+                            key={`history-${activeNote.id}`}
+                            noteId={activeNote.id}
+                            currentContent={activeNote.content}
+                            onRestore={(content) => {
+                              updateNotes(updateNote(notes, activeNote.id, { content }));
+                              setRestoreCounter((c) => c + 1);
+                            }}
+                          />
+                        </Suspense>
+                      ) : null}
+                      <Suspense
+                        fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}
+                      >
+                        {showPreview ? (
+                          <MarkdownPreview
+                            content={activeNote.content}
+                            onNavigateToNote={selectNoteByTitle}
+                          />
+                        ) : (
+                          <Notepad
+                            key={`editor-${activeNote.id}-${restoreCounter}`}
+                            content={activeNote.content}
+                            autoFocus={userSelectedNoteRef.current}
+                            onContentChange={(content) =>
+                              updateNotes(updateNote(notes, activeNote.id, { content }))
+                            }
+                          />
+                        )}
+                      </Suspense>
+                      <BacklinksPanel
+                        notes={notes}
+                        activeNote={activeNote}
+                        onSelectNote={selectNote}
+                      />
+                    </Flex>
+                  </Card>
+                ) : (
+                  <Card data-testid="no-notes">
+                    <Text size="3" weight="medium" color="indigo">
+                      📝 ノートがありません。上の「+ ノート」ボタンを押すと書き始められます
+                    </Text>
+                  </Card>
+                )}
+              </section>
+            </div>
+          </main>
+        </Flex>
+      </Container>
     </Theme>
   );
 }

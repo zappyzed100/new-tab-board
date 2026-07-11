@@ -1,6 +1,6 @@
 // SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 import { useState } from "react";
-import { Button, Flex, Heading, TextField } from "@radix-ui/themes";
+import { Button, Card, Flex, Heading, TextField } from "@radix-ui/themes";
 import { getSnapshot } from "../../../lib/storage/db";
 import { gzipDecompress } from "../../../lib/history/gzip";
 import { getSnapshotBody } from "../../../lib/externalIO/nasArchive";
@@ -44,8 +44,8 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
   }
 
   return (
-    <div data-testid="search-panel">
-      <Heading as="h2" size="3" className="panel-title">
+    <Card data-testid="search-panel">
+      <Heading as="h2" size="3" mb="3">
         🔍 全文検索(全ノートの本文を横断)
       </Heading>
       <TextField.Root
@@ -72,6 +72,6 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }

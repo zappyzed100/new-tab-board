@@ -1,6 +1,6 @@
 // CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { Dialog, Flex, TextField } from "@radix-ui/themes";
+import { Button, Dialog, Flex, TextField } from "@radix-ui/themes";
 import {
   buildCommandItems,
   filterCommandItems,
@@ -85,15 +85,17 @@ export function CommandPalette({
           }}
           onKeyDown={handleKeyDown}
         />
-        <ul data-testid="command-palette-list">
-          {filtered.map((item, i) => (
-            <li
-              key={`${item.type}-${item.id}`}
-              data-testid={`command-palette-item-${item.type}-${item.id}`}
-            >
-              <Flex asChild width="100%">
-                <button
+        <Flex direction="column" gap="1" mt="3" asChild>
+          <ul data-testid="command-palette-list">
+            {filtered.map((item, i) => (
+              <li
+                key={`${item.type}-${item.id}`}
+                data-testid={`command-palette-item-${item.type}-${item.id}`}
+              >
+                <Button
                   type="button"
+                  variant={i === activeIndex ? "solid" : "ghost"}
+                  style={{ width: "100%", justifyContent: "flex-start" }}
                   data-testid={`command-palette-run-${item.type}-${item.id}`}
                   aria-pressed={i === activeIndex}
                   onClick={() => runItem(item)}
@@ -101,11 +103,11 @@ export function CommandPalette({
                 >
                   {item.label}
                   <span> ({item.type})</span>
-                </button>
-              </Flex>
-            </li>
-          ))}
-        </ul>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Flex>
       </Dialog.Content>
     </Dialog.Root>
   );

@@ -1,6 +1,6 @@
 // TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 import { useState, type KeyboardEvent } from "react";
-import { Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Card, Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
 import {
   addTodo,
   createTodo,
@@ -28,7 +28,7 @@ export function TodoList({ todos, onTodosChange }: Props) {
   }
 
   return (
-    <div data-testid="todo-list">
+    <Card data-testid="todo-list">
       <TextField.Root
         type="text"
         data-testid="todo-new-input"
@@ -66,6 +66,6 @@ export function TodoList({ todos, onTodosChange }: Props) {
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }

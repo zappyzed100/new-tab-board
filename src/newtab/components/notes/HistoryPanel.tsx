@@ -1,6 +1,6 @@
 // HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 import { useEffect, useState } from "react";
-import { Button, Checkbox, Flex, Heading, Text } from "@radix-ui/themes";
+import { Button, Card, Checkbox, Flex, Heading, Text } from "@radix-ui/themes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { getSnapshotsByNote, putSnapshot } from "../../../lib/storage/db";
 import { gzipCompress, gzipDecompress } from "../../../lib/history/gzip";
@@ -69,8 +69,8 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
   const canShowDiff = first !== undefined && second !== undefined;
 
   return (
-    <div data-testid="history-panel">
-      <Heading as="h2" size="3" className="panel-title">
+    <Card data-testid="history-panel">
+      <Heading as="h2" size="3" mb="1">
         🕑 履歴(自動保存されたスナップショット)
       </Heading>
       <Text as="p" size="2" color="gray" className="hint">
@@ -107,6 +107,6 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
       {canShowDiff && decoded[first] !== undefined && decoded[second] !== undefined ? (
         <DiffView before={decoded[second]} after={decoded[first]} />
       ) : null}
-    </div>
+    </Card>
   );
 }

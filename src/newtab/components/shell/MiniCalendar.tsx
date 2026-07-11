@@ -3,7 +3,7 @@
 // Radix Themesに月カレンダーグリッド相当のコンポーネントは無いため、<table>構造・
 // 円形の日付ピル自体は自前CSSのまま温存し、周辺のボタン/ラベルのみRadix化している。
 import { useState } from "react";
-import { Button, Flex, Text } from "@radix-ui/themes";
+import { Button, Card, Flex, Text } from "@radix-ui/themes";
 import { buildGCalUrl, buildMonthGrid } from "../../../lib/display/calendarMonth";
 import { now } from "../../../lib/runtime/clock";
 
@@ -33,11 +33,11 @@ export function MiniCalendar() {
   }
 
   return (
-    <div
+    <Card
       data-testid="mini-calendar"
       title="日付をクリックするとGoogleカレンダーのその日を新しいタブで開きます"
     >
-      <Flex className="calendar-nav" align="center" justify="between">
+      <Flex className="calendar-nav" align="center" justify="between" mb="2">
         <Button
           type="button"
           variant="soft"
@@ -82,6 +82,6 @@ export function MiniCalendar() {
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
