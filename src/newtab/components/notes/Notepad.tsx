@@ -106,26 +106,8 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
     // すぐ入力できるようにする(フォーカスが無いと本文クリックがもう1回要る——実害あり)。
     // ただし新規タブを開いた直後の自動選択ではオムニバー側にフォーカスさせたいので、
     // 呼び出し側がautoFocus=falseを渡した時だけ奪わない。
-    let destroyed = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    if (autoFocus) {
-      view.focus();
-      // Chrome 27+はNTP差し替え拡張機能のオムニバー乗っ取り対策として、新規タブを
-      // 開いてから約500msの「critical focus window」中は拡張機能側からのfocus()を
-      // 無条件で握りつぶす(実際のユーザークリック起因でも区別されない)。この窓の
-      // 直後を狙って1回だけ再試行することで、開いた直後にクリックした場合でも
-      // 実質1クリックでノート本文へフォーカスが移るようにする。
-      if (!view.hasFocus) {
-        retryTimer = setTimeout(() => {
-          if (!destroyed) view.focus();
-        }, 600);
-      }
-    }
-    return () => {
-      destroyed = true;
-      clearTimeout(retryTimer);
-      view.destroy();
-    };
+    if (autoFocus) view.focus();
+    return () => view.destroy();
     // content/onContentChangeは初回マウント時のみ使用する(意図的な依存配列省略——
     // ノート切替時はkey propで再マウントされるため、ここでの再実行は不要)。
   }, []);
