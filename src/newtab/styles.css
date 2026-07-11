@@ -194,11 +194,11 @@ body {
 
 [data-testid^="bookmark-edit-"],
 [data-testid^="bookmark-remove-"] {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 14px;
   line-height: 1;
   box-shadow: none;
   border-color: transparent;

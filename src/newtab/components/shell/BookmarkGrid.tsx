@@ -80,7 +80,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
                   <IconButton
                     type="button"
                     variant="ghost"
-                    size="1"
+                    size="2"
                     data-testid={`bookmark-edit-${bookmark.id}`}
                     title="このブックマークを編集する"
                     onClick={() => setEditingId(bookmark.id)}
@@ -90,7 +90,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
                   <IconButton
                     type="button"
                     variant="ghost"
-                    size="1"
+                    size="2"
                     color="red"
                     data-testid={`bookmark-remove-${bookmark.id}`}
                     title="このブックマークを削除する"
@@ -168,24 +168,17 @@ function BookmarkEditForm({
   onSave: (patch: { url: string; label: string; alias?: string }) => void;
   onCancel: () => void;
 }) {
-  // 新規追加時はURLだけ貼り付ければよい(名称はURLのホスト名から自動で付け、
+  // 追加・編集ともURLだけ貼り替えればよい(名称はURLのホスト名から自動で付け、
   // アイコンはBookmarkIconの既定動作(favicon種別)でURLから自動取得される)。
-  // 既存ブックマークの編集時のみ、名称・エイリアスを手で直せるようにする。
-  const isNew = !bookmark;
+  // エイリアスはUIから編集する経路が無くなったため既存値をそのまま引き継ぐ。
   const [url, setUrl] = useState(bookmark?.url ?? "");
-  const [label, setLabel] = useState(bookmark?.label ?? "");
-  const [alias, setAlias] = useState(bookmark?.alias ?? "");
   const testIdBase = bookmark ? `bookmark-edit-form-${bookmark.id}` : "bookmark-add-form";
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (isNew) {
-      const derivedLabel = safeHostname(url) || url;
-      if (!url || !derivedLabel) return;
-      onSave({ url, label: derivedLabel });
-      return;
-    }
-    onSave({ url, label, alias: alias || undefined });
+    const derivedLabel = safeHostname(url) || url;
+    if (!url || !derivedLabel) return;
+    onSave({ url, label: derivedLabel, alias: bookmark?.alias });
   }
 
   return (
@@ -198,22 +191,6 @@ function BookmarkEditForm({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        {!isNew ? (
-          <>
-            <TextField.Root
-              aria-label="名称"
-              data-testid={`${testIdBase}-label`}
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-            />
-            <TextField.Root
-              aria-label="エイリアス"
-              data-testid={`${testIdBase}-alias`}
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-            />
-          </>
-        ) : null}
         <Flex gap="1">
           <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
             保存
