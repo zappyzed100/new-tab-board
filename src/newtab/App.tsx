@@ -340,6 +340,13 @@ export function App() {
                   ⌨️ ショートカット一覧(?)
                 </Button>
 
+                <DataPanel
+                  sync={sync}
+                  notes={notes}
+                  onImportData={importData}
+                  onOpenFileAsNote={openFileAsNote}
+                />
+
                 {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
                   <Text
                     size="1"
@@ -350,13 +357,6 @@ export function App() {
                     {DRIVE_SYNC_LABEL[driveSyncStatus]}
                   </Text>
                 ) : null}
-
-                <DataPanel
-                  sync={sync}
-                  notes={notes}
-                  onImportData={importData}
-                  onOpenFileAsNote={openFileAsNote}
-                />
               </nav>
             </Flex>
 
