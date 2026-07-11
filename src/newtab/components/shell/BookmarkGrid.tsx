@@ -1,6 +1,8 @@
 // BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 // 数字キー1-9でのジャンプはApp.tsxのshortcuts.ts単一レジストリ側に統合済み(SPEC.md §4.6)。
+// D&D並べ替えは自前のHTML5 native drag-and-dropロジック(Radixに代替が無いため温存)。
 import { useState } from "react";
+import { Button, Flex, Grid, IconButton, Text, TextField } from "@radix-ui/themes";
 import {
   addBookmark,
   createBookmark,
@@ -40,7 +42,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
   }
 
   return (
-    <div data-testid="bookmark-grid">
+    <Grid data-testid="bookmark-grid" columns="repeat(auto-fill, 64px)" gap="2">
       {sorted.map((bookmark, index) => (
         <div
           key={bookmark.id}
@@ -60,35 +62,43 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
               onCancel={() => setEditingId(null)}
             />
           ) : (
-            <>
-              <button
+            <Flex direction="column" align="center" gap="1">
+              <IconButton
                 type="button"
+                variant="soft"
                 data-testid={`bookmark-open-${bookmark.id}`}
                 title={`${bookmark.label}を開く(${bookmark.url})`}
                 onClick={() => openBookmark(bookmark)}
               >
                 <BookmarkIcon bookmark={bookmark} />
-              </button>
-              <span data-testid={`bookmark-label-${bookmark.id}`}>{bookmark.label}</span>
-              <div className="bookmark-actions">
-                <button
+              </IconButton>
+              <Text as="span" size="1" data-testid={`bookmark-label-${bookmark.id}`}>
+                {bookmark.label}
+              </Text>
+              <Flex className="bookmark-actions" gap="1">
+                <IconButton
                   type="button"
+                  variant="ghost"
+                  size="1"
                   data-testid={`bookmark-edit-${bookmark.id}`}
                   title="このブックマークを編集する"
                   onClick={() => setEditingId(bookmark.id)}
                 >
                   ✏️
-                </button>
-                <button
+                </IconButton>
+                <IconButton
                   type="button"
+                  variant="ghost"
+                  size="1"
+                  color="red"
                   data-testid={`bookmark-remove-${bookmark.id}`}
                   title="このブックマークを削除する"
                   onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
                 >
                   🗑️
-                </button>
-              </div>
-            </>
+                </IconButton>
+              </Flex>
+            </Flex>
           )}
         </div>
       ))}
@@ -103,19 +113,22 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
           onCancel={() => setAdding(false)}
         />
       ) : (
-        <div className="bookmark-cell-add">
-          <button
+        <Flex direction="column" align="center" gap="1" className="bookmark-cell-add">
+          <IconButton
             type="button"
+            variant="soft"
             data-testid="bookmark-add"
             title="新しいブックマークを追加する"
             onClick={() => setAdding(true)}
           >
             +
-          </button>
-          <span>サイトを追加</span>
-        </div>
+          </IconButton>
+          <Text as="span" size="1">
+            サイトを追加
+          </Text>
+        </Flex>
       )}
-    </div>
+    </Grid>
   );
 }
 
@@ -166,30 +179,39 @@ function BookmarkEditForm({
         onSave({ url, label, alias: alias || undefined });
       }}
     >
-      <input
-        aria-label="URL"
-        data-testid={`${testIdBase}-url`}
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-      />
-      <input
-        aria-label="名称"
-        data-testid={`${testIdBase}-label`}
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-      />
-      <input
-        aria-label="エイリアス"
-        data-testid={`${testIdBase}-alias`}
-        value={alias}
-        onChange={(e) => setAlias(e.target.value)}
-      />
-      <button type="submit" data-testid={`${testIdBase}-save`}>
-        保存
-      </button>
-      <button type="button" data-testid={`${testIdBase}-cancel`} onClick={onCancel}>
-        キャンセル
-      </button>
+      <Flex direction="column" gap="1">
+        <TextField.Root
+          aria-label="URL"
+          data-testid={`${testIdBase}-url`}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <TextField.Root
+          aria-label="名称"
+          data-testid={`${testIdBase}-label`}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <TextField.Root
+          aria-label="エイリアス"
+          data-testid={`${testIdBase}-alias`}
+          value={alias}
+          onChange={(e) => setAlias(e.target.value)}
+        />
+        <Flex gap="1">
+          <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
+            保存
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`${testIdBase}-cancel`}
+            onClick={onCancel}
+          >
+            キャンセル
+          </Button>
+        </Flex>
+      </Flex>
     </form>
   );
 }
