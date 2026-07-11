@@ -31,9 +31,14 @@ test("テーマ切替がdocument.documentElementへ反映される", async ({ co
   await page.goto(newTabUrl);
   await expect(page.getByTestId("app-root")).toBeVisible();
 
-  await page.getByTestId("theme-select").selectOption("dark");
+  // Radix Selectは独自のポップオーバー実装(ネイティブ<select>ではない)なので
+  // selectOption()は使えず、トリガーをクリック→該当optionをクリックする形にする。
+  await page.getByTestId("theme-select").click();
+  await page.getByRole("option", { name: "ダーク" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByTestId("theme-select").selectOption("light");
+
+  await page.getByTestId("theme-select").click();
+  await page.getByRole("option", { name: "ライト" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
