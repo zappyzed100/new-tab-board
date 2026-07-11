@@ -195,18 +195,15 @@ function BookmarkEditForm({
 
   return (
     <form data-testid={testIdBase} onSubmit={handleSubmit}>
-      <Flex align="center" gap="2">
+      <Flex direction="column" gap="2">
         <TextField.Root
           aria-label="URL"
           placeholder="https://example.com"
           data-testid={`${testIdBase}-url`}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          style={{ flex: 1, minWidth: 200 }}
         />
-        {/* flex-shrink:0が無いと、URL欄のflex:1に押されて保存/キャンセルの文字が
-            収まる最小幅より圧縮され、ボタン内でテキストが折り返して崩れる。 */}
-        <Flex gap="1" style={{ flexShrink: 0 }}>
+        <Flex gap="1">
           <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
             保存
           </Button>
