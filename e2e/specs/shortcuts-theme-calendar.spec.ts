@@ -8,7 +8,7 @@ test("ショートカット一覧モーダルが開閉できる", async ({ conte
 
   await page.getByTestId("open-shortcuts-modal").click();
   await expect(page.getByTestId("shortcuts-modal")).toBeVisible();
-  await expect(page.getByTestId("shortcuts-modal")).toContainText("コマンドパレットを開く");
+  await expect(page.getByTestId("shortcuts-modal")).toContainText("全文検索を開く/閉じる");
   await page.getByTestId("shortcuts-modal-close").click();
   await expect(page.getByTestId("shortcuts-modal")).not.toBeVisible();
 });

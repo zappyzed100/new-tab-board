@@ -61,7 +61,6 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
-- `e2e/specs/command-palette.spec.ts` — command-palette.spec.ts — コマンドパレット(Cmd+K)のE2E(SPEC.md §4.5)
 - `e2e/specs/data-panel.spec.ts` — data-panel.spec.ts — データ管理パネルのJSON書き出し/取り込みE2E(SPEC.md §4.7)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
@@ -154,8 +153,6 @@
 - `src/lib/search/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
 - `src/lib/search/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
 - `src/lib/search/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
-- `src/lib/shortcuts/commandPalette.test.ts` — commandPalette.test.ts — commandPalette.ts(候補生成・フィルタ)の単体テスト
-- `src/lib/shortcuts/commandPalette.ts` — commandPalette.ts — コマンドパレット(Cmd+K)の候補生成とフィルタ(純関数。SPEC.md §4.5)
 - `src/lib/shortcuts/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
 - `src/lib/shortcuts/shortcuts.ts` — shortcuts.ts — キーボードショートカットの単一レジストリ(SPEC.md §4.6・§6)
 - `src/lib/shortcuts/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
@@ -164,7 +161,6 @@
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-- `src/newtab/components/discovery/CommandPalette.tsx` — CommandPalette.tsx — Cmd+Kのモーダル。ノート切替/ブックマーク遷移/アプリ起動の単一入口(SPEC.md §4.5)
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
@@ -484,11 +480,6 @@
 ### `src/lib/search/tokenize.ts`
 - function tokenize
 
-### `src/lib/shortcuts/commandPalette.ts`
-- type CommandItem
-- function buildCommandItems
-- function filterCommandItems
-
 ### `src/lib/shortcuts/shortcuts.ts`
 - type ShortcutCombo
 - type ShortcutDef
@@ -525,9 +516,6 @@
 
 ### `src/newtab/App.tsx`
 - function App
-
-### `src/newtab/components/discovery/CommandPalette.tsx`
-- function CommandPalette
 
 ### `src/newtab/components/discovery/SearchPanel.tsx`
 - function SearchPanel

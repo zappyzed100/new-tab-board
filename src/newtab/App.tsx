@@ -4,7 +4,6 @@ import { Button, Card, Container, Flex, Text, Theme } from "@radix-ui/themes";
 import { BacklinksPanel } from "./components/notes/BacklinksPanel";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
-import { CommandPalette } from "./components/discovery/CommandPalette";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteTabs } from "./components/notes/NoteTabs";
@@ -13,7 +12,6 @@ import { SnapshotScheduler } from "./components/notes/SnapshotScheduler";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
-import { pickAndReadTextFile } from "../lib/fileio/fileSystem";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
 import { addNote, createNote, sortedNotes, updateNote } from "../lib/entities/notes";
 import {
@@ -68,7 +66,6 @@ export function App() {
   const [showSearch, setShowSearch] = useState(false);
   // データ管理はホーム画面レベルのトグル(アプリ全体のバックアップ/取り込み)。
   const [showData, setShowData] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
@@ -172,7 +169,6 @@ export function App() {
   );
 
   useGlobalShortcuts(shortcutRegistry, {
-    commandPalette: () => setShowCommandPalette(true),
     toggleSearch: () => setShowSearch((v) => !v),
     cheatSheet: () => setShowShortcutsModal(true),
     immediateSnapshot: () => {
@@ -338,15 +334,6 @@ export function App() {
                   <Button
                     type="button"
                     variant="soft"
-                    data-testid="open-command-palette"
-                    title="ノート切替・ブックマーク・ファイルを開くを1つの入口で検索する(Cmd/Ctrl+K)"
-                    onClick={() => setShowCommandPalette(true)}
-                  >
-                    🚀 クイックオープン(Ctrl+K)
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="soft"
                     data-testid="open-shortcuts-modal"
                     title="使えるキーボードショートカットの一覧を表示する"
                     onClick={() => setShowShortcutsModal(true)}
@@ -374,22 +361,6 @@ export function App() {
                 notes={notes}
                 onImportData={importData}
                 onOpenFileAsNote={openFileAsNote}
-              />
-            ) : null}
-
-            {showCommandPalette ? (
-              <CommandPalette
-                notes={notes}
-                bookmarks={sync.bookmarks}
-                appLaunches={sync.appLaunches}
-                openIn={sync.settings.openIn}
-                onSelectNote={selectNote}
-                onOpenFile={() =>
-                  void pickAndReadTextFile().then(
-                    (r) => r && openFileAsNote(r.name.replace(/\.txt$/i, ""), r.content),
-                  )
-                }
-                onClose={() => setShowCommandPalette(false)}
               />
             ) : null}
             {showShortcutsModal ? (

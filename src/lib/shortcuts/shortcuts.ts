@@ -18,11 +18,6 @@ export type ShortcutDef = {
 
 export const SHORTCUT_REGISTRY: ShortcutDef[] = [
   {
-    id: "commandPalette",
-    combo: { key: "k", ctrlOrMeta: true },
-    description: "コマンドパレットを開く",
-  },
-  {
     id: "toggleSearch",
     combo: { key: "f", ctrlOrMeta: true },
     description: "全文検索を開く/閉じる",
