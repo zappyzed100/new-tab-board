@@ -52,6 +52,16 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
             onDragStart={() => setDragIndex(index)}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => handleDrop(index)}
+            // 編集中はURL入力欄+保存/キャンセルボタンが64px幅のタイルに収まらず
+            // 折り返して崩れるため、常識的なURL文字列+ボタン2つが1行に収まる
+            // 程度(64px×6列+gap分≒424px)まで広げる。セル共通CSSのalign-items:center
+            // (column方向の中央寄せ)のままだとフォームが中身の幅に縮んでしまうため、
+            // 編集中だけstretchで上書きして横幅いっぱいに広げる。
+            style={
+              editingId === bookmark.id
+                ? { gridColumn: "span 6", alignItems: "stretch" }
+                : undefined
+            }
           >
             {editingId === bookmark.id ? (
               <BookmarkEditForm
@@ -105,14 +115,16 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
         ))}
 
         {adding ? (
-          <BookmarkEditForm
-            onSave={({ url, label, alias }) => {
-              if (!url || !label) return;
-              onChange(addBookmark(bookmarks, createBookmark(url, label, sorted.length, alias)));
-              setAdding(false);
-            }}
-            onCancel={() => setAdding(false)}
-          />
+          <div style={{ gridColumn: "span 6" }}>
+            <BookmarkEditForm
+              onSave={({ url, label, alias }) => {
+                if (!url || !label) return;
+                onChange(addBookmark(bookmarks, createBookmark(url, label, sorted.length, alias)));
+                setAdding(false);
+              }}
+              onCancel={() => setAdding(false)}
+            />
+          </div>
         ) : (
           <Flex direction="column" align="center" gap="1" className="bookmark-cell-add">
             <IconButton
@@ -183,15 +195,18 @@ function BookmarkEditForm({
 
   return (
     <form data-testid={testIdBase} onSubmit={handleSubmit}>
-      <Flex direction="column" gap="1">
+      <Flex align="center" gap="2">
         <TextField.Root
           aria-label="URL"
           placeholder="https://example.com"
           data-testid={`${testIdBase}-url`}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
+          style={{ flex: 1, minWidth: 200 }}
         />
-        <Flex gap="1">
+        {/* flex-shrink:0が無いと、URL欄のflex:1に押されて保存/キャンセルの文字が
+            収まる最小幅より圧縮され、ボタン内でテキストが折り返して崩れる。 */}
+        <Flex gap="1" style={{ flexShrink: 0 }}>
           <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
             保存
           </Button>

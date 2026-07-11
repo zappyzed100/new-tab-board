@@ -192,8 +192,12 @@ body {
   opacity: 1;
 }
 
-[data-testid^="bookmark-edit-"],
-[data-testid^="bookmark-remove-"] {
+/* :not([data-testid*="-form-"])が無いと、前方一致(^=)が編集フォーム内の
+   保存/キャンセルボタン(bookmark-edit-form-<id>-save/-cancel、"bookmark-edit-"
+   で始まる)にも誤って一致し、丸い28px固定サイズに押し潰されて文字が折り返し
+   崩れるバグがあった。 */
+[data-testid^="bookmark-edit-"]:not([data-testid*="-form-"]),
+[data-testid^="bookmark-remove-"]:not([data-testid*="-form-"]) {
   width: 28px;
   height: 28px;
   padding: 0;

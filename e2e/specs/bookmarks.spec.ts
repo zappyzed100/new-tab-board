@@ -16,7 +16,17 @@ test("ブックマークの追加→編集→削除が一連で動く", async ({
   await page.locator('[data-testid^="bookmark-edit-"]').click();
   const urlInput = page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-url"]');
   await urlInput.fill("https://example.org");
-  await page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-save"]').click();
+
+  // 編集フォーム内の保存/キャンセルボタンは、丸い編集/削除アイコンボタン用CSS
+  // ([data-testid^="bookmark-edit-"])に前方一致で誤って巻き込まれ、28x28pxの
+  // 円形に押し潰されて文字が折り返し崩れるバグがあった(testidが
+  // "bookmark-edit-form-..."で"bookmark-edit-"から始まるため誤爆していた)。
+  // 押し潰されていない(テキストが収まる十分な幅がある)ことを確認する。
+  const saveButton = page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-save"]');
+  const saveBox = await saveButton.boundingBox();
+  expect(saveBox?.width ?? 0).toBeGreaterThan(40);
+
+  await saveButton.click();
   await expect(page.getByTestId("bookmark-grid")).toContainText("example.org");
 
   // --- 削除 ---
