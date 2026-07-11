@@ -1,7 +1,9 @@
-// NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除。SPEC.md §4.2)
+// NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/D&D並べ替え。SPEC.md §4.2)
 // タブの曲線シェイプはOSS実装 adamschwartz/chrome-tabs (MIT)のsvg/tab.svg+
 // css/chrome-tabs.cssの実物を参照して移植(左右対称の1つのpath symbolを
 // scale(-1,1)で反転複製し、隣接タブと地続きに見える台形状の切り欠きを作る手法)。
+// 本家はドラッグ物理演算にdraggabillyを使うが、本プロジェクトは新規依存を避け、
+// BookmarkGrid.tsxと同じ自前のHTML5 native drag-and-dropパターンで並べ替えを実装している。
 // ピン留め機能のUIは撤去済み(データ上のnote.pinned/sortedNotesの並び順ロジック自体は
 // 互換性のため維持——インポートしたデータのpinned:trueも並び順には反映され続ける)。
 import { useState } from "react";
@@ -10,6 +12,7 @@ import {
   createNote,
   nextNoteLetterTitle,
   removeNote,
+  reorderNotes,
   sortedNotes,
   updateNote,
 } from "../../../lib/entities/notes";
@@ -24,6 +27,7 @@ type Props = {
 
 export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const sorted = sortedNotes(notes);
 
   function handleAdd() {
@@ -35,6 +39,13 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
     const note = createNote(title, sorted.length);
     onNotesChange(addNote(notes, note));
     onSelect(note.id);
+  }
+
+  function handleDrop(toIndex: number) {
+    if (dragIndex !== null && dragIndex !== toIndex) {
+      onNotesChange(reorderNotes(notes, dragIndex, toIndex));
+    }
+    setDragIndex(null);
   }
 
   return (
@@ -50,7 +61,7 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
           </symbol>
         </defs>
       </svg>
-      {sorted.map((note) => {
+      {sorted.map((note, index) => {
         const isActive = note.id === activeNoteId;
         return (
           <div
@@ -58,6 +69,10 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
             data-testid={`note-tab-${note.id}`}
             className="note-tab"
             data-active={isActive || undefined}
+            draggable
+            onDragStart={() => setDragIndex(index)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => handleDrop(index)}
           >
             <div className="note-tab-background" aria-hidden="true">
               <svg preserveAspectRatio="none" className="note-tab-geometry-svg">

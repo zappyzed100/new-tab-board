@@ -26,3 +26,24 @@ test("ノートタブの追加→リネーム→削除が一連で動く", async
   await page.locator('[data-testid^="note-tab-delete-"]').last().click();
   await expect(page.locator('[data-testid^="note-tab-select-"]')).toHaveCount(beforeCount);
 });
+
+test("ノートタブはドラッグ&ドロップで並べ替えられる", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  // 順序を判定しやすいよう2件追加する(既存タブが残っていても末尾2件で比較する)
+  await page.getByTestId("note-tab-add").click();
+  await page.getByTestId("note-tab-add").click();
+
+  const selects = page.locator('[data-testid^="note-tab-select-"]');
+  const count = await selects.count();
+  const firstTitle = await selects.nth(count - 2).textContent();
+  const secondTitle = await selects.nth(count - 1).textContent();
+
+  const tabs = page.locator(".note-tab");
+  await tabs.nth(count - 2).dragTo(tabs.nth(count - 1));
+
+  await expect(selects.nth(count - 2)).toHaveText(secondTitle ?? "");
+  await expect(selects.nth(count - 1)).toHaveText(firstTitle ?? "");
+});
