@@ -448,19 +448,25 @@ button.note-tab-add {
 /* --- 常時表示の小型カレンダー(react-day-picker。SPEC.md §4.9)
    外枠はCard(MiniCalendar.tsx)に任せる。react-day-pickerの既定サイズ(日セル44px相当)は
    サイドバーの小型ウィジェットには大きすぎるため、CSSカスタムプロパティで旧実装相当
-   (26px程度)まで縮小している。 */
+   (26px程度)まで縮小している。日付ボタン自体は小さくしつつ、表を旧実装同様に
+   サイドバー全幅へ広げる(table-layout:fixedで7列に均等割り)——ボタンだけ縮小して
+   表の幅を固定のままにすると、自前ヘッダー行(全幅)と表(狭い固定幅)の横幅が
+   食い違い、見出しがカレンダー本体から離れて見える崩れ方をする。 */
 [data-testid="mini-calendar"] .rdp-root {
-  --rdp-day-height: 28px;
-  --rdp-day-width: 28px;
+  --rdp-day-height: 30px;
   --rdp-day_button-height: 26px;
   --rdp-day_button-width: 26px;
-  --rdp-nav-height: 1.75rem;
   --rdp-weekday-padding: 2px 0;
   font-size: 11px;
 }
 
-[data-testid="mini-calendar"] .rdp-months {
-  max-width: none;
+[data-testid="mini-calendar"] .rdp-month_grid {
+  width: 100%;
+  table-layout: fixed;
+}
+
+[data-testid="mini-calendar"] .rdp-day {
+  width: auto;
 }
 
 [data-testid="calendar-month-label"] {
