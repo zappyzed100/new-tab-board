@@ -39,14 +39,6 @@ const DRIVE_SYNC_LABEL: Record<string, string> = {
   error: "同期エラー",
 };
 
-const JSON_BACKUP_STATUS_LABEL: Record<string, string> = {
-  idle: "",
-  syncing: "バックアップ中…",
-  synced: "☁バックアップ済",
-  unauthenticated: "Drive未認証",
-  error: "バックアップエラー",
-};
-
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
 
 // CodeMirror本体はサイズが大きいため動的importで分割し、初期描画をブロックしない
@@ -174,10 +166,8 @@ export function App() {
     if (!sync || !notes) return null;
     return serializeExport(buildExportPayload(sync, notes, clockNow()));
   }, [sync, notes]);
-  const { status: jsonBackupStatus } = useJsonBackupSync(
-    backupJson,
-    sync?.settings.jsonBackupFileId,
-    (fileId) => updateSettings({ jsonBackupFileId: fileId }),
+  useJsonBackupSync(backupJson, sync?.settings.jsonBackupFileId, (fileId) =>
+    updateSettings({ jsonBackupFileId: fileId }),
   );
 
   const shortcutRegistry = useMemo(
@@ -360,16 +350,16 @@ export function App() {
                     {DRIVE_SYNC_LABEL[driveSyncStatus]}
                   </Text>
                 ) : null}
+
+                <DataPanel
+                  sync={sync}
+                  notes={notes}
+                  onImportData={importData}
+                  onOpenFileAsNote={openFileAsNote}
+                />
               </nav>
             </Flex>
 
-            <DataPanel
-              sync={sync}
-              notes={notes}
-              onImportData={importData}
-              onOpenFileAsNote={openFileAsNote}
-              jsonBackupStatusLabel={JSON_BACKUP_STATUS_LABEL[jsonBackupStatus]}
-            />
             {showShortcutsModal ? (
               <ShortcutsModal
                 registry={shortcutRegistry}
