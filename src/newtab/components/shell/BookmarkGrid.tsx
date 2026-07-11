@@ -1,7 +1,7 @@
 // BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 // 数字キー1-9でのジャンプはApp.tsxのshortcuts.ts単一レジストリ側に統合済み(SPEC.md §4.6)。
 // D&D並べ替えは自前のHTML5 native drag-and-dropロジック(Radixに代替が無いため温存)。
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Button, Card, Flex, Grid, IconButton, Text, TextField } from "@radix-ui/themes";
 import {
   addBookmark,
@@ -168,38 +168,52 @@ function BookmarkEditForm({
   onSave: (patch: { url: string; label: string; alias?: string }) => void;
   onCancel: () => void;
 }) {
+  // 新規追加時はURLだけ貼り付ければよい(名称はURLのホスト名から自動で付け、
+  // アイコンはBookmarkIconの既定動作(favicon種別)でURLから自動取得される)。
+  // 既存ブックマークの編集時のみ、名称・エイリアスを手で直せるようにする。
+  const isNew = !bookmark;
   const [url, setUrl] = useState(bookmark?.url ?? "");
   const [label, setLabel] = useState(bookmark?.label ?? "");
   const [alias, setAlias] = useState(bookmark?.alias ?? "");
   const testIdBase = bookmark ? `bookmark-edit-form-${bookmark.id}` : "bookmark-add-form";
 
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (isNew) {
+      const derivedLabel = safeHostname(url) || url;
+      if (!url || !derivedLabel) return;
+      onSave({ url, label: derivedLabel });
+      return;
+    }
+    onSave({ url, label, alias: alias || undefined });
+  }
+
   return (
-    <form
-      data-testid={testIdBase}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave({ url, label, alias: alias || undefined });
-      }}
-    >
+    <form data-testid={testIdBase} onSubmit={handleSubmit}>
       <Flex direction="column" gap="1">
         <TextField.Root
           aria-label="URL"
+          placeholder="https://example.com"
           data-testid={`${testIdBase}-url`}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
         />
-        <TextField.Root
-          aria-label="名称"
-          data-testid={`${testIdBase}-label`}
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-        />
-        <TextField.Root
-          aria-label="エイリアス"
-          data-testid={`${testIdBase}-alias`}
-          value={alias}
-          onChange={(e) => setAlias(e.target.value)}
-        />
+        {!isNew ? (
+          <>
+            <TextField.Root
+              aria-label="名称"
+              data-testid={`${testIdBase}-label`}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+            <TextField.Root
+              aria-label="エイリアス"
+              data-testid={`${testIdBase}-alias`}
+              value={alias}
+              onChange={(e) => setAlias(e.target.value)}
+            />
+          </>
+        ) : null}
         <Flex gap="1">
           <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
             保存
