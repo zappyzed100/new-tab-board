@@ -445,61 +445,27 @@ button.note-tab-add {
   width: 100%;
 }
 
-/* --- 常時表示の小型カレンダー(サイドバー全幅)
-   外枠はCard(MiniCalendar.tsx)に任せる。 --- */
-[data-testid="mini-calendar"] {
-  font-size: 12px;
+/* --- 常時表示の小型カレンダー(react-day-picker。SPEC.md §4.9)
+   外枠はCard(MiniCalendar.tsx)に任せる。react-day-pickerの既定サイズ(日セル44px相当)は
+   サイドバーの小型ウィジェットには大きすぎるため、CSSカスタムプロパティで旧実装相当
+   (26px程度)まで縮小している。 */
+[data-testid="mini-calendar"] .rdp-root {
+  --rdp-day-height: 28px;
+  --rdp-day-width: 28px;
+  --rdp-day_button-height: 26px;
+  --rdp-day_button-width: 26px;
+  --rdp-nav-height: 1.75rem;
+  --rdp-weekday-padding: 2px 0;
+  font-size: 11px;
 }
 
-/* 前月/翌月/月ラベルは必ず横一列(折り返し禁止)。全幅を使えるので窮屈にならない。 */
-.calendar-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-wrap: nowrap;
-  margin-bottom: var(--space-2);
-}
-
-.calendar-nav button[type="button"] {
-  white-space: nowrap;
-  flex-shrink: 0;
+[data-testid="mini-calendar"] .rdp-months {
+  max-width: none;
 }
 
 [data-testid="calendar-month-label"] {
   font-weight: 600;
   white-space: nowrap;
-}
-
-[data-testid="mini-calendar"] table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: var(--space-1);
-}
-
-[data-testid="mini-calendar"] td {
-  text-align: center;
-  padding: 2px;
-}
-
-[data-testid="mini-calendar"] a {
-  display: inline-block;
-  width: 26px;
-  height: 26px;
-  line-height: 26px;
-  border-radius: 999px;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 11px;
-}
-
-[data-testid="mini-calendar"] a:hover {
-  background: var(--surface-2);
-}
-
-[data-testid="mini-calendar"] a[aria-current="true"] {
-  background: var(--accent);
-  color: var(--accent-fg);
 }
 
 /* --- TODOリスト(TodoMVC参考: 入力欄+チェックボックス行+hover時のみ×) --- */
