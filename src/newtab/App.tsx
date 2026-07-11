@@ -1,6 +1,6 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Container, Flex, Text, Theme } from "@radix-ui/themes";
+import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import { BacklinksPanel } from "./components/notes/BacklinksPanel";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
@@ -289,7 +289,7 @@ export function App() {
       radius="large"
       panelBackground="solid"
     >
-      <Container size="4" p={{ initial: "3", sm: "5" }}>
+      <Box p={{ initial: "3", sm: "5" }}>
         <Flex asChild direction="column" gap="4">
           <main data-testid="app-root">
             {countdown.kind === "upcoming" ? (
@@ -327,6 +327,12 @@ export function App() {
                 />
               </header>
             </Flex>
+
+            <BookmarkGrid
+              bookmarks={sync.bookmarks}
+              openIn={sync.settings.openIn}
+              onBookmarksChange={updateBookmarks}
+            />
 
             <Flex asChild align="center" gap="3" wrap="wrap">
               <nav>
@@ -369,11 +375,6 @@ export function App() {
 
             <div className="app-main">
               <div className="app-sidebar">
-                <BookmarkGrid
-                  bookmarks={sync.bookmarks}
-                  openIn={sync.settings.openIn}
-                  onBookmarksChange={updateBookmarks}
-                />
                 <MiniCalendar />
                 <TodoList todos={todos} onTodosChange={updateTodos} />
               </div>
@@ -487,7 +488,7 @@ export function App() {
             </div>
           </main>
         </Flex>
-      </Container>
+      </Box>
     </Theme>
   );
 }
