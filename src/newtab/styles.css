@@ -356,6 +356,18 @@ button.note-tab-add {
 
 [data-testid="notepad-editor"] .cm-scroller {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  flex: 1;
+  min-height: 0;
+}
+
+/* CM6のベーステーマが`.ͼ1 .cm-scroller { align-items: flex-start !important }`を
+   !important付きで挿入しているため、詳細度をいくら上げても勝てず!importantで対抗する
+   必要がある。align-items:flex-startのままだと.cm-content(contenteditable本体)が
+   本文の行数分の高さにしかならず、CM6のクリック→カーソル移動処理は.cm-contentにしか
+   効かないため、本文より下の余白(裸の.cm-scroller/.cm-editorの部分)をクリックしても
+   何も起きない(フォーカスもカーソル移動もしない)バグがあった。 */
+[data-testid="notepad-editor"] .cm-scroller {
+  align-items: stretch !important;
 }
 
 /* CM6のdrawSelection()拡張が描画するカーソル。ネイティブキャレット(caret-color)は
