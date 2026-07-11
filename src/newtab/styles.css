@@ -452,6 +452,10 @@ button.note-tab-add {
    サイドバー全幅へ広げる(table-layout:fixedで7列に均等割り)——ボタンだけ縮小して
    表の幅を固定のままにすると、自前ヘッダー行(全幅)と表(狭い固定幅)の横幅が
    食い違い、見出しがカレンダー本体から離れて見える崩れ方をする。 */
+[data-testid="mini-calendar"] {
+  max-width: 240px;
+}
+
 [data-testid="mini-calendar"] .rdp-root {
   --rdp-day-height: 30px;
   --rdp-day_button-height: 26px;
