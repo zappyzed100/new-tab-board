@@ -50,3 +50,32 @@ test("全文検索は現在の本文の部分文字列(日本語)でヒットす
     "高尾山",
   );
 });
+
+test("全文検索の結果が複数あっても重ならず縦に並ぶ", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  const colFirst = (c: number) =>
+    page.locator(`[data-testid="note-column-${c}"] [data-testid^="note-editor-area-"]`).first();
+
+  // 共通ワードを含むノートを2件用意する。
+  await colFirst(0).locator(".cm-content").click();
+  await page.keyboard.type("りんごジュースの作り方");
+  await colFirst(1).locator(".cm-content").click();
+  await page.keyboard.type("りんごを買う");
+
+  await page.getByTestId("search-input").fill("りんご");
+  const results = page.locator('[data-testid^="search-result-open-"]');
+  await expect(results).toHaveCount(2);
+
+  // 2つの結果の矩形が縦に重なっていない(上の下端 ≤ 下の上端)。Radix Button固定高による重なりの回帰防止。
+  const boxes = await results.evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }),
+  );
+  boxes.sort((a, b) => a.top - b.top);
+  expect(boxes[0].bottom).toBeLessThanOrEqual(boxes[1].top + 1);
+});

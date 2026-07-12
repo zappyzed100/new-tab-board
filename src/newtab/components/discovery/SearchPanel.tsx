@@ -3,7 +3,7 @@
 // 引け、まだ履歴に刻まれていない書きかけの本文も対象になる(ユーザー指摘「全文検索が空」への対応)。
 // 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fはこの検索欄へフォーカスを移す。
 import { forwardRef, useMemo, useState } from "react";
-import { Button, Card, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { Card, Heading, Text, TextField } from "@radix-ui/themes";
 import { searchNotesByText } from "../../../lib/search/noteSearch";
 import type { Note } from "../../../types";
 
@@ -38,24 +38,20 @@ export const SearchPanel = forwardRef<HTMLInputElement, Props>(function SearchPa
           {results.length}件ヒット
         </Text>
       ) : null}
-      <ul>
+      {/* Radix Buttonは単一行前提で高さが固定のため、2行(タイトル+スニペット)を入れると
+          はみ出して結果同士が重なる(ユーザー指摘)。自前の可変高ボタンで縦に積む。 */}
+      <ul className="search-results">
         {results.map((item) => (
           <li key={item.note.id} data-testid={`search-result-${item.note.id}`}>
-            <Button
+            <button
               type="button"
-              variant="soft"
+              className="search-result-btn"
               data-testid={`search-result-open-${item.note.id}`}
               onClick={() => onSelectNote(item.note.id)}
             >
-              <Flex as="span" direction="column" align="start" gap="1">
-                <Text as="span" size="2" weight="medium">
-                  {item.note.title}
-                </Text>
-                <Text as="span" size="1" color="gray">
-                  {item.snippet}
-                </Text>
-              </Flex>
-            </Button>
+              <span className="search-result-title">{item.note.title}</span>
+              <span className="search-result-snippet">{item.snippet}</span>
+            </button>
           </li>
         ))}
       </ul>

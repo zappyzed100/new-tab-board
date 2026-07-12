@@ -188,16 +188,23 @@ body {
   background: var(--gray-a3);
 }
 
-/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。 */
+/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。
+   上ボタンは画面の上端寄り、下ボタンは下端寄りへそれぞれ配置する(ユーザー指示)。
+   容器は上下に張り、space-betweenで両端へ寄せる。中央の空きはクリックを透過させる。 */
 .scroll-jump {
   position: fixed;
   right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 12px;
+  bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  justify-content: space-between;
   z-index: 20;
+  pointer-events: none;
+}
+
+.scroll-jump-btn {
+  pointer-events: auto;
 }
 
 .scroll-jump-btn {
@@ -218,6 +225,46 @@ body {
 .scroll-jump-btn:hover,
 .scroll-jump-btn:focus-visible {
   opacity: 1;
+}
+
+/* 全文検索の結果一覧。各結果はタイトル+スニペットの2行を持つ可変高ボタンで、縦に間隔を空けて
+   積む(Radix Buttonの固定高で2行がはみ出し重なる不具合の対処——ユーザー指摘)。 */
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.search-result-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.search-result-btn:hover,
+.search-result-btn:focus-visible {
+  border-color: var(--accent);
+}
+
+.search-result-title {
+  font-weight: 600;
+}
+
+.search-result-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
