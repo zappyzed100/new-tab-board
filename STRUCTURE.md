@@ -260,6 +260,7 @@
 ### `native-host/build_index.py`
 - def parse_front_matter
 - def create_schema
+- def parse_snapshot_filename
 - def build_index
 - def main
 
@@ -280,6 +281,9 @@
 - def test_parse_front_matter_quoted_and_empty_tags
 - def test_parse_front_matter_none
 - def test_build_index_creates_db_and_tag_join
+- def test_parse_snapshot_filename
+- def test_build_index_ingests_history_snapshots
+- def test_active_txt_not_indexed_as_snapshot
 - def test_build_index_is_regenerable
 
 ### `native-host/test_nas_bridge.py`

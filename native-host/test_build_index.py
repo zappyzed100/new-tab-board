@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import sqlite3
 
-from build_index import build_index, parse_front_matter
+from build_index import build_index, parse_front_matter, parse_snapshot_filename
 
 
 def test_parse_front_matter_basic() -> None:
@@ -60,8 +60,8 @@ def test_build_index_creates_db_and_tag_join(tmp_path) -> None:
         "---\nid: b\ntitle: AIメモ\ntags:\n  - 開発\n  - AI\n---\n\n本文B",
     )
 
-    count = build_index(str(tmp_path))
-    assert count == 2
+    result = build_index(str(tmp_path))
+    assert result["notes"] == 2
 
     db = sqlite3.connect(str(tmp_path / "data" / "index.db"))
     try:
@@ -80,6 +80,51 @@ def test_build_index_creates_db_and_tag_join(tmp_path) -> None:
         assert content == "本文A"
     finally:
         db.close()
+
+
+def test_parse_snapshot_filename() -> None:
+    note = "1e4b7a53-4693-45ee-89b0-57b42053608a"
+    snap = "46af3516-b65d-4d66-ae01-b6f8b328f888"
+    assert parse_snapshot_filename(f"{note}-1783830340293-{snap}.txt") == (note, 1783830340293, snap)
+    # 形式が違うものはNone
+    assert parse_snapshot_filename("notafile.txt") is None
+    assert parse_snapshot_filename(f"{note}-notanumber-{snap}.txt") is None
+
+
+def test_build_index_ingests_history_snapshots(tmp_path) -> None:
+    # notes/(現在) と 年/月/日/*.txt(履歴) の両方を索引する
+    notes = str(tmp_path / "notes")
+    _write_note(notes, "a.md", "---\nid: n1\ntitle: 登山\ntags:\n  - 登山\n---\n\n現在の本文")
+    hist_dir = str(tmp_path / "2026" / "7" / "12")
+    os.makedirs(hist_dir, exist_ok=True)
+    note = "n1" + "0" * 34  # 36文字のnote_id相当
+    snap = "s1" + "0" * 34
+    with open(os.path.join(hist_dir, f"{note}-1783830340293-{snap}.txt"), "w", encoding="utf-8") as f:
+        f.write("過去の登山メモ。高尾山へ行った。")
+
+    result = build_index(str(tmp_path))
+    assert result["snapshots"] == 1
+
+    db = sqlite3.connect(str(tmp_path / "data" / "index.db"))
+    try:
+        # 履歴本文の部分一致(LIKE)で引ける
+        rows = db.execute(
+            "SELECT note_id, timestamp FROM snapshots WHERE content LIKE '%高尾山%'"
+        ).fetchall()
+        assert rows == [(note, 1783830340293)]
+        # active/ の2階層.txtは履歴として取り込まれない
+        assert db.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0] == 1
+    finally:
+        db.close()
+
+
+def test_active_txt_not_indexed_as_snapshot(tmp_path) -> None:
+    active = str(tmp_path / "active")
+    os.makedirs(active, exist_ok=True)
+    with open(os.path.join(active, "New Tab Board.txt"), "w", encoding="utf-8") as f:
+        f.write("title: X\n\n本文")
+    result = build_index(str(tmp_path))
+    assert result["snapshots"] == 0
 
 
 def test_build_index_is_regenerable(tmp_path) -> None:

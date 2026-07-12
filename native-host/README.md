@@ -41,13 +41,22 @@ HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.newtabboard.na
 python build_index.py "Z:\NAS\backup"
 ```
 
-生成される `index.db` の主なテーブルは `notes / tags / note_tags`。例: 「開発」タグのノート:
+生成される `index.db` のテーブルは `notes / tags / note_tags / snapshots`。
+`notes` は現在のノート、`snapshots` は過去の履歴(NASの `年/月/日/*.txt`)。例:
 
 ```sql
+-- 「開発」タグのノート
 SELECT notes.title FROM notes
 JOIN note_tags ON notes.id = note_tags.note_id
 JOIN tags ON tags.id = note_tags.tag_id
 WHERE tags.name = '開発';
+
+-- 「開発」タグのノートの“履歴”を本文の部分一致で検索(タグ絞り込み→文字列検索)
+SELECT s.note_id, s.timestamp, s.file_path FROM snapshots s
+WHERE s.note_id IN (
+  SELECT nt.note_id FROM note_tags nt JOIN tags t ON t.id = nt.tag_id WHERE t.name = '開発'
+) AND s.content LIKE '%キーワード%'
+ORDER BY s.timestamp DESC;
 ```
 
 依存は標準ライブラリのみ(sqlite3)。拡張機能自身はこの db を読まない(ブラウザからSQLiteは

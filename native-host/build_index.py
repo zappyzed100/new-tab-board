@@ -67,6 +67,7 @@ def create_schema(conn: sqlite3.Connection) -> None:
         DROP TABLE IF EXISTS note_tags;
         DROP TABLE IF EXISTS tags;
         DROP TABLE IF EXISTS notes;
+        DROP TABLE IF EXISTS snapshots;
         CREATE TABLE notes (
             id TEXT PRIMARY KEY,
             file_path TEXT NOT NULL,
@@ -86,12 +87,39 @@ def create_schema(conn: sqlite3.Connection) -> None:
             tag_id INTEGER NOT NULL,
             PRIMARY KEY (note_id, tag_id)
         );
+        -- 過去の履歴(NASの 年/月/日/*.txt スナップショット群)。本文の部分一致検索(LIKE)用。
+        CREATE TABLE snapshots (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            timestamp INTEGER,
+            file_path TEXT NOT NULL,
+            content TEXT
+        );
+        CREATE INDEX idx_snapshots_note ON snapshots (note_id);
         """
     )
 
 
-def build_index(nas_folder: str) -> int:
-    """notes/*.md を読み、data/index.db を作り直す。取り込んだノート数を返す。"""
+def parse_snapshot_filename(name: str):
+    """履歴スナップショットのファイル名 `<noteId36>-<timestamp>-<snapshotId36>.txt` を分解する。
+    UUIDは常に36文字なので固定幅で切り出す。形式が違えばNone。"""
+    base = name[:-4] if name.endswith(".txt") else name
+    if len(base) < 36 + 3 + 36:
+        return None
+    note_id = base[:36]
+    snapshot_id = base[-36:]
+    middle = base[36:-36]  # "-<timestamp>-"
+    if not (middle.startswith("-") and middle.endswith("-")):
+        return None
+    ts_str = middle[1:-1]
+    if not ts_str.isdigit():
+        return None
+    return note_id, int(ts_str), snapshot_id
+
+
+def build_index(nas_folder: str) -> dict:
+    """notes/*.md と 年/月/日/*.txt(履歴) を読み、data/index.db を作り直す。
+    取り込んだ件数 {"notes": n, "snapshots": m} を返す。"""
     notes_dir = os.path.join(nas_folder, "notes")
     data_dir = os.path.join(nas_folder, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -135,8 +163,25 @@ def build_index(nas_folder: str) -> int:
                     (note_id, tag_ids[tag]),
                 )
             count += 1
+
+        # 履歴スナップショット(年/月/日/*.txt)を取り込む。4階層グロブなので active/(2階層)とは衝突しない。
+        snap_count = 0
+        for path in sorted(glob.glob(os.path.join(nas_folder, "*", "*", "*", "*.txt"))):
+            parsed = parse_snapshot_filename(os.path.basename(path))
+            if parsed is None:
+                continue
+            note_id, ts, snapshot_id = parsed
+            with open(path, "r", encoding="utf-8") as f:
+                body = f.read()
+            conn.execute(
+                "INSERT OR REPLACE INTO snapshots (id, note_id, timestamp, file_path, content)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (snapshot_id, note_id, ts, path, body),
+            )
+            snap_count += 1
+
         conn.commit()
-        return count
+        return {"notes": count, "snapshots": snap_count}
     finally:
         conn.close()
 
@@ -146,7 +191,7 @@ def main() -> None:
         print("usage: python build_index.py <NASフォルダ>", file=sys.stderr)
         sys.exit(2)
     n = build_index(sys.argv[1])
-    print(f"index.db を再生成しました: {n} 件のノートを取り込みました")
+    print(f"index.db を再生成しました: ノート{n['notes']}件・履歴{n['snapshots']}件を取り込みました")
 
 
 if __name__ == "__main__":
