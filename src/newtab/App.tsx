@@ -419,25 +419,29 @@ export function App() {
                 <TodoList todos={todos} onTodosChange={updateTodos} />
               </div>
               <section className="app-notes">
-                <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
-                  <NoteTabs
-                    notes={notes}
-                    activeNoteId={activeNoteId}
-                    visibleNoteIds={visibleNoteIds}
-                    onNotesChange={updateNotes}
-                    onSelect={selectNote}
-                    onToggleVisible={toggleVisible}
-                  />
-                </Flex>
-                <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-                  <SearchPanel
-                    ref={searchInputRef}
-                    notes={notes}
-                    onSelectNote={(noteId) => selectNote(noteId)}
-                  />
-                </Suspense>
+                {/* タブバーと全文検索は、下へスクロールしても上端に貼り付いて追従する
+                    (position:sticky。ユーザー指示)。2つをまとめて1つのstickyヘッダにする。 */}
+                <div className="note-sticky-head" data-testid="note-sticky-head">
+                  <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
+                    <NoteTabs
+                      notes={notes}
+                      activeNoteId={activeNoteId}
+                      visibleNoteIds={visibleNoteIds}
+                      onNotesChange={updateNotes}
+                      onSelect={selectNote}
+                      onToggleVisible={toggleVisible}
+                    />
+                  </Flex>
+                  <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+                    <SearchPanel
+                      ref={searchInputRef}
+                      notes={notes}
+                      onSelectNote={(noteId) => selectNote(noteId)}
+                    />
+                  </Suspense>
+                </div>
                 {visibleNotes.length > 0 ? (
-                  <Flex gap="3" className="note-editor-panes">
+                  <div className="note-editor-panes">
                     {visibleNotes.map((note) => (
                       <NoteEditorPane
                         key={note.id}
@@ -451,7 +455,7 @@ export function App() {
                         onSelectNoteByTitle={selectNoteByTitle}
                       />
                     ))}
-                  </Flex>
+                  </div>
                 ) : (
                   <Card data-testid="no-notes">
                     <Text size="3" weight="medium" color="indigo">

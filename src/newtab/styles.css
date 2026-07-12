@@ -131,15 +131,30 @@ body {
   flex: 1;
 }
 
-/* 最大3件のノートを横並び表示する(SPEC.md §4.2)。画面が狭い場合は折り返す
-   (ノートPCの狭いウィンドウ等でも横スクロールが発生しないように)。 */
+/* ノートは「1行に最大3件」まで並べ、はみ出したら下の行へ折り返して下へどんどん伸びる
+   (ユーザー指示: 1行3件まで・幅はこれまでどおり)。flex-basisを(100%-2*gap)/3にすることで
+   数式上ちょうど3件で1行が埋まり、4件目以降は必ず次の行へ回る(画面が広くても4列にならない)。
+   grow:1で1〜3件のときは幅を埋める(従来の気に入っている見た目)。align-items:stretch(既定)で
+   各行のノートは等高になり、行同士は隙間なく積み上がる。狭い画面ではmin-widthで2列以下へ緩む。 */
 .note-editor-panes {
+  display: flex;
   flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: stretch;
 }
 
-.note-editor-panes > * {
-  flex: 1 1 260px;
-  min-width: 260px;
+/* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
+   スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
+   下の本文が透けないよう背景を敷き、他要素より前面に出す。 */
+.note-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
 }
 
 /* --- 時計 --- */
@@ -368,9 +383,13 @@ button.note-tab-add {
 
 /* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク。1ペイン=1ノート。
    NoteEditorPane.tsxが `note-editor-area-<noteId>` を付与するため前方一致で拾う)
-   外枠はCard(NoteEditorPane.tsx)に任せ、伸縮指定だけここで持つ。 --- */
+   外枠はCard(NoteEditorPane.tsx)に任せ、伸縮指定だけここで持つ。この要素が
+   .note-editor-panes の flex item 本体なので、1行3件までの基準幅もここに持たせる
+   (basisを(100%-2*gap)/3にすると数式上ちょうど3件で1行が埋まり4件目は次行へ。
+   この規則が .note-editor-panes > * より後方=後勝ちのため、基準幅はこちらに書く)。 --- */
 [data-testid^="note-editor-area-"] {
-  flex: 1;
+  flex: 1 1 calc((100% - 2 * var(--space-3)) / 3);
+  min-width: 240px;
   min-height: 0;
 }
 
