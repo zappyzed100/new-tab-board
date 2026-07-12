@@ -9,6 +9,7 @@ import { setNasDirectoryHandle } from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { exportNotesToFolder, pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
+import { getAuthToken } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import type { AppLaunch, Bookmark, Note, Settings } from "../../../types";
 
@@ -23,6 +24,15 @@ type Props = {
 
 export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props) {
   const [message, setMessage] = useState<string | null>(null);
+
+  async function handleConnectDrive() {
+    const token = await getAuthToken(true);
+    setMessage(
+      token
+        ? "Googleアカウントに接続しました(以後は自動でDriveへバックアップされます)"
+        : "Googleアカウントへの接続に失敗しました(ポップアップを閉じた場合は再度お試しください)",
+    );
+  }
 
   async function handleRestoreFromDrive() {
     const result = await restoreJsonBackupFromDrive(true, sync.settings.jsonBackupFileId);
@@ -116,6 +126,15 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
             onClick={() => void handleFlushNow()}
           >
             📤 今すぐNASへ書き出し
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid="data-connect-drive"
+            title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+            onClick={() => void handleConnectDrive()}
+          >
+            ⚙️ GDrive設定
           </Button>
           <Button
             type="button"
