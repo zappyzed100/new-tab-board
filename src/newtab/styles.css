@@ -171,10 +171,34 @@ body {
   cursor: grabbing;
 }
 
-/* ノート名の編集フィールド(記述部の上・Markdownプレビューの左。少し大きめ・太字——ユーザー指示)。 */
-.note-pane-title input {
-  font-weight: 600;
-  font-size: 1.05rem;
+/* ノート名(ペインの一番左上)。入力欄の枠・背景を消して「見出し」に見せる——ユーザー指示。
+   クリックでそのまま編集でき、ホバー/フォーカス時だけ淡い下地で編集可能なことを示す。 */
+.note-pane-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  color: var(--gray-12);
+  padding: 2px 6px;
+  border-radius: var(--radius-2, 4px);
+}
+
+.note-pane-title-input::placeholder {
+  color: var(--gray-a8);
+  font-weight: 500;
+}
+
+.note-pane-title-input:hover {
+  background: var(--gray-a3);
+}
+
+.note-pane-title-input:focus {
+  outline: none;
+  background: var(--gray-a3);
 }
 
 /* 「対応済み」のノートは淡色表示にし、名前に取り消し線を引く(削除はしない——見返せるよう残す)。 */
@@ -182,7 +206,7 @@ body {
   opacity: 0.55;
 }
 
-[data-testid^="note-editor-area-"][data-done] .note-pane-title input {
+[data-testid^="note-editor-area-"][data-done] .note-pane-title-input {
   text-decoration: line-through;
 }
 

@@ -3,7 +3,7 @@
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Badge, Button, Card, Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import { removeNote, updateNote } from "../../../lib/entities/notes";
@@ -220,10 +220,19 @@ export function NoteEditorPane({
     >
       <Flex direction="column" gap="3">
         <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
-        {/* ヘッダ(1行にまとめて折り返す): 位置調整(つまみ/対応済み/ピン/上へ)を左に、
-            ノート名を記述部の上・Markdownプレビューの左に大きめで置き、その右に各操作ボタン、
-            末尾に初期化/削除を並べる(ユーザー指示)。 */}
-        <Flex align="center" gap="2" wrap="wrap">
+        {/* 1行目: ノート名を一番左上に、枠なし・太字・大きめで置く(クリックでそのまま編集)。
+            右端に控えめなドラッグつまみ(ノートの位置入れ替え用)。 */}
+        <Flex align="center" gap="2">
+          <input
+            className="note-pane-title-input"
+            data-testid={`note-title-${note.id}`}
+            aria-label="ノート名"
+            placeholder="(名称未設定)"
+            value={note.title}
+            onChange={(e) =>
+              onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
+            }
+          />
           <span
             className="note-drag-handle"
             data-testid={`note-drag-handle-${note.id}`}
@@ -241,14 +250,10 @@ export function NoteEditorPane({
           >
             ⠿
           </span>
-          <Checkbox
-            data-testid={`done-note-${note.id}`}
-            checked={note.done ?? false}
-            title={note.done ? "対応済みを解除する" : "対応済みにする"}
-            onCheckedChange={(checked) =>
-              onNotesChange((prev) => updateNote(prev, note.id, { done: checked === true }))
-            }
-          />
+        </Flex>
+        {/* 2行目: 操作は全て「アイコン＋説明」で統一。順序も統一(状態→表示→AI→編集操作)。
+            同期状態はボタンではないので最後に置く(ユーザー指示)。 */}
+        <Flex align="center" gap="2" wrap="wrap">
           <Button
             type="button"
             variant={note.pinned ? "solid" : "soft"}
@@ -256,7 +261,7 @@ export function NoteEditorPane({
             title={note.pinned ? "ピンを外す" : "ピン留めして最優先で左上に置く"}
             onClick={() => onTogglePin(note.id)}
           >
-            {note.pinned ? "📌 ピン中" : "📌 ピン"}
+            📌 ピン
           </Button>
           <Button
             type="button"
@@ -268,18 +273,16 @@ export function NoteEditorPane({
           >
             ⬆️ 優先度
           </Button>
-          {/* ノート名: 記述部の上・Markdownプレビューの左に、少し大きめの文字で編集可能に(ユーザー指示)。 */}
-          <TextField.Root
-            className="note-pane-title"
-            data-testid={`note-title-${note.id}`}
-            aria-label="ノート名"
-            title="ここでノート名を編集できます"
-            value={note.title}
-            onChange={(e) =>
-              onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
-            }
-            style={{ flex: "0 1 14em", minWidth: "7em" }}
-          />
+          <Button
+            type="button"
+            variant={note.done ? "solid" : "soft"}
+            color={note.done ? "green" : undefined}
+            data-testid={`done-note-${note.id}`}
+            title={note.done ? "対応済みを解除する" : "対応済みにする"}
+            onClick={() => onNotesChange((prev) => updateNote(prev, note.id, { done: !note.done }))}
+          >
+            ☑️ 済み
+          </Button>
           <Button
             type="button"
             variant={showPreview ? "solid" : "soft"}
@@ -287,7 +290,7 @@ export function NoteEditorPane({
             title="Markdown記法(見出し・リスト等)を清書して表示する"
             onClick={() => setShowPreview((v) => !v)}
           >
-            {showPreview ? "編集に戻る" : "Markdownプレビュー"}
+            {showPreview ? "✏️ 編集" : "📖 プレビュー"}
           </Button>
           <Button
             type="button"
@@ -306,7 +309,7 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleSummarize()}
           >
-            {aiBusy === "summary" ? "要約中…" : "✨ 要約"}
+            {aiBusy === "summary" ? "✨ 要約中…" : "✨ 要約"}
           </Button>
           <Button
             type="button"
@@ -316,7 +319,7 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleExtractTodos()}
           >
-            {aiBusy === "todo" ? "抽出中…" : "✅ TODO抽出"}
+            {aiBusy === "todo" ? "✅ 抽出中…" : "✅ TODO抽出"}
           </Button>
           <Button
             type="button"
@@ -326,7 +329,7 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleTagThisNote()}
           >
-            {aiBusy === "tag" ? "タグ付け中…" : "🏷️ タグ"}
+            {aiBusy === "tag" ? "🏷️ タグ付け中…" : "🏷️ タグ"}
           </Button>
           <Button
             type="button"
@@ -337,19 +340,9 @@ export function NoteEditorPane({
           >
             📋 コピー
           </Button>
-          {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-            <Text
-              size="1"
-              color="gray"
-              data-testid={`drive-sync-status-${note.id}`}
-              title="このノートのGoogle Drive自動同期の状態"
-            >
-              {DRIVE_SYNC_LABEL[driveSyncStatus]}
-            </Text>
-          ) : null}
-          {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物
-              (ユーザー指示)。消える前の本文は大量削除の安全網で履歴に刻まれるため復元可能。 */}
-          <IconButton
+          {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物。
+              消える前の本文は大量削除の安全網で履歴に刻まれるため復元可能。 */}
+          <Button
             type="button"
             variant="soft"
             data-testid={`reset-note-${note.id}`}
@@ -370,9 +363,9 @@ export function NoteEditorPane({
               setRestoreCounter((c) => c + 1);
             }}
           >
-            🧹
-          </IconButton>
-          <IconButton
+            🧹 初期化
+          </Button>
+          <Button
             type="button"
             variant="soft"
             color="red"
@@ -380,8 +373,19 @@ export function NoteEditorPane({
             title="このノートを削除する"
             onClick={() => onNotesChange((prev) => removeNote(prev, note.id))}
           >
-            🗑
-          </IconButton>
+            🗑️ 削除
+          </Button>
+          {/* 同期状態はボタンではないので、全ボタンの最後に控えめに置く(ユーザー指示)。 */}
+          {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
+            <Text
+              size="1"
+              color="gray"
+              data-testid={`drive-sync-status-${note.id}`}
+              title="このノートのGoogle Drive自動同期の状態"
+            >
+              {DRIVE_SYNC_LABEL[driveSyncStatus]}
+            </Text>
+          ) : null}
         </Flex>
         {showHistory ? (
           <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
