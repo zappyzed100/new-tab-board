@@ -8,6 +8,7 @@ import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
 import { NoteTabs } from "./components/notes/NoteTabs";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
+import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
@@ -568,6 +569,7 @@ export function App() {
                     />
                   </Suspense>
                 </div>
+                <TagSearchPanel notes={notes} onSelectNote={selectNote} />
                 {visibleNotes.length > 0 ? (
                   <div className="note-editor-panes">
                     {visibleNotes.map((note) => (

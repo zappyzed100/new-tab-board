@@ -176,6 +176,8 @@
 - `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
 - `src/lib/search/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
 - `src/lib/search/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
+- `src/lib/search/tagSearch.test.ts` — tagSearch.test.ts — タグ絞り込み純粋ロジックの単体テスト
+- `src/lib/search/tagSearch.ts` — tagSearch.ts — タグによるノート絞り込みの純粋ロジック(メモリ内。ノートは最大501件・全件
 - `src/lib/search/tokenize.test.ts` — tokenize.test.ts — tokenize.ts の単体テスト
 - `src/lib/search/tokenize.ts` — tokenize.ts — 全文検索用のトークナイザ(単語単位・大文字小文字を無視。SPEC.md §4.3)
 - `src/lib/shortcuts/shortcuts.test.ts` — shortcuts.test.ts — shortcuts.ts(ショートカット単一レジストリ)の単体テスト
@@ -188,6 +190,7 @@
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
+- `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — タグでノートを絞り込むパネル(メモリ内・索引不要。tagSearch.tsの純粋ロジックを使う)
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
@@ -585,6 +588,12 @@
 - function indexSnapshot
 - function searchSnapshotIds
 
+### `src/lib/search/tagSearch.ts`
+- type TagCount
+- function tagCounts
+- function filterNotesByTags
+- function relatedTags
+
 ### `src/lib/search/tokenize.ts`
 - function tokenize
 
@@ -632,6 +641,9 @@
 
 ### `src/newtab/components/discovery/ShortcutsModal.tsx`
 - function ShortcutsModal
+
+### `src/newtab/components/discovery/TagSearchPanel.tsx`
+- function TagSearchPanel
 
 ### `src/newtab/components/notes/BacklinksPanel.tsx`
 - function BacklinksPanel
