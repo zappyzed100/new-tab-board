@@ -59,6 +59,18 @@ describe("uploadBackup", () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({}, false, 500));
     await expect(uploadBackup(json, "token-abc", null, fetchImpl)).rejects.toThrow("HTTP 500");
   });
+
+  it("既存ファイルIDが消えている(404)なら、新規作成にフォールバックして新IDを返す", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({}, false, 404)) // 古いIDへのPATCHが404
+      .mockResolvedValueOnce(fakeResponse({ id: "recreated" })); // 新規作成POSTは成功
+    const id = await uploadBackup(json, "token-abc", "gone-file", fetchImpl);
+    expect(id).toBe("recreated");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0][1].method).toBe("PATCH");
+    expect(fetchImpl.mock.calls[1][1].method).toBe("POST");
+  });
 });
 
 describe("downloadBackup", () => {

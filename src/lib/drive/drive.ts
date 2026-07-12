@@ -57,6 +57,12 @@ export async function uploadNote(
     body,
   });
   if (!res.ok) {
+    // 保存済みのdriveFileIdが指す先が消えている(404)場合は、古いIDで上書きし続けて毎回
+    // 404になるのを防ぐため、新規作成へフォールバックする(呼び出し側は返り値の新IDを保存)。
+    if (existingFileId && res.status === 404) {
+      logOp("drive", "upload-recreate", `note=${note.id} existing file gone (404); creating new`);
+      return uploadNote(note, token, null, fetchImpl);
+    }
     logOp("drive", "upload-error", `note=${note.id} status=${res.status}`);
     throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
   }

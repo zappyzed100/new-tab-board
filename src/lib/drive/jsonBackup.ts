@@ -61,6 +61,12 @@ export async function uploadBackup(
     body,
   });
   if (!res.ok) {
+    // 保存済みファイルIDの指す先が消えている(404)場合は、その古いIDを使い続けて毎回404に
+    // なるのを防ぐため、新規作成へフォールバックする(呼び出し側は返り値の新IDを保存する)。
+    if (existingFileId && res.status === 404) {
+      logOp("jsonBackup", "upload-recreate", "existing file gone (404); creating new");
+      return uploadBackup(json, token, null, fetchImpl);
+    }
     logOp("jsonBackup", "upload-error", `status=${res.status}`);
     throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
   }
