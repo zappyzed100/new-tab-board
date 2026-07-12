@@ -118,6 +118,15 @@ body {
   min-width: 0;
 }
 
+/* データ操作ツールバー(開く/NASへ書き出し/Drive等)と下のノート域の区切り線(ユーザー指示)。
+   全幅の細い横線。色はテーマ追従の --border。上下に少し余白を取る。 */
+.toolbar-divider {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-2) 0;
+}
+
 /* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
    ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて `.note-column` ごとに
    縦積みする。各列は独立した縦スタック(align-items:flex-startで上端揃え・縦の高さは列でバラバラ)。
@@ -449,6 +458,14 @@ body {
   width: 100%;
   min-width: 0;
   min-height: 0;
+  /* 非空ノート: 通常のカード地(solidパネル)。空ノートと見分けるため明示する。 */
+  background: var(--color-panel-solid);
+}
+
+/* 空ノートは控えめなグレー地にして「まだ書いていない付箋」だと一目で分かるようにする
+   (ユーザー指示)。Radixのグレースケール変数なのでライト/ダーク両テーマで追従する。 */
+[data-testid^="note-editor-area-"][data-empty] {
+  background: var(--gray-3);
 }
 
 [data-testid="notepad-editor"] {

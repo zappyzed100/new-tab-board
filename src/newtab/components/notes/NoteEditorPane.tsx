@@ -19,6 +19,7 @@ import { writeNoteToNasStructure } from "../../../lib/externalIO/nasArchive";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
+import { buildTagVocabulary } from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
@@ -129,7 +130,8 @@ export function NoteEditorPane({
     }
     setAiBusy("tag");
     onMessage(`「${note.title}」にGeminiでタグ・タイトルを付与中…`);
-    const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
+    const vocabulary = buildTagVocabulary(tagCandidates, notes);
+    const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, vocabulary);
     setAiBusy(null);
     if (tags.length === 0 && !junk && !title) {
       onMessage("タグ・タイトルを付けられませんでした(Gemini呼び出しに失敗した可能性)");
@@ -172,7 +174,12 @@ export function NoteEditorPane({
     if (!apiKey) return null;
     autoTagInFlight = true;
     try {
-      const analysis = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
+      const analysis = await analyzeNote(
+        savedContent,
+        apiKey,
+        {},
+        buildTagVocabulary(tagCandidates, notes),
+      );
       if (analysis.tags.length === 0 && !analysis.junk && !analysis.title) return null;
       onNotesChange((prev) => {
         // 自動付与では、既定タイトル(ノートX)のときだけ生成タイトルを入れる(手動命名は尊重)。
@@ -250,6 +257,8 @@ export function NoteEditorPane({
     <Card
       data-testid={`note-editor-area-${note.id}`}
       data-active={isActive || undefined}
+      // 空ノートと非空ノートで背景色を変えて見分けられるようにする(ユーザー指示)。空=控えめなグレー。
+      data-empty={note.content.trim() === "" || undefined}
       // ドラッグ交換の drop 先。掴んだノート(App側のrefが保持)をこのノートの位置へ移動する。
       // dropを許可するためdragOverでpreventDefaultする。本文中央はCodeMirrorがdropを飲むため、
       // 実質的にヘッダのつまみ帯へ落とす運用になる(掴んだノートidはApp側のrefで受け渡す)。

@@ -31,6 +31,7 @@ import {
 import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
+import { buildTagVocabulary } from "../lib/entities/tags";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
@@ -448,10 +449,12 @@ export function App() {
     }
     setTagging(true);
     setDataPanelMessage(`${targets.length}件のノートにGeminiでタグ付け中…`);
+    // タグ候補＋既存ノートの頻出タグ(最大200)を語彙として渡し、タグの統一を促す(ユーザー指示)。
+    const vocabulary = buildTagVocabulary(tagCandidates, all);
     let done = 0;
     let junkCount = 0;
     for (const note of targets) {
-      const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
+      const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, vocabulary);
       if (tags.length > 0 || junk || title) {
         const hash = contentHash(note.content);
         // 一括では既定タイトル(ノートX)のときだけ生成タイトルを入れる(手動命名は尊重)。
@@ -654,6 +657,10 @@ export function App() {
                 </Button>
               </nav>
             </Flex>
+
+            {/* データ操作ツールバー(ファイルを開く/NASへ書き出し等)と、この下のノート域
+                (ノート文字サイズ等)の間に区切り線を入れる(ユーザー指示)。 */}
+            <hr className="toolbar-divider" data-testid="toolbar-divider" />
 
             {/* ショートカットボタンより後ろ(ソースコード上も下)に置く——同じflex行に
                 width:100%のメッセージが並ぶと、メッセージの有無でショートカットボタンの

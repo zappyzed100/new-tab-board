@@ -149,7 +149,7 @@
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/entities/tagCandidates.test.ts` — tagCandidates.test.ts — タグ候補の純粋関数の単体テスト
 - `src/lib/entities/tagCandidates.ts` — tagCandidates.ts — タグ候補(ユーザーが手で並べる語彙)の純粋な追加/削除。I/Oは持たない。
-- `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
+- `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出 / タグ語彙構築)の単体テスト
 - `src/lib/entities/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
 - `src/lib/entities/todos.test.ts` — todos.test.ts — todos.ts の純粋関数の単体テスト
 - `src/lib/entities/todos.ts` — todos.ts — 単体TODOリストの純粋な状態更新関数(I/Oを持たない。TodoMVC相当・ノート非依存)
@@ -578,6 +578,7 @@
 
 ### `src/lib/entities/tags.ts`
 - function extractTags
+- function buildTagVocabulary
 
 ### `src/lib/entities/todos.ts`
 - function createTodo
