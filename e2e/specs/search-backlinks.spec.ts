@@ -29,13 +29,12 @@ test("検索・バックリンクが連動して動く", async ({ context, newTa
   await page.locator('[data-testid^="note-tab-rename-input-"]').fill("買い物リスト");
   await page.locator('[data-testid^="note-tab-rename-input-"]').blur();
 
-  // --- 全文検索: ノート1の検索語がヒットする(検索は全ノート横断のグローバルトグル) ---
+  // --- 全文検索: ノート1の検索語がヒットする(検索バーは全ノート横断で常時表示) ---
   await note1Tab.click();
-  await page.getByTestId("toggle-search").click();
   await expect(page.getByTestId("search-panel")).toBeVisible();
   await page.getByTestId("search-input").fill("keyword-xyz");
   await expect(page.locator('[data-testid^="search-result-open-"]')).toContainText("会議メモ");
-  await page.getByTestId("toggle-search").click();
+  await page.getByTestId("search-input").fill("");
 
   // --- バックリンク: 「買い物リスト」に切り替えると「会議メモ」からのリンクが見える ---
   await note2Tab.click();

@@ -1,5 +1,7 @@
 // SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
-import { useState } from "react";
+// 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fは「開く/閉じる」ではなく
+// この検索欄へフォーカスを移す操作として再割り当てされている(App.tsxのuseGlobalShortcuts参照)。
+import { forwardRef, useState } from "react";
 import { Button, Card, Flex, Heading, TextField } from "@radix-ui/themes";
 import { getSnapshot } from "../../../lib/storage/db";
 import { gzipDecompress } from "../../../lib/history/gzip";
@@ -14,7 +16,10 @@ type Props = {
   onSelectNote: (noteId: string) => void;
 };
 
-export function SearchPanel({ notes, onSelectNote }: Props) {
+export const SearchPanel = forwardRef<HTMLInputElement, Props>(function SearchPanel(
+  { notes, onSelectNote },
+  ref,
+) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ResultItem[]>([]);
 
@@ -49,6 +54,7 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
         🔍 全文検索(全ノートの本文を横断)
       </Heading>
       <TextField.Root
+        ref={ref}
         aria-label="全文検索"
         data-testid="search-input"
         placeholder="検索したい単語を入力(完全一致)"
@@ -74,4 +80,4 @@ export function SearchPanel({ notes, onSelectNote }: Props) {
       </ul>
     </Card>
   );
-}
+});

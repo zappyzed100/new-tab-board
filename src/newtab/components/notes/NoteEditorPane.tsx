@@ -38,7 +38,7 @@ type Props = {
   /** Cmd/Ctrl+Sが押されるたびに増える共有カウンタ。表示中の全ペインがこれを監視し、
    * 自分のノートを即時スナップショット+Drive同期する(「見えている全部を保存する」)。 */
   manualSyncSignal: number;
-  onNotesChange: (notes: Note[]) => void;
+  onNotesChange: (update: Note[] | ((prev: Note[]) => Note[])) => void;
   onSelectNote: (noteId: string) => void;
   onSelectNoteByTitle: (title: string) => void;
 };
@@ -60,7 +60,7 @@ export function NoteEditorPane({
   const { status: driveSyncStatus, syncNow: syncDriveNow } = useDriveSync(
     note,
     (driveFileId, lastSyncedAt) => {
-      onNotesChange(updateNote(notes, note.id, { driveFileId, lastSyncedAt }));
+      onNotesChange((prev) => updateNote(prev, note.id, { driveFileId, lastSyncedAt }));
     },
   );
 
@@ -113,7 +113,7 @@ export function NoteEditorPane({
               noteId={note.id}
               currentContent={note.content}
               onRestore={(content) => {
-                onNotesChange(updateNote(notes, note.id, { content }));
+                onNotesChange((prev) => updateNote(prev, note.id, { content }));
                 setRestoreCounter((c) => c + 1);
               }}
             />
@@ -127,7 +127,9 @@ export function NoteEditorPane({
               key={`editor-${note.id}-${restoreCounter}`}
               content={note.content}
               autoFocus={autoFocus}
-              onContentChange={(content) => onNotesChange(updateNote(notes, note.id, { content }))}
+              onContentChange={(content) =>
+                onNotesChange((prev) => updateNote(prev, note.id, { content }))
+              }
             />
           )}
         </Suspense>

@@ -44,10 +44,9 @@ export function App() {
   // 4件以上ある時だけ意味を持つ「表示する3件」のユーザー選択(3件以下なら常に全件
   // 表示のため無視される。resolveVisibleNoteIdsが実際に描画する集合へ解決する)。
   const [requestedVisibleIds, setRequestedVisibleIds] = useState<string[]>([]);
-  // 検索はノート編集エリア内のトグル(プレビュー/履歴と同じ並び)——ホーム画面レベルの
-  // 概念ではなく「今開いているノートに対する操作」として編集エリア側に置く。全ノート
-  // 横断の性質上、複数ペイン表示でも唯一グローバルのまま(ペインごとには持たない)。
-  const [showSearch, setShowSearch] = useState(false);
+  // 全文検索バーは常時表示(開閉トグルは撤去済み——ユーザー指示)。Cmd/Ctrl+Fは
+  // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
@@ -75,12 +74,15 @@ export function App() {
     );
   }
 
+  // タブクリック(selectNote)と違い、チェックボックスでの明示的な選択操作は
+  // 「入りきらないから何かを追い出す」ことをせず、単純な追加/削除にとどめる
+  // (これにより0件・1件・2件・3件のどの表示数もユーザーの意図どおりに選べる)。
   function toggleVisible(noteId: string) {
     setRequestedVisibleIds((prev) =>
       prev.includes(noteId)
         ? prev.filter((id) => id !== noteId)
         : prev.length >= 3
-          ? [...prev.slice(1), noteId]
+          ? prev
           : [...prev, noteId],
     );
   }
@@ -93,6 +95,14 @@ export function App() {
       setNotes(localData.notes);
       setTodos(localData.todos ?? []);
       setActiveNoteId(localData.notes[0]?.id ?? null);
+      // 4件以上あるノートの初期表示。resolveVisibleNoteIdsはもう自動補完しないため、
+      // 何も指定しないと初回表示が0件になってしまう——表示順の先頭3件を既定値として
+      // シードする(以前の「常に3件表示」だった挙動に近い、素直な初期状態)。
+      setRequestedVisibleIds(
+        sortedNotes(localData.notes)
+          .slice(0, 3)
+          .map((n) => n.id),
+      );
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
     });
@@ -177,7 +187,7 @@ export function App() {
   );
 
   useGlobalShortcuts(shortcutRegistry, {
-    toggleSearch: () => setShowSearch((v) => !v),
+    toggleSearch: () => searchInputRef.current?.focus(),
     cheatSheet: () => setShowShortcutsModal(true),
     // 表示中の全ペイン(NoteEditorPane)がmanualSyncSignalの変化を検知し、
     // それぞれ自分のノートを即時スナップショット+Drive同期する。
@@ -216,15 +226,27 @@ export function App() {
     void saveSyncData(next);
   }
 
-  function updateNotes(nextNotes: Note[]) {
-    setNotes(nextNotes);
-    // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
-    // (todos/nextEventCache/alarmActive)を巻き込まないよう現在値を明示的に含めて保存する
-    // (含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が消えてしまう)。
-    void saveLocalData({ notes: nextNotes, todos, nextEventCache, alarmActive });
-    if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
-      setActiveNoteId(nextNotes[0]?.id ?? null);
-    }
+  function updateNotes(update: Note[] | ((prev: Note[]) => Note[])) {
+    // 常にsetNotesの関数型updaterを経由する(引数が配列であっても内部で関数化する)。
+    // 「タブ追加ボタンを連打すると作ったノートが消える」バグの原因は、複数の呼び出しが
+    // それぞれ古いclosure内のnotes(propsとして渡された時点のスナップショット)から
+    // 新しい配列を計算し、後勝ちでsetNotesしていたこと(1個目の追加が2個目の呼び出しの
+    // 計算元に含まれておらず上書きされて消えていた)。Reactは関数型updaterを
+    // キューされた順に必ず正しいprevへ適用するため、呼び出しが連続してもデータが
+    // 失われない。
+    setNotes((prev) => {
+      const base = prev ?? [];
+      const nextNotes = typeof update === "function" ? update(base) : update;
+      // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
+      // (todos/nextEventCache/alarmActive)を巻き込まないよう現在値を明示的に含めて
+      // 保存する(含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が
+      // 消えてしまう)。
+      void saveLocalData({ notes: nextNotes, todos, nextEventCache, alarmActive });
+      if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
+        setActiveNoteId(nextNotes[0]?.id ?? null);
+      }
+      return nextNotes;
+    });
   }
 
   function updateTodos(nextTodos: Todo[]) {
@@ -248,9 +270,8 @@ export function App() {
   }
 
   function openFileAsNote(title: string, content: string) {
-    if (!notes) return;
-    const note = createNote(title, sortedNotes(notes).length);
-    updateNotes(addNote(notes, { ...note, content }));
+    const note = createNote(title, sortedNotes(notes ?? []).length);
+    updateNotes((prev) => addNote(prev, { ...note, content }));
     selectNote(note.id);
   }
 
@@ -365,7 +386,7 @@ export function App() {
                 <TodoList todos={todos} onTodosChange={updateTodos} />
               </div>
               <section className="app-notes">
-                <Flex align="center" gap="3" wrap="wrap">
+                <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
                   <NoteTabs
                     notes={notes}
                     activeNoteId={activeNoteId}
@@ -374,28 +395,14 @@ export function App() {
                     onSelect={selectNote}
                     onToggleVisible={toggleVisible}
                   />
-                  <Button
-                    type="button"
-                    variant={showSearch ? "solid" : "soft"}
-                    aria-pressed={showSearch}
-                    data-testid="toggle-search"
-                    title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
-                    onClick={() => setShowSearch((v) => !v)}
-                  >
-                    🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
-                  </Button>
                 </Flex>
-                {showSearch ? (
-                  <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-                    <SearchPanel
-                      notes={notes}
-                      onSelectNote={(noteId) => {
-                        selectNote(noteId);
-                        setShowSearch(false);
-                      }}
-                    />
-                  </Suspense>
-                ) : null}
+                <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+                  <SearchPanel
+                    ref={searchInputRef}
+                    notes={notes}
+                    onSelectNote={(noteId) => selectNote(noteId)}
+                  />
+                </Suspense>
                 {visibleNotes.length > 0 ? (
                   <Flex gap="3" className="note-editor-panes">
                     {visibleNotes.map((note) => (

@@ -89,10 +89,15 @@ describe("resolveVisibleNoteIds", () => {
     expect(resolveVisibleNoteIds([a, b], ["dummy"])).toEqual([a.id, b.id]);
   });
 
-  it("4件以上ならrequestedIdsを優先し、足りない分は表示順で埋めて3件にする", () => {
+  it("4件以上ならrequestedIdsをそのまま(自動で埋めずに)返す", () => {
     const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    const [a, b, , d] = notes;
-    expect(resolveVisibleNoteIds(notes, [d.id])).toEqual([d.id, a.id, b.id]);
+    const [, , , d] = notes;
+    expect(resolveVisibleNoteIds(notes, [d.id])).toEqual([d.id]);
+  });
+
+  it("requestedIdsが空なら0件(表示なし)を返す", () => {
+    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
+    expect(resolveVisibleNoteIds(notes, [])).toEqual([]);
   });
 
   it("requestedIdsが4件以上あっても先頭3件だけを使う", () => {
@@ -101,9 +106,9 @@ describe("resolveVisibleNoteIds", () => {
     expect(resolveVisibleNoteIds(notes, [d.id, c.id, b.id, a.id])).toEqual([d.id, c.id, b.id]);
   });
 
-  it("requestedIdsに削除済み(存在しない)IDが混じっていれば無視して埋め直す", () => {
+  it("requestedIdsに削除済み(存在しない)IDが混じっていれば無視する(埋め直さない)", () => {
     const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    const [a, b, c] = notes;
-    expect(resolveVisibleNoteIds(notes, ["gone", c.id])).toEqual([c.id, a.id, b.id]);
+    const [, , c] = notes;
+    expect(resolveVisibleNoteIds(notes, ["gone", c.id])).toEqual([c.id]);
   });
 });

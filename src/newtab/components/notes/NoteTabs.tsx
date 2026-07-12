@@ -32,7 +32,7 @@ type Props = {
   activeNoteId: string | null;
   /** 横並び表示中のノートID(3件以下なら常に全件と一致)。 */
   visibleNoteIds: string[];
-  onNotesChange: (notes: Note[]) => void;
+  onNotesChange: (update: Note[] | ((prev: Note[]) => Note[])) => void;
   onSelect: (noteId: string) => void;
   /** 4件以上の時だけ使う「表示する3件」の選択トグル。 */
   onToggleVisible: (noteId: string) => void;
@@ -57,13 +57,13 @@ export function NoteTabs({
       return;
     }
     const note = createNote(title, sorted.length);
-    onNotesChange(addNote(notes, note));
+    onNotesChange((prev) => addNote(prev, note));
     onSelect(note.id);
   }
 
   function handleDrop(toIndex: number) {
     if (dragIndex !== null && dragIndex !== toIndex) {
-      onNotesChange(reorderNotes(notes, dragIndex, toIndex));
+      onNotesChange((prev) => reorderNotes(prev, dragIndex, toIndex));
     }
     setDragIndex(null);
   }
@@ -101,8 +101,9 @@ export function NoteTabs({
                   {notes.length > 3 ? (
                     <Checkbox
                       data-testid={`note-tab-visible-${note.id}`}
-                      title="表示する3件に含める"
+                      title="横並び表示に含める(最大3件)"
                       checked={visibleNoteIds.includes(note.id)}
+                      disabled={visibleNoteIds.length >= 3 && !visibleNoteIds.includes(note.id)}
                       onClick={(e) => e.stopPropagation()}
                       onCheckedChange={() => onToggleVisible(note.id)}
                     />
@@ -115,13 +116,13 @@ export function NoteTabs({
                     title="このノートを削除する"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onNotesChange(removeNote(notes, note.id));
+                      onNotesChange((prev) => removeNote(prev, note.id));
                     }}
                     onKeyDown={(e) => {
                       if (e.key !== "Enter" && e.key !== " ") return;
                       e.preventDefault();
                       e.stopPropagation();
-                      onNotesChange(removeNote(notes, note.id));
+                      onNotesChange((prev) => removeNote(prev, note.id));
                     }}
                   >
                     ×
@@ -148,9 +149,8 @@ export function NoteTabs({
           autoFocus
           defaultValue={renamingNote.title}
           onBlur={(e) => {
-            onNotesChange(
-              updateNote(notes, renamingNote.id, { title: e.target.value || renamingNote.title }),
-            );
+            const nextTitle = e.target.value || renamingNote.title;
+            onNotesChange((prev) => updateNote(prev, renamingNote.id, { title: nextTitle }));
             setRenamingId(null);
           }}
         />

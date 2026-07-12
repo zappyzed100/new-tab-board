@@ -20,7 +20,7 @@ export const SHORTCUT_REGISTRY: ShortcutDef[] = [
   {
     id: "toggleSearch",
     combo: { key: "f", ctrlOrMeta: true },
-    description: "全文検索を開く/閉じる",
+    description: "全文検索欄にフォーカス",
   },
   {
     id: "immediateSnapshot",
