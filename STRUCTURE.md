@@ -61,6 +61,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」「フォルダへ書き出し」の回帰(2026-07-12)
 - `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — NoteTabs周りの状態競合バグの回帰まとめ(§13昇格対象)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
@@ -129,8 +130,8 @@
 - `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
-- `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(File System Access APIラッパー)の単体テスト
-- `src/lib/fileio/fileSystem.ts` — fileSystem.ts — File System Access APIの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
+- `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み/書き出し)の単体テスト
+- `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込み/書き出しの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト

@@ -1,6 +1,6 @@
-// fileSystem.test.ts — fileSystem.ts(File System Access APIラッパー)の単体テスト
-// window.showOpenFilePicker/showDirectoryPickerをvi.stubGlobalでフェイクに差し替える
-// (vitestの既定環境はnodeでwindowが無いため、テスト内で丸ごと生やす)。
+// fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み/書き出し)の単体テスト
+// <input type="file">・chrome.downloadsをvi.stubGlobalでフェイクに差し替える
+// (vitestの既定環境はnodeでdocument/chromeが無いため、テスト内で丸ごと生やす)。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { exportNotesToFolder, pickAndReadTextFile } from "./fileSystem";
 import type { Note } from "../../types";
@@ -9,35 +9,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function abortError(): DOMException {
-  return new DOMException("The user aborted a request.", "AbortError");
+type Listener = () => void;
+
+/** <input type="file">の最小限のフェイク。click()で"change"または"cancel"を発火する。 */
+function fakeFileInput(file: { name: string; text: () => Promise<string> } | null) {
+  const listeners: Partial<Record<string, Listener[]>> = {};
+  return {
+    type: "",
+    accept: "",
+    files: file ? [file] : null,
+    addEventListener(type: string, cb: Listener) {
+      (listeners[type] ??= []).push(cb);
+    },
+    click() {
+      const type = file ? "change" : "cancel";
+      listeners[type]?.forEach((cb) => cb());
+    },
+  };
 }
 
 describe("pickAndReadTextFile", () => {
   it("選択したファイルの名前と中身を返す", async () => {
     const fakeFile = { name: "メモ.txt", text: async () => "こんにちは" };
-    const fakeHandle = { getFile: async () => fakeFile };
-    vi.stubGlobal("window", { showOpenFilePicker: async () => [fakeHandle] });
+    vi.stubGlobal("document", { createElement: () => fakeFileInput(fakeFile) });
 
     expect(await pickAndReadTextFile()).toEqual({ name: "メモ.txt", content: "こんにちは" });
   });
 
-  it("キャンセル(AbortError)ならnullを返す", async () => {
-    vi.stubGlobal("window", {
-      showOpenFilePicker: async () => {
-        throw abortError();
-      },
-    });
-    expect(await pickAndReadTextFile()).toBeNull();
-  });
+  it("キャンセルするとnullを返す", async () => {
+    vi.stubGlobal("document", { createElement: () => fakeFileInput(null) });
 
-  it("AbortError以外の例外は再送出する", async () => {
-    vi.stubGlobal("window", {
-      showOpenFilePicker: async () => {
-        throw new Error("permission denied");
-      },
-    });
-    await expect(pickAndReadTextFile()).rejects.toThrow("permission denied");
+    expect(await pickAndReadTextFile()).toBeNull();
   });
 });
 
@@ -47,39 +49,71 @@ describe("exportNotesToFolder", () => {
     { id: "n2", title: "TODO/リスト", content: "本文2", pinned: false, order: 1 },
   ];
 
-  it("各ノートを個別の.mdファイルとして書き出す(ファイル名は禁則文字を置換)", async () => {
-    const written = new Map<string, string>();
-    const fakeDir = {
-      getFileHandle: async (name: string) => ({
-        createWritable: async () => ({
-          write: async (data: string) => written.set(name, data),
-          close: async () => {},
-        }),
-      }),
+  function fakeChromeDownloads(onDownload: (filename: string) => void) {
+    let nextId = 1;
+    const changedListeners: Array<(delta: { id: number; state?: { current: string } }) => void> =
+      [];
+    return {
+      downloads: {
+        download(opts: { filename: string }, callback: (id: number | undefined) => void) {
+          const id = nextId++;
+          onDownload(opts.filename);
+          callback(id);
+          queueMicrotask(() => {
+            changedListeners.forEach((cb) => cb({ id, state: { current: "complete" } }));
+          });
+        },
+        onChanged: {
+          addListener: (cb: (delta: { id: number; state?: { current: string } }) => void) =>
+            changedListeners.push(cb),
+          removeListener: (cb: (delta: { id: number; state?: { current: string } }) => void) => {
+            const i = changedListeners.indexOf(cb);
+            if (i >= 0) changedListeners.splice(i, 1);
+          },
+        },
+      },
+      runtime: { lastError: undefined },
     };
-    vi.stubGlobal("window", { showDirectoryPicker: async () => fakeDir });
+  }
+
+  it("各ノートを個別の.mdファイルとしてnew-tab-board-notes/へ書き出す(ファイル名は禁則文字を置換)", async () => {
+    const filenames: string[] = [];
+    vi.stubGlobal(
+      "chrome",
+      fakeChromeDownloads((f) => filenames.push(f)),
+    );
+    vi.stubGlobal("URL", {
+      createObjectURL: () => "blob:fake",
+      revokeObjectURL: () => {},
+    });
 
     await exportNotesToFolder(notes);
 
-    expect(written.get("会議メモ.md")).toBe("本文1");
-    expect(written.get("TODO_リスト.md")).toBe("本文2"); // "/"は禁則文字なので"_"に置換
+    expect(filenames).toEqual([
+      "new-tab-board-notes/会議メモ.md",
+      "new-tab-board-notes/TODO_リスト.md", // "/"は禁則文字なので"_"に置換
+    ]);
   });
 
-  it("キャンセル(AbortError)なら何も書き出さず正常終了する", async () => {
-    vi.stubGlobal("window", {
-      showDirectoryPicker: async () => {
-        throw abortError();
+  it("ダウンロードが中断(interrupted)されたら例外を投げる", async () => {
+    let onChangedCb: ((delta: { id: number; state?: { current: string } }) => void) | undefined;
+    vi.stubGlobal("chrome", {
+      downloads: {
+        download: (_opts: unknown, callback: (id: number | undefined) => void) => {
+          callback(1);
+          queueMicrotask(() => onChangedCb?.({ id: 1, state: { current: "interrupted" } }));
+        },
+        onChanged: {
+          addListener: (cb: typeof onChangedCb) => {
+            onChangedCb = cb;
+          },
+          removeListener: () => {},
+        },
       },
+      runtime: { lastError: undefined },
     });
-    await expect(exportNotesToFolder(notes)).resolves.toBeUndefined();
-  });
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} });
 
-  it("AbortError以外の例外は再送出する", async () => {
-    vi.stubGlobal("window", {
-      showDirectoryPicker: async () => {
-        throw new Error("permission denied");
-      },
-    });
-    await expect(exportNotesToFolder(notes)).rejects.toThrow("permission denied");
+    await expect(exportNotesToFolder(notes)).rejects.toThrow("interrupted");
   });
 });

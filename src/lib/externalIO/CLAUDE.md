@@ -23,6 +23,25 @@
 次のテストの集計件数に混入するバグを`nasArchive.test.ts`で実際に踏んだ——集計件数の
 比較ではなく、特定IDの状態を個別にassertする形で回避すること。
 
+## showDirectoryPicker()はChromium拡張機能コンテキストで既知の不具合がある
+
+NAS二層アーカイブ(`nasArchive.ts`)は`FileSystemDirectoryHandle`の持続的な書き込み権限が
+必須のため`window.showDirectoryPicker()`(呼び出しは`DataPanel.tsx`の
+`handleSetNasFolder`)を使い続けている。しかしChrome拡張機能のページから呼ぶと、
+**ユーザーが実際にフォルダを選択してもAbortErrorで即座に失敗する**という
+Chromium側の既知バグがある(WICG/file-system-access#314、crbug.com/issues/40240444。
+拡張機能コンテキスト特有・Chromeバージョンによって再現したりしなかったりする)。
+
+このバグが原因のAbortErrorと、ユーザーが本当にダイアログをキャンセルした場合の
+AbortErrorは**アプリのコードからは区別不可能**(どちらも同じ`DOMException`)。
+そのため`handleSetNasFolder`はAbortError発生時に「キャンセルまたは失敗」の両方を
+まとめて案内するメッセージを表示する(片方だけを想定した文言にしない)。
+
+一方、`fileSystem.ts`の「ファイルを開く」「フォルダへ書き出し」は同じ既知バグの
+影響を受けない実装(`<input type="file">`・`chrome.downloads`)へ置き換え済み
+——NAS二層アーカイブだけが持続的なフォルダ書き込み権限を要求するため
+File System Access APIから離れられない。
+
 ## nativeMessaging.tsのテスト
 
 `chrome.runtime.connectNative`は`Port`を返す同期API。テストでは`connectNative`を

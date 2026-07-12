@@ -37,9 +37,22 @@
 
 ## M13 — SSD→NAS二層アーカイブ
 - [ ] データ管理パネルの「NASフォルダを設定」で実際のNAS上のフォルダを選択できるか
+      (**既知の問題**: Chromium拡張機能コンテキストの`showDirectoryPicker()`には
+      「フォルダを選んでもAbortErrorになる」既知バグがある——WICG/file-system-access#314、
+      crbug.com/issues/40240444。「設定しました」ではなく「キャンセルされたか、選択後に
+      失敗しました」と出た場合、Chromeを最新版に更新のうえ再試行する。src/lib/externalIO/
+      CLAUDE.md参照)
 - [ ] 「今すぐNASへ書き出し」で未archivedのスナップショットがNASへファイルとして
       書き出され、履歴パネルに「(NAS保管)」表示が付くか
 - [ ] NASを一時的に切断した状態でも履歴一覧の表示自体は壊れないか(degrade確認)
+
+## M13-b — ローカルファイルの読み込み/書き出し(2026-07-12修正)
+- [ ] データ管理パネルの「ファイルを開く」で.txtを選ぶと、ネイティブのファイル選択
+      ダイアログが出て、選んだファイルが新規ノートとして取り込まれるか
+- [ ] 「フォルダへ書き出し」で全ノートが`ダウンロード/new-tab-board-notes/`配下へ
+      `.md`ファイルとして書き出されるか(以前はshowDirectoryPickerの既知バグにより
+      拡張機能コンテキストで無反応になっていたため、chrome.downloads経由に変更した
+      ——保存先は「フォルダを選ぶ」ではなく既定のダウンロード先固定になった点に注意)
 
 ## M14 — Flow Launcher連携
 - [ ] 別リポジトリ側でnative messaging host(`docs/native-messaging-protocol.md`の

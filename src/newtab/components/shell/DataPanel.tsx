@@ -74,7 +74,7 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
 
   async function handleExportFolder() {
     await exportNotesToFolder(notes);
-    setMessage("フォルダへ書き出しました");
+    setMessage("ダウンロードフォルダの new-tab-board-notes/ へ書き出しました");
   }
 
   async function handleSetNasFolder() {
@@ -83,9 +83,18 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
       await setNasDirectoryHandle(handle);
       setMessage("NASフォルダを設定しました");
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
+      // Chromiumの拡張機能コンテキストにはshowDirectoryPicker()が正しくフォルダを
+      // 選んだ後でもAbortErrorを投げる既知の不具合がある(WICG/file-system-access#314、
+      // crbug.com/issues/40240444)。この既知バグとユーザーの意図的なキャンセルは
+      // どちらも同じAbortErrorとして届き、アプリ側からは区別できないため、無反応に
+      // 見えないよう両方のケースをまとめて案内する(fileSystem.tsのヘッダー参照)。
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setMessage(
+          "フォルダ選択がキャンセルされたか、選択後に失敗しました(Chromiumの既知の問題で、選択が実際は成功していても失敗扱いになることがあります。もう一度試すか、Chromeを最新版に更新してください)",
+        );
+        return;
+      }
       setMessage("NASフォルダの設定に失敗しました");
-      throw err;
     }
   }
 
@@ -113,7 +122,7 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
             type="button"
             variant="soft"
             data-testid="data-export-folder"
-            title="全ノートをそれぞれ.mdファイルとしてフォルダへ書き出す"
+            title="全ノートをそれぞれ.mdファイルとしてダウンロードフォルダのnew-tab-board-notes/へ書き出す"
             onClick={() => void handleExportFolder()}
           >
             🗂️ フォルダへ書き出し
