@@ -51,3 +51,20 @@ export function reorderNotes(notes: Note[], fromIndex: number, toIndex: number):
   sorted.splice(toIndex, 0, moved);
   return sorted.map((n, i) => ({ ...n, order: i }));
 }
+
+/** 横並び表示する最大3件のノートIDを解決する(SPEC.md §4.2)。
+ * ノートが3件以下なら全件を自動表示(選択不要)。4件以上ならrequestedIds(ユーザーが
+ * チェックボックスで選んだ順)を優先しつつ、3件に満たない分は表示順の先頭から
+ * 埋めて常に3件表示を維持する(削除済みIDはrequestedIdsから自然に除外される)。 */
+export function resolveVisibleNoteIds(notes: Note[], requestedIds: string[]): string[] {
+  const sorted = sortedNotes(notes);
+  if (sorted.length <= 3) return sorted.map((n) => n.id);
+
+  const validIds = new Set(sorted.map((n) => n.id));
+  const result = requestedIds.filter((id) => validIds.has(id)).slice(0, 3);
+  for (const note of sorted) {
+    if (result.length >= 3) break;
+    if (!result.includes(note.id)) result.push(note.id);
+  }
+  return result;
+}

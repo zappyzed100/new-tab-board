@@ -6,6 +6,7 @@ import {
   nextNoteLetterTitle,
   removeNote,
   reorderNotes,
+  resolveVisibleNoteIds,
   sortedNotes,
   updateNote,
 } from "./notes";
@@ -77,5 +78,32 @@ describe("nextNoteLetterTitle", () => {
 
   it("ノートA〜Z以外のタイトルは無視して判定する", () => {
     expect(nextNoteLetterTitle(["会議メモ", "ノートA"])).toBe("ノートB");
+  });
+});
+
+describe("resolveVisibleNoteIds", () => {
+  it("3件以下なら選択に関わらず全件を表示順で返す", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    expect(resolveVisibleNoteIds([a, b], [])).toEqual([a.id, b.id]);
+    expect(resolveVisibleNoteIds([a, b], ["dummy"])).toEqual([a.id, b.id]);
+  });
+
+  it("4件以上ならrequestedIdsを優先し、足りない分は表示順で埋めて3件にする", () => {
+    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
+    const [a, b, , d] = notes;
+    expect(resolveVisibleNoteIds(notes, [d.id])).toEqual([d.id, a.id, b.id]);
+  });
+
+  it("requestedIdsが4件以上あっても先頭3件だけを使う", () => {
+    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
+    const [a, b, c, d] = notes;
+    expect(resolveVisibleNoteIds(notes, [d.id, c.id, b.id, a.id])).toEqual([d.id, c.id, b.id]);
+  });
+
+  it("requestedIdsに削除済み(存在しない)IDが混じっていれば無視して埋め直す", () => {
+    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
+    const [a, b, c] = notes;
+    expect(resolveVisibleNoteIds(notes, ["gone", c.id])).toEqual([c.id, a.id, b.id]);
   });
 });

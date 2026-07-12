@@ -14,7 +14,7 @@
 // ピン留め機能のUIは撤去済み(データ上のnote.pinned/sortedNotesの並び順ロジック自体は
 // 互換性のため維持——インポートしたデータのpinned:trueも並び順には反映され続ける)。
 import { useState } from "react";
-import { IconButton, TextField } from "@radix-ui/themes";
+import { Checkbox, IconButton, TextField } from "@radix-ui/themes";
 import { Tabs } from "radix-ui";
 import {
   addNote,
@@ -30,11 +30,22 @@ import type { Note } from "../../../types";
 type Props = {
   notes: Note[];
   activeNoteId: string | null;
+  /** 横並び表示中のノートID(3件以下なら常に全件と一致)。 */
+  visibleNoteIds: string[];
   onNotesChange: (notes: Note[]) => void;
   onSelect: (noteId: string) => void;
+  /** 4件以上の時だけ使う「表示する3件」の選択トグル。 */
+  onToggleVisible: (noteId: string) => void;
 };
 
-export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props) {
+export function NoteTabs({
+  notes,
+  activeNoteId,
+  visibleNoteIds,
+  onNotesChange,
+  onSelect,
+  onToggleVisible,
+}: Props) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const sorted = sortedNotes(notes);
@@ -87,6 +98,15 @@ export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props
                   >
                     {note.title}
                   </span>
+                  {notes.length > 3 ? (
+                    <Checkbox
+                      data-testid={`note-tab-visible-${note.id}`}
+                      title="表示する3件に含める"
+                      checked={visibleNoteIds.includes(note.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onCheckedChange={() => onToggleVisible(note.id)}
+                    />
+                  ) : null}
                   <span
                     data-testid={`note-tab-delete-${note.id}`}
                     className="note-tab-close"

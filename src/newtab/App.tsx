@@ -1,19 +1,18 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
-import { BacklinksPanel } from "./components/notes/BacklinksPanel";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
+import { NoteEditorPane } from "./components/notes/NoteEditorPane";
 import { NoteTabs } from "./components/notes/NoteTabs";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
-import { SnapshotScheduler } from "./components/notes/SnapshotScheduler";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
-import { addNote, createNote, sortedNotes, updateNote } from "../lib/entities/notes";
+import { addNote, createNote, resolveVisibleNoteIds, sortedNotes } from "../lib/entities/notes";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
@@ -25,33 +24,14 @@ import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import { flushAllToNas } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
-import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
-import { useDriveSync } from "../lib/drive/useDriveSync";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
 
-const DRIVE_SYNC_LABEL: Record<string, string> = {
-  idle: "",
-  syncing: "同期中…",
-  synced: "☁同期済",
-  unauthenticated: "Drive未認証",
-  error: "同期エラー",
-};
-
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
 
-// CodeMirror本体はサイズが大きいため動的importで分割し、初期描画をブロックしない
-// (SPEC.md §8「新規タブは即座に描画」)。プレビュー用のmarkdown-it/DOMPurifyも同様。
-const Notepad = lazy(() =>
-  import("./components/notes/Notepad").then((m) => ({ default: m.Notepad })),
-);
-const MarkdownPreview = lazy(() =>
-  import("./components/notes/MarkdownPreview").then((m) => ({ default: m.MarkdownPreview })),
-);
-const HistoryPanel = lazy(() =>
-  import("./components/notes/HistoryPanel").then((m) => ({ default: m.HistoryPanel })),
-);
+// 全文検索は「全ノート横断」の性質上、複数ペイン表示でも唯一グローバルのまま
+// (プレビュー/履歴/エディタ本体はNoteEditorPane側でペインごとに動的import)。
 const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
@@ -61,10 +41,12 @@ export function App() {
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  // 4件以上ある時だけ意味を持つ「表示する3件」のユーザー選択(3件以下なら常に全件
+  // 表示のため無視される。resolveVisibleNoteIdsが実際に描画する集合へ解決する)。
+  const [requestedVisibleIds, setRequestedVisibleIds] = useState<string[]>([]);
   // 検索はノート編集エリア内のトグル(プレビュー/履歴と同じ並び)——ホーム画面レベルの
-  // 概念ではなく「今開いているノートに対する操作」として編集エリア側に置く。
+  // 概念ではなく「今開いているノートに対する操作」として編集エリア側に置く。全ノート
+  // 横断の性質上、複数ペイン表示でも唯一グローバルのまま(ペインごとには持たない)。
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
@@ -73,10 +55,9 @@ export function App() {
   // document.documentElement.dataset.themeへの書き込みと同時にstateへも保持し、
   // Radixの<Theme appearance>propへ同じ値を配線する(二重の解決ロジックを作らない)。
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
-  // 履歴からの復元はNotepad(CM6)の内部エディタ状態を作り直す必要があるため、
-  // 復元のたびにインクリメントしてNotepadのkeyへ含め、強制的に再マウントさせる
-  // (通常の入力ではCM6側が真実の源であり、外部からのcontent変更を静かに無視する設計のため)。
-  const [restoreCounter, setRestoreCounter] = useState(0);
+  // Cmd/Ctrl+Sで「見えている全ペイン」に即時スナップショット+Drive同期をキックする
+  // ための共有シグナル(各NoteEditorPaneがこの値の変化をuseEffectで監視する)。
+  const [manualSyncSignal, setManualSyncSignal] = useState(0);
   // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
   // 「ユーザーが自分でノートを選んだ」時だけノート本文へオートフォーカスする
   // (それ以外=起動直後の自動選択ではフォーカスを奪わない)。
@@ -84,6 +65,24 @@ export function App() {
   function selectNote(noteId: string) {
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
+    // 横並び表示にも入れる(すでに3件表示中なら最も古いものと入れ替える)。
+    setRequestedVisibleIds((prev) =>
+      prev.includes(noteId)
+        ? prev
+        : prev.length >= 3
+          ? [...prev.slice(1), noteId]
+          : [...prev, noteId],
+    );
+  }
+
+  function toggleVisible(noteId: string) {
+    setRequestedVisibleIds((prev) =>
+      prev.includes(noteId)
+        ? prev.filter((id) => id !== noteId)
+        : prev.length >= 3
+          ? [...prev.slice(1), noteId]
+          : [...prev, noteId],
+    );
   }
 
   useEffect(() => {
@@ -148,16 +147,14 @@ export function App() {
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
-  const activeNote = notes?.find((n) => n.id === activeNoteId) ?? null;
-
-  const { status: driveSyncStatus, syncNow: syncDriveNow } = useDriveSync(
-    activeNote,
-    (driveFileId, lastSyncedAt) => {
-      if (notes && activeNote) {
-        updateNotes(updateNote(notes, activeNote.id, { driveFileId, lastSyncedAt }));
-      }
-    },
+  // 横並び表示する最大3件(3件以下なら全件・4件以上ならrequestedVisibleIds+自動補完)。
+  const visibleNoteIds = useMemo(
+    () => resolveVisibleNoteIds(orderedNotes, requestedVisibleIds),
+    [orderedNotes, requestedVisibleIds],
   );
+  const visibleNotes = visibleNoteIds
+    .map((id) => notes?.find((n) => n.id === id))
+    .filter((n): n is Note => n !== undefined);
 
   // 全データ(ブックマーク/ノート/設定/TODO)のJSONバックアップをdebounce付きで自動的に
   // Driveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
@@ -182,10 +179,9 @@ export function App() {
   useGlobalShortcuts(shortcutRegistry, {
     toggleSearch: () => setShowSearch((v) => !v),
     cheatSheet: () => setShowShortcutsModal(true),
-    immediateSnapshot: () => {
-      if (activeNote) void forceSnapshot(activeNote.id, activeNote.content);
-      syncDriveNow(true);
-    },
+    // 表示中の全ペイン(NoteEditorPane)がmanualSyncSignalの変化を検知し、
+    // それぞれ自分のノートを即時スナップショット+Drive同期する。
+    immediateSnapshot: () => setManualSyncSignal((v) => v + 1),
     ...Object.fromEntries(orderedNotes.map((n, i) => [`noteJump-${i}`, () => selectNote(n.id)])),
     ...Object.fromEntries(
       orderedBookmarks.map((b, i) => [
@@ -353,17 +349,6 @@ export function App() {
                 >
                   ⌨️ ショートカット一覧(?)
                 </Button>
-
-                {activeNote && DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-                  <Text
-                    size="1"
-                    color="gray"
-                    data-testid="drive-sync-status"
-                    title="このノートのGoogle Drive自動同期の状態"
-                  >
-                    {DRIVE_SYNC_LABEL[driveSyncStatus]}
-                  </Text>
-                ) : null}
               </nav>
             </Flex>
 
@@ -380,104 +365,53 @@ export function App() {
                 <TodoList todos={todos} onTodosChange={updateTodos} />
               </div>
               <section className="app-notes">
-                <NoteTabs
-                  notes={notes}
-                  activeNoteId={activeNoteId}
-                  onNotesChange={updateNotes}
-                  onSelect={selectNote}
-                />
-                {activeNote ? (
-                  <Card data-testid="note-editor-area">
-                    <Flex direction="column" gap="3">
-                      <SnapshotScheduler
-                        key={activeNote.id}
-                        noteId={activeNote.id}
-                        content={activeNote.content}
-                      />
-                      <Flex align="center" gap="3" wrap="wrap">
-                        <Button
-                          type="button"
-                          variant={showPreview ? "solid" : "soft"}
-                          data-testid="toggle-preview"
-                          title="Markdown記法(見出し・リスト等)を清書して表示する"
-                          onClick={() => setShowPreview((v) => !v)}
-                        >
-                          {showPreview ? "編集に戻る" : "Markdownプレビュー"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={showHistory ? "solid" : "soft"}
-                          data-testid="toggle-history"
-                          title="過去のスナップショット一覧・差分表示・復元"
-                          onClick={() => setShowHistory((v) => !v)}
-                        >
-                          🕑 {showHistory ? "履歴を閉じる" : "履歴"}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={showSearch ? "solid" : "soft"}
-                          aria-pressed={showSearch}
-                          data-testid="toggle-search"
-                          title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
-                          onClick={() => setShowSearch((v) => !v)}
-                        >
-                          🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
-                        </Button>
-                      </Flex>
-                      {showSearch ? (
-                        <Suspense
-                          fallback={<div data-testid="search-loading">検索を読み込み中…</div>}
-                        >
-                          <SearchPanel
-                            notes={notes}
-                            onSelectNote={(noteId) => {
-                              selectNote(noteId);
-                              setShowSearch(false);
-                            }}
-                          />
-                        </Suspense>
-                      ) : null}
-                      {showHistory ? (
-                        <Suspense
-                          fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}
-                        >
-                          <HistoryPanel
-                            key={`history-${activeNote.id}`}
-                            noteId={activeNote.id}
-                            currentContent={activeNote.content}
-                            onRestore={(content) => {
-                              updateNotes(updateNote(notes, activeNote.id, { content }));
-                              setRestoreCounter((c) => c + 1);
-                            }}
-                          />
-                        </Suspense>
-                      ) : null}
-                      <Suspense
-                        fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}
-                      >
-                        {showPreview ? (
-                          <MarkdownPreview
-                            content={activeNote.content}
-                            onNavigateToNote={selectNoteByTitle}
-                          />
-                        ) : (
-                          <Notepad
-                            key={`editor-${activeNote.id}-${restoreCounter}`}
-                            content={activeNote.content}
-                            autoFocus={userSelectedNoteRef.current}
-                            onContentChange={(content) =>
-                              updateNotes(updateNote(notes, activeNote.id, { content }))
-                            }
-                          />
-                        )}
-                      </Suspense>
-                      <BacklinksPanel
+                <Flex align="center" gap="3" wrap="wrap">
+                  <NoteTabs
+                    notes={notes}
+                    activeNoteId={activeNoteId}
+                    visibleNoteIds={visibleNoteIds}
+                    onNotesChange={updateNotes}
+                    onSelect={selectNote}
+                    onToggleVisible={toggleVisible}
+                  />
+                  <Button
+                    type="button"
+                    variant={showSearch ? "solid" : "soft"}
+                    aria-pressed={showSearch}
+                    data-testid="toggle-search"
+                    title="全ノートの本文を横断して全文検索する(Cmd/Ctrl+F)"
+                    onClick={() => setShowSearch((v) => !v)}
+                  >
+                    🔍 {showSearch ? "検索を閉じる" : "検索(Ctrl+F)"}
+                  </Button>
+                </Flex>
+                {showSearch ? (
+                  <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+                    <SearchPanel
+                      notes={notes}
+                      onSelectNote={(noteId) => {
+                        selectNote(noteId);
+                        setShowSearch(false);
+                      }}
+                    />
+                  </Suspense>
+                ) : null}
+                {visibleNotes.length > 0 ? (
+                  <Flex gap="3" className="note-editor-panes">
+                    {visibleNotes.map((note) => (
+                      <NoteEditorPane
+                        key={note.id}
+                        note={note}
                         notes={notes}
-                        activeNote={activeNote}
+                        isActive={note.id === activeNoteId}
+                        autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                        manualSyncSignal={manualSyncSignal}
+                        onNotesChange={updateNotes}
                         onSelectNote={selectNote}
+                        onSelectNoteByTitle={selectNoteByTitle}
                       />
-                    </Flex>
-                  </Card>
+                    ))}
+                  </Flex>
                 ) : (
                   <Card data-testid="no-notes">
                     <Text size="3" weight="medium" color="indigo">
