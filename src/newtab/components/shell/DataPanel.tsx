@@ -29,6 +29,10 @@ type Props = {
 
 export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
+  // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
+  // 押した時だけその右に出す(ブックマーク/ノートの編集フォームと同じ「押したら
+  // その場に出る」パターン)。
+  const [showNasInput, setShowNasInput] = useState(false);
 
   useEffect(() => {
     void getNasFolderPath().then((path) => {
@@ -108,6 +112,7 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
       return;
     }
     await setNasFolderPath(path);
+    setShowNasInput(false);
     onMessage("NASフォルダを設定しました");
   }
 
@@ -148,22 +153,39 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
         >
           ☁️ Driveから復元
         </Button>
-        <TextField.Root
-          aria-label="NASフォルダのパス"
-          placeholder="例: Z:\NAS\backup"
-          data-testid="data-nas-path-input"
-          value={nasPathInput}
-          onChange={(e) => setNasPathInput(e.target.value)}
-        />
         <Button
           type="button"
-          variant="soft"
+          variant={showNasInput ? "solid" : "soft"}
           data-testid="data-set-nas-folder"
-          title="履歴の長期保管先(NASの共有フォルダ等)のパスを保存する"
-          onClick={() => void handleSaveNasPath()}
+          title="履歴の長期保管先(NASの共有フォルダ等)のパスを設定する"
+          onClick={() => setShowNasInput((v) => !v)}
         >
-          📁 NASフォルダを保存
+          📁 NASフォルダを設定
         </Button>
+        {showNasInput ? (
+          <>
+            <TextField.Root
+              aria-label="NASフォルダのパス"
+              placeholder="例: Z:\NAS\backup"
+              data-testid="data-nas-path-input"
+              autoFocus
+              value={nasPathInput}
+              onChange={(e) => setNasPathInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveNasPath();
+              }}
+            />
+            <Button
+              type="button"
+              variant="soft"
+              data-testid="data-save-nas-path"
+              title="入力したパスを保存する"
+              onClick={() => void handleSaveNasPath()}
+            >
+              保存
+            </Button>
+          </>
+        ) : null}
         {/* 設定系ボタンとして配列の一番右に配置(ユーザー指示)。 */}
         <Button
           type="button"
