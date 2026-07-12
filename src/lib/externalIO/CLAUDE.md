@@ -1,20 +1,30 @@
 # src/lib/externalIO/ — フォルダ固有の知見
 
-## fake-indexeddbは関数を持つオブジェクトを保存できない(DataCloneError)
+## showDirectoryPicker()のChromium既知バグでNASはNative Messaging方式へ移行済み(2026-07-12)
 
-`nasArchive.ts`はNASフォルダの`FileSystemDirectoryHandle`をIndexedDBへ直接保存する
-設計(ブラウザ仕様上は可能)。しかし`fake-indexeddb`(このプロジェクトのテスト環境)は
-`getFileHandle`等のメソッドを持つオブジェクトの構造化複製を`DataCloneError`で拒否する。
+NAS二層アーカイブ(`nasArchive.ts`)は元々`window.showDirectoryPicker()`で得た
+`FileSystemDirectoryHandle`を使っていたが、Chrome拡張機能のページから呼ぶと
+**ユーザーが実際にフォルダを選択してもAbortErrorで即座に失敗する**という
+Chromium側の既知バグ(WICG/file-system-access#314、crbug.com/issues/40240444。
+拡張機能コンテキスト特有・Chromeバージョンによって再現したりしなかったりする)が
+実機で解消できず(エラーメッセージすら出ない完全な無反応だった)、ユーザー指示に
+より`native-host/nas_bridge.py`(NASブリッジ・Native Messaging host。このリポジトリに
+同梱)経由のパス文字列方式へ移行した。契約は
+`docs/nas-native-messaging-protocol.md`、拡張側クライアントは`nasNativeHost.ts`。
 
-**これはfake-indexeddb固有のバグではない**——手作りのフェイクディレクトリハンドルを
-実際のChromeのIndexedDBへ保存しようとしたときも、同じ`DataCloneError`が実ブラウザで
-再現した(Playwright MCPで実機確認済み)。つまり「関数プロパティを持つオブジェクトの
-構造化複製」自体が本物の制約で、テスト環境だけの近似ではない。
+`fileSystem.ts`にも元々showDirectoryPickerを使う「フォルダへ書き出し」機能が
+あったが、同じ理由でボタンごと撤去した。「ファイルを開く」だけは
+`<input type="file">`へ置き換え済み(この既知バグの対象は`showDirectoryPicker`の
+方だけで`showOpenFilePicker`は影響を受けない)。
 
-対処は`nasArchive.ts`の関数群(`flushAllToNas`/`readArchivedSnapshot`/`getSnapshotBody`)
-が`getNasDirectoryHandle`を依存注入で受け取れる形にすること——テストでは実IndexedDB
-経由の保存を完全にバイパスしたフェイクハンドルを直接渡す。新しく似た関数を書くときも
-このパターンを踏襲する。
+## nasArchive.test.ts / nasNativeHost.test.tsはNASブリッジをフェイクに差し替える
+
+`nasArchive.ts`の関数群(`flushAllToNas`/`readArchivedSnapshot`/`getSnapshotBody`)は
+`getNasFolderPath`/`probeNasPath`/`writeFileToNas`/`readFileFromNas`を依存注入で
+受け取れる形になっている——テストでは実IndexedDB・実native messagingを経由しない
+フェイク関数を直接渡す。`nasNativeHost.ts`自体のテストは`connectNative`を差し替え、
+フェイク`chrome.runtime.Port`の`onMessage`/`onDisconnect`を手動発火させる
+(`nativeMessaging.test.ts`と同じパターン)。
 
 ## fake-indexeddbの状態は同一テストファイル内で永続する
 
@@ -23,29 +33,18 @@
 次のテストの集計件数に混入するバグを`nasArchive.test.ts`で実際に踏んだ——集計件数の
 比較ではなく、特定IDの状態を個別にassertする形で回避すること。
 
-## showDirectoryPicker()はChromium拡張機能コンテキストで既知の不具合がある
-
-NAS二層アーカイブ(`nasArchive.ts`)は`FileSystemDirectoryHandle`の持続的な書き込み
-権限が必須のため`window.showDirectoryPicker()`(呼び出しは`DataPanel.tsx`の
-`handleSetNasFolder`)を使う。しかしChrome拡張機能のページから呼ぶと、
-**ユーザーが実際にフォルダを選択してもAbortErrorで即座に失敗する**という
-Chromium側の既知バグがある(WICG/file-system-access#314、crbug.com/issues/40240444。
-拡張機能コンテキスト特有・Chromeバージョンによって再現したりしなかったりする)。
-
-このバグが原因のAbortErrorと、ユーザーが本当にダイアログをキャンセルした場合の
-AbortErrorは**アプリのコードからは区別不可能**(どちらも同じ`DOMException`)。
-そのため`handleSetNasFolder`はAbortError発生時に「キャンセルまたは失敗」の両方を
-まとめて案内するメッセージを表示する(片方だけを想定した文言にしない)。
-
-`fileSystem.ts`にも元々「フォルダへ書き出し」(showDirectoryPickerで選んだフォルダへ
-全ノートを書き出す)機能があったが、この既知バグが実機で解消できず(選択後に
-エラーメッセージすら出ない完全な無反応だった)、ユーザー指示によりボタンごと撤去した
-(2026-07-12)。`fileSystem.ts`の「ファイルを開く」だけは`<input type="file">`へ
-置き換え済みで、この既知バグの影響を受けない。
-
-## nativeMessaging.tsのテスト
+## nativeMessaging.ts / nasNativeHost.tsのテスト
 
 `chrome.runtime.connectNative`は`Port`を返す同期API。テストでは`connectNative`を
 引数として差し替え可能にし(`ConnectNativeFn`)、フェイクPortの`onMessage`/`onDisconnect`
 リスナーを手動で発火させる形でチャンク分割・再結合・エラー処理を検証する
-(`nativeMessaging.test.ts`のパターンを踏襲)。
+(`nativeMessaging.test.ts`のパターンを踏襲)。`nasNativeHost.ts`はFlow Launcher連携と
+違い各操作が接続→1メッセージ送信→1メッセージ受信→切断の1往復で完結するため、
+チャンク分割のテストは無い。
+
+## native-host/(Pythonのnative messaging host本体)は別ディレクトリ
+
+`native-host/`はこのフォルダ(`src/lib/externalIO/`)とは別に、リポジトリ直下に
+同梱している(TypeScript/Reactのレイヤー構成とは独立した第三の言語ランタイム)。
+テストは`native-host/test_nas_bridge.py`(pytest)。導入手順は`native-host/README.md`、
+設計根拠は`plan.md`の「native-host/」節を参照。

@@ -5,13 +5,13 @@ import {
   getAllIndexEntries,
   getAllSnapshots,
   getIndexEntry,
-  getNasDirectoryHandle,
+  getNasFolderPath,
   getSnapshot,
   getSnapshotsByNote,
   markSnapshotArchived,
   putIndexEntry,
   putSnapshot,
-  setNasDirectoryHandle,
+  setNasFolderPath,
 } from "./db";
 
 describe("snapshots", () => {
@@ -87,14 +87,13 @@ describe("searchIndex", () => {
   });
 });
 
-describe("NASディレクトリハンドル", () => {
+describe("NASフォルダのパス", () => {
   it("未設定ならundefinedを返す", async () => {
-    expect(await getNasDirectoryHandle()).toBeUndefined();
+    expect(await getNasFolderPath()).toBeUndefined();
   });
 
   it("put/get で往復できる", async () => {
-    const fakeHandle = { kind: "directory", name: "archive" };
-    await setNasDirectoryHandle(fakeHandle as unknown as FileSystemDirectoryHandle);
-    expect(await getNasDirectoryHandle()).toEqual(fakeHandle);
+    await setNasFolderPath("Z:\\NAS\\backup");
+    expect(await getNasFolderPath()).toBe("Z:\\NAS\\backup");
   });
 });

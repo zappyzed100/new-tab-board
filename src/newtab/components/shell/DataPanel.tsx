@@ -7,11 +7,13 @@
 // ——このコンポーネント内で持つと、隣接する「ショートカット一覧」ボタンとwidth:100%の
 // メッセージが同じflexコンテナで並ぶため、メッセージの有無でショートカットボタンの
 // 表示位置がガタつく(ユーザー指摘)。
-import { Button, Flex } from "@radix-ui/themes";
-import { setNasDirectoryHandle } from "../../../lib/storage/db";
+import { useEffect, useState } from "react";
+import { Button, Flex, TextField } from "@radix-ui/themes";
+import { getNasFolderPath, setNasFolderPath } from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
+import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
 import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import type { AppLaunch, Bookmark, Note, Settings } from "../../../types";
@@ -26,6 +28,13 @@ type Props = {
 };
 
 export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: Props) {
+  const [nasPathInput, setNasPathInput] = useState("");
+
+  useEffect(() => {
+    void getNasFolderPath().then((path) => {
+      if (path) setNasPathInput(path);
+    });
+  }, []);
   async function handleConnectDrive() {
     const { token, error } = await getAuthTokenWithError(true);
     onMessage(
@@ -80,29 +89,26 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
     onMessage(`「${title}」をノートとして読み込みました`);
   }
 
-  async function handleSetNasFolder() {
-    try {
-      const handle = await window.showDirectoryPicker();
-      await setNasDirectoryHandle(handle);
-      onMessage("NASフォルダを設定しました");
-    } catch (err) {
-      // Chromiumの拡張機能コンテキストにはshowDirectoryPicker()が正しくフォルダを
-      // 選んだ後でもAbortErrorを投げる既知の不具合がある(WICG/file-system-access#314、
-      // crbug.com/issues/40240444)。この既知バグとユーザーの意図的なキャンセルは
-      // どちらも同じAbortErrorとして届き、アプリ側からは区別できないため、無反応に
-      // 見えないよう両方のケースをまとめて案内する(fileSystem.tsのヘッダー参照)。
-      if (err instanceof DOMException && err.name === "AbortError") {
-        onMessage(
-          "フォルダ選択がキャンセルされたか、選択後に失敗しました(Chromiumの既知の問題で、選択が実際は成功していても失敗扱いになることがあります。もう一度試すか、Chromeを最新版に更新してください)",
-        );
-        return;
-      }
-      // 原因の切り分けのため、実際のエラー名/メッセージをそのまま案内に含める
-      // (「失敗しました」とだけ出しても、キャンセルとの違いはおろか原因の手がかりが
-      // 一切残らず調査できないため)。
-      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      onMessage(`NASフォルダの設定に失敗しました(${detail})`);
+  async function handleSaveNasPath() {
+    const path = nasPathInput.trim();
+    if (!path) {
+      onMessage("NASフォルダのパスを入力してください");
+      return;
     }
+    // 拡張機能はサンドボックスの都合上パス文字列だけでは読み書きできないため、
+    // native-host/nas_bridge.py(NASブリッジ)へ実際に到達確認する。host未導入
+    // ならここで検出できる(showDirectoryPickerの既知バグを回避する本格対応
+    // ——docs/nas-native-messaging-protocol.md参照)。
+    const reachable = await probeNasPath(path);
+    if (!reachable) {
+      onMessage(
+        "NASフォルダに到達できませんでした(パスが正しいか、native-host/README.mdの手順で" +
+          "NASブリッジを導入済みか確認してください)",
+      );
+      return;
+    }
+    await setNasFolderPath(path);
+    onMessage("NASフォルダを設定しました");
   }
 
   async function handleFlushNow() {
@@ -142,14 +148,21 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
         >
           ☁️ Driveから復元
         </Button>
+        <TextField.Root
+          aria-label="NASフォルダのパス"
+          placeholder="例: Z:\NAS\backup"
+          data-testid="data-nas-path-input"
+          value={nasPathInput}
+          onChange={(e) => setNasPathInput(e.target.value)}
+        />
         <Button
           type="button"
           variant="soft"
           data-testid="data-set-nas-folder"
-          title="履歴の長期保管先(NASの共有フォルダ等)を選ぶ"
-          onClick={() => void handleSetNasFolder()}
+          title="履歴の長期保管先(NASの共有フォルダ等)のパスを保存する"
+          onClick={() => void handleSaveNasPath()}
         >
-          📁 NASフォルダを設定
+          📁 NASフォルダを保存
         </Button>
         {/* 設定系ボタンとして配列の一番右に配置(ユーザー指示)。 */}
         <Button

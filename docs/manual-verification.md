@@ -35,13 +35,16 @@
 - [ ] `chrome.notifications`の通知(停止ボタン付き)が出るか
 - [ ] 通知の「停止」ボタン、またはnew-tab上の「アラーム停止」ボタンで音が止まるか
 
-## M13 — SSD→NAS二層アーカイブ
-- [ ] データ管理パネルの「NASフォルダを設定」で実際のNAS上のフォルダを選択できるか
-      (**既知の問題**: Chromium拡張機能コンテキストの`showDirectoryPicker()`には
-      「フォルダを選んでもAbortErrorになる」既知バグがある——WICG/file-system-access#314、
-      crbug.com/issues/40240444。「設定しました」ではなく「キャンセルされたか、選択後に
-      失敗しました」と出た場合、Chromeを最新版に更新のうえ再試行する。src/lib/externalIO/
-      CLAUDE.md参照)
+## M13 — SSD→NAS二層アーカイブ(2026-07-12: Native Messaging方式へ移行)
+showDirectoryPicker()の既知バグ(WICG/file-system-access#314、
+crbug.com/issues/40240444——選択後もAbortErrorになり、実機でエラーメッセージすら
+出ない無反応のままだった)が解消できなかったため、Native Messaging
+(`native-host/nas_bridge.py`)経由のパス入力方式へ移行した。
+- [ ] `native-host/README.md`の手順で`python install_windows.py`を実行し、
+      NASブリッジをOSへ登録できるか
+- [ ] データ管理パネルの「NASフォルダのパス」欄にパス(例: `Z:\NAS\backup`)を
+      入力して「NASフォルダを保存」を押すと、「NASフォルダを設定しました」と
+      出るか(host未導入や到達不可の場合は「到達できませんでした」と出るか)
 - [ ] 「今すぐNASへ書き出し」で未archivedのスナップショットがNASへファイルとして
       書き出され、履歴パネルに「(NAS保管)」表示が付くか
 - [ ] NASを一時的に切断した状態でも履歴一覧の表示自体は壊れないか(degrade確認)

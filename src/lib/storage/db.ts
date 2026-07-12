@@ -3,7 +3,7 @@ import { type DBSchema, type IDBPDatabase, openDB } from "idb";
 import type { IndexEntry, Snapshot } from "../../types";
 import { logOp } from "../runtime/log";
 
-const NAS_HANDLE_KEY = "nasDirectoryHandle";
+const NAS_FOLDER_PATH_KEY = "nasFolderPath";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -17,7 +17,6 @@ interface AppDB extends DBSchema {
   };
   settings: {
     key: string;
-    // FileSystemDirectoryHandleは構造化複製可能でIndexedDBへ直接保存できる(ブラウザ仕様)。
     value: unknown;
   };
 }
@@ -96,13 +95,15 @@ export async function getAllIndexEntries(): Promise<IndexEntry[]> {
   return db.getAll("searchIndex");
 }
 
-export async function getNasDirectoryHandle(): Promise<FileSystemDirectoryHandle | undefined> {
+/** NASフォルダのパス文字列(例: "Z:\\NAS\\backup")を返す。未設定ならundefined。
+ * native-host/nas_bridge.py(NASブリッジ)へそのまま渡す絶対パス。 */
+export async function getNasFolderPath(): Promise<string | undefined> {
   const db = await getDb();
-  return db.get("settings", NAS_HANDLE_KEY) as Promise<FileSystemDirectoryHandle | undefined>;
+  return db.get("settings", NAS_FOLDER_PATH_KEY) as Promise<string | undefined>;
 }
 
-export async function setNasDirectoryHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+export async function setNasFolderPath(path: string): Promise<void> {
   const db = await getDb();
-  await db.put("settings", handle, NAS_HANDLE_KEY);
-  logOp("db", "put", "settings/nasDirectoryHandle");
+  await db.put("settings", path, NAS_FOLDER_PATH_KEY);
+  logOp("db", "put", "settings/nasFolderPath");
 }

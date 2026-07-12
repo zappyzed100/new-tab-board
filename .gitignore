@@ -20,3 +20,7 @@ test-results/
 .pw-user-data/
 .time-freeze.json
 .playwright-mcp/
+# native-host/install_windows.py が生成するマシン固有ファイル(絶対パスを含む)
+native-host/nas_bridge.bat
+native-host/com.newtabboard.nas_bridge.json
+native-host/.pytest_cache/

@@ -51,6 +51,7 @@
 - `docs/guardrails/GOALS.md`
 - `docs/guardrails/GUARDRAILS.md`
 - `docs/manual-verification.md`
+- `docs/nas-native-messaging-protocol.md`
 - `docs/native-messaging-protocol.md`
 - `docs/stack.md`
 - `docs/ui-parts.md`
@@ -62,11 +63,19 @@
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
+- `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — NoteTabs周りの状態競合バグの回帰まとめ(§13昇格対象)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
+
+## `native-host/`
+
+- `native-host/README.md`
+- `native-host/install_windows.py` — install_windows.py — NASブリッジnative messaging hostをWindowsへ登録する
+- `native-host/nas_bridge.py` — nas_bridge.py — New Tab BoardのNASブリッジ native messaging host
+- `native-host/test_nas_bridge.py` — test_nas_bridge.py — nas_bridge.py(NASブリッジnative messaging host)の単体テスト
 
 ## `public/`
 
@@ -126,6 +135,8 @@
 - `src/lib/externalIO/CLAUDE.md`
 - `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
 - `src/lib/externalIO/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
+- `src/lib/externalIO/nasNativeHost.test.ts` — nasNativeHost.test.ts — nasNativeHost.ts(NASブリッジnative messagingクライアント)の単体テスト
+- `src/lib/externalIO/nasNativeHost.ts` — nasNativeHost.ts — NASブリッジ native messaging hostの拡張側クライアント(SPEC.md §4.3)
 - `src/lib/externalIO/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
 - `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
@@ -186,7 +197,7 @@
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/newtab/styles.css`
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
-- `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージ・APIのアンビエント宣言
+- `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
 
 ## `tests/`
@@ -232,6 +243,26 @@
 ### `e2e/fixtures.ts`
 - const test
 - const expect
+
+### `native-host/install_windows.py`
+- def main
+
+### `native-host/nas_bridge.py`
+- def read_message
+- def send_message
+- def handle_probe
+- def handle_write_file
+- def handle_read_file
+- def handle
+- def main
+
+### `native-host/test_nas_bridge.py`
+- def test_probe_success
+- def test_probe_failure_for_nonexistent_path
+- def test_write_file_then_read_file_roundtrip
+- def test_write_file_failure_for_nonexistent_directory
+- def test_read_file_failure_for_missing_file
+- def test_unknown_message_type_returns_error
 
 ### `scripts/check_bootstrap.py`
 - def parse_ledger
@@ -427,11 +458,17 @@
 - function sortedTodos
 
 ### `src/lib/externalIO/nasArchive.ts`
-- function probeNasReachable
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot
 - function getSnapshotBody
+
+### `src/lib/externalIO/nasNativeHost.ts`
+- const NAS_HOST_NAME
+- type ConnectNativeFn
+- function probeNasPath
+- function writeFileToNas
+- function readFileFromNas
 
 ### `src/lib/externalIO/nativeMessaging.ts`
 - const NATIVE_HOST_NAME
@@ -530,8 +567,8 @@
 - function putIndexEntry
 - function getIndexEntry
 - function getAllIndexEntries
-- function getNasDirectoryHandle
-- function setNasDirectoryHandle
+- function getNasFolderPath
+- function setNasFolderPath
 
 ### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS
