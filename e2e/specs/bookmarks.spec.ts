@@ -12,10 +12,13 @@ test("ブックマークの追加→編集→削除が一連で動く", async ({
   await page.getByTestId("bookmark-add-form-save").click();
   await expect(page.getByTestId("bookmark-grid")).toContainText("example.com");
 
-  // --- 編集(URLだけ貼り替える。名称は新しいホスト名から自動で付け直る) ---
+  // --- 編集(URLと表示名をそれぞれ貼り替える。表示名は独立して編集可能——
+  //     未入力のまま保存した場合だけURLのホスト名から自動で付け直す) ---
   await page.locator('[data-testid^="bookmark-edit-"]').click();
   const urlInput = page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-url"]');
   await urlInput.fill("https://example.org");
+  const labelInput = page.locator('[data-testid^="bookmark-edit-form-"][data-testid$="-label"]');
+  await labelInput.fill("example.org");
 
   // 編集フォーム内の保存/キャンセルボタンは、丸い編集/削除アイコンボタン用CSS
   // ([data-testid^="bookmark-edit-"])に前方一致で誤って巻き込まれ、28x28pxの

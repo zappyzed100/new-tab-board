@@ -175,12 +175,12 @@ body {
   border: 1px solid var(--border);
   background: var(--surface-2);
   border-radius: var(--radius-sm);
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 34px;
   box-shadow: var(--shadow-btn);
   transition:
     transform 0.1s ease,
@@ -194,12 +194,17 @@ body {
 }
 
 [data-testid^="bookmark-label-"] {
-  font-size: 11px;
+  font-size: 22px;
+  font-weight: 700;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  /* 親(bookmark-cell-*)はalign-items:centerでcross軸方向に子を伸縮させないため、
+     max-width:100%は子自身の内容幅を基準にしてしまい機能しない(隣のセルへ文字が
+     はみ出して重なるバグがあった)。グリッド列幅(84px)と同じ値を直接指定して
+     必ず収まるようにする。 */
+  max-width: 84px;
 }
 
 /* 編集/削除はアイコンと重ならない通常フロー(ラベル下の小さい行)に配置する——

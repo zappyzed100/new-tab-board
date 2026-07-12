@@ -43,7 +43,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
 
   return (
     <Card data-testid="bookmark-grid">
-      <Grid columns="repeat(auto-fill, 64px)" gap="2">
+      <Grid columns="repeat(auto-fill, 84px)" gap="2">
         {sorted.map((bookmark, index) => (
           <div
             key={bookmark.id}
@@ -151,14 +151,14 @@ function BookmarkIcon({ bookmark }: { bookmark: Bookmark }) {
     return <span aria-hidden>{bookmark.icon.value}</span>;
   }
   if (bookmark.icon.type === "image" && bookmark.icon.value) {
-    return <img src={bookmark.icon.value} alt="" width={24} height={24} />;
+    return <img src={bookmark.icon.value} alt="" width={32} height={32} />;
   }
   return (
     <img
       src={`https://www.google.com/s2/favicons?domain=${safeHostname(bookmark.url)}&sz=32`}
       alt=""
-      width={24}
-      height={24}
+      width={32}
+      height={32}
     />
   );
 }
@@ -180,17 +180,19 @@ function BookmarkEditForm({
   onSave: (patch: { url: string; label: string; alias?: string }) => void;
   onCancel: () => void;
 }) {
-  // 追加・編集ともURLだけ貼り替えればよい(名称はURLのホスト名から自動で付け、
-  // アイコンはBookmarkIconの既定動作(favicon種別)でURLから自動取得される)。
-  // エイリアスはUIから編集する経路が無くなったため既存値をそのまま引き継ぐ。
+  // 表示名は明示的に編集できる(未入力のまま保存した場合だけURLのホスト名から
+  // 自動で付ける)。アイコンはBookmarkIconの既定動作(favicon種別)でURLから
+  // 自動取得される。エイリアスはUIから編集する経路が無くなったため既存値を
+  // そのまま引き継ぐ。
   const [url, setUrl] = useState(bookmark?.url ?? "");
+  const [label, setLabel] = useState(bookmark?.label ?? "");
   const testIdBase = bookmark ? `bookmark-edit-form-${bookmark.id}` : "bookmark-add-form";
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const derivedLabel = safeHostname(url) || url;
-    if (!url || !derivedLabel) return;
-    onSave({ url, label: derivedLabel, alias: bookmark?.alias });
+    const finalLabel = label.trim() || safeHostname(url) || url;
+    if (!url || !finalLabel) return;
+    onSave({ url, label: finalLabel, alias: bookmark?.alias });
   }
 
   return (
@@ -202,6 +204,13 @@ function BookmarkEditForm({
           data-testid={`${testIdBase}-url`}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
+        />
+        <TextField.Root
+          aria-label="表示名"
+          placeholder="表示名(未入力ならURLから自動で付けます)"
+          data-testid={`${testIdBase}-label`}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
         />
         <Flex gap="1">
           <Button type="submit" variant="solid" data-testid={`${testIdBase}-save`}>
