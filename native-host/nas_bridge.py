@@ -157,12 +157,34 @@ def handle_search(message: dict) -> dict:
         return {"type": "search-result", "ok": False, "error": str(exc)}
 
 
+def handle_list_tree(message: dict) -> dict:
+    """subdir(例: "library")配下の .md ファイルを相対パスで再帰列挙する(ライブラリのツリー閲覧用)。
+    フォルダが無ければ空リスト。baseの外へ出るsubdirは拒否。"""
+    try:
+        base = message["path"]
+        subdir = message.get("subdir", "")
+        root = _safe_target(base, subdir) if subdir else os.path.abspath(base)
+        if not os.path.isdir(root):
+            return {"type": "list-tree-result", "ok": True, "files": []}
+        files = []
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for name in filenames:
+                if name.endswith(".md"):
+                    rel = os.path.relpath(os.path.join(dirpath, name), root).replace("\\", "/")
+                    files.append(rel)
+        files.sort()
+        return {"type": "list-tree-result", "ok": True, "files": files}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "list-tree-result", "ok": False, "error": str(exc)}
+
+
 HANDLERS = {
     "probe": handle_probe,
     "write-file": handle_write_file,
     "read-file": handle_read_file,
     "rebuild-index": handle_rebuild_index,
     "search": handle_search,
+    "list-tree": handle_list_tree,
 }
 
 

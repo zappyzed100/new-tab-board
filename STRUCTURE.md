@@ -275,6 +275,7 @@
 - def handle_read_file
 - def handle_rebuild_index
 - def handle_search
+- def handle_list_tree
 - def handle
 - def main
 
@@ -298,6 +299,8 @@
 - def test_write_file_rejects_path_traversal
 - def test_rebuild_index_then_search_by_tag_and_text
 - def test_search_without_index_returns_error
+- def test_list_tree_lists_md_recursively
+- def test_list_tree_missing_folder_is_empty
 - def test_unknown_message_type_returns_error
 
 ### `scripts/check_bootstrap.py`
@@ -519,6 +522,7 @@
 - function writeFileToNas
 - function readFileFromNas
 - function rebuildNasIndex
+- function listNasTree
 - function searchNasHistory
 
 ### `src/lib/externalIO/nativeMessaging.ts`

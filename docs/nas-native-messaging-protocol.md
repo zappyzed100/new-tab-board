@@ -111,6 +111,19 @@ Python側(nas_bridge.py)がindex.dbへSQLを実行し、結果だけ返す。`in
 ] }
 ```
 
+### フォルダの.md一覧(list-tree)
+
+`subdir`(例: `library`)配下の `.md` を相対パスで再帰列挙する(ライブラリのツリー閲覧用)。
+フォルダが無ければ空リスト。`..`等でbaseの外へ出るsubdirは拒否。
+
+```json
+{ "type": "list-tree", "path": "Z:\\NAS\\backup", "subdir": "library" }
+```
+
+```json
+{ "type": "list-tree-result", "ok": true, "files": ["メモ.md", "仕事/2026/計画.md"] }
+```
+
 ## エラー・切断時の扱い
 
 - host未インストール/接続失敗時、`chrome.runtime.connectNative`は`onDisconnect`を

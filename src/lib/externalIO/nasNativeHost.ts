@@ -30,12 +30,14 @@ type RebuildResult = {
   snapshots?: number;
   error?: string;
 };
+type ListTreeResult = { type: "list-tree-result"; ok: boolean; files?: string[]; error?: string };
 type HostResponse =
   | ProbeResult
   | WriteResult
   | ReadResult
   | SearchResult
   | RebuildResult
+  | ListTreeResult
   | { type: "error"; error: string };
 
 function callHost(
@@ -117,6 +119,19 @@ export async function rebuildNasIndex(
   const result = await callHost({ type: "rebuild-index", path }, connectNative);
   if (result?.type === "rebuild-result" && result.ok) {
     return { notes: result.notes ?? 0, snapshots: result.snapshots ?? 0 };
+  }
+  return null;
+}
+
+/** NASの subdir(例: "library")配下の .md を相対パスで列挙する(ライブラリのツリー閲覧用)。失敗はnull。 */
+export async function listNasTree(
+  path: string,
+  subdir: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<string[] | null> {
+  const result = await callHost({ type: "list-tree", path, subdir }, connectNative);
+  if (result?.type === "list-tree-result" && result.ok) {
+    return result.files ?? [];
   }
   return null;
 }

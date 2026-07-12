@@ -1,6 +1,7 @@
 // nasNativeHost.test.ts — nasNativeHost.ts(NASブリッジnative messagingクライアント)の単体テスト
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  listNasTree,
   NAS_HOST_NAME,
   probeNasPath,
   readFileFromNas,
@@ -134,6 +135,23 @@ describe("rebuildNasIndex", () => {
     const fake = makeFakePort();
     const promise = rebuildNasIndex("Z:\\NAS", () => fake.port);
     fake.emitMessage({ type: "rebuild-result", ok: false, error: "boom" });
+    expect(await promise).toBeNull();
+  });
+});
+
+describe("listNasTree", () => {
+  it("list-tree-resultのfilesを返し、path/subdirを送る", async () => {
+    const fake = makeFakePort();
+    const promise = listNasTree("Z:\\NAS", "library", () => fake.port);
+    fake.emitMessage({ type: "list-tree-result", ok: true, files: ["メモ.md", "仕事/計画.md"] });
+    expect(await promise).toEqual(["メモ.md", "仕事/計画.md"]);
+    expect(fake.sentMessages).toEqual([{ type: "list-tree", path: "Z:\\NAS", subdir: "library" }]);
+  });
+
+  it("ok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = listNasTree("Z:\\NAS", "library", () => fake.port);
+    fake.emitMessage({ type: "list-tree-result", ok: false, error: "boom" });
     expect(await promise).toBeNull();
   });
 });

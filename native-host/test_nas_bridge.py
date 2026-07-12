@@ -126,6 +126,27 @@ def test_search_without_index_returns_error(tmp_path) -> None:
     assert "index.db" in res["error"]
 
 
+def test_list_tree_lists_md_recursively(tmp_path) -> None:
+    lib = os.path.join(str(tmp_path), "library", "仕事", "2026")
+    os.makedirs(lib, exist_ok=True)
+    with open(os.path.join(lib, "計画.md"), "w", encoding="utf-8") as f:
+        f.write("# 計画")
+    with open(os.path.join(str(tmp_path), "library", "メモ.md"), "w", encoding="utf-8") as f:
+        f.write("メモ")
+    # .md 以外は無視
+    with open(os.path.join(str(tmp_path), "library", "無視.txt"), "w", encoding="utf-8") as f:
+        f.write("x")
+
+    res = handle({"type": "list-tree", "path": str(tmp_path), "subdir": "library"})
+    assert res["ok"] is True
+    assert res["files"] == ["メモ.md", "仕事/2026/計画.md"]
+
+
+def test_list_tree_missing_folder_is_empty(tmp_path) -> None:
+    res = handle({"type": "list-tree", "path": str(tmp_path), "subdir": "library"})
+    assert res == {"type": "list-tree-result", "ok": True, "files": []}
+
+
 def test_unknown_message_type_returns_error() -> None:
     result = handle({"type": "something-else"})
     assert result["type"] == "error"
