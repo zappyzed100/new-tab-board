@@ -61,7 +61,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
-- `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — 「ノート追加ボタンを連打すると作ったノートが消える」バグの回帰(§13昇格対象)
+- `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — NoteTabs周りの状態競合バグの回帰まとめ(§13昇格対象)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)

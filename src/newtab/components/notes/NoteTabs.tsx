@@ -104,6 +104,17 @@ export function NoteTabs({
                       title="横並び表示に含める(最大3件)"
                       checked={visibleNoteIds.includes(note.id)}
                       disabled={visibleNoteIds.length >= 3 && !visibleNoteIds.includes(note.id)}
+                      // Tabs.Triggerは(クリックではなく)mousedown、および子要素へフォーカスが
+                      // 移った際のfocus(onFocus。ブラウザがクリック時に自動でボタンへフォーカス
+                      // を移す副作用としてfocusinがバブリングする)の時点でcontext.onValueChangeを
+                      // 呼ぶ(生radix-uiのTabsTrigger実装。RovingFocusGroup.Itemのフォーカス管理
+                      // 込み)。clickだけstopPropagationしてもmousedown/focusは止まらず素通りして
+                      // バブリングし、親のonSelect(selectNote)がrequestedVisibleIdsを別ロジック
+                      // (スワップ式)で書き換えてしまい、直後のonCheckedChangeによる追加/削除と
+                      // 競合して「チェックした直後に外れる」という再現しにくい競合の原因になって
+                      // いた。両方の段階で止める。
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                       onCheckedChange={() => onToggleVisible(note.id)}
                     />
