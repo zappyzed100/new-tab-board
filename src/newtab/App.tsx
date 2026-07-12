@@ -24,7 +24,8 @@ import {
   TRAILING_EMPTY_NOTES,
   updateNote,
 } from "../lib/entities/notes";
-import { getGeminiApiKey } from "../lib/storage/db";
+import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
+import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
@@ -71,6 +72,8 @@ export function App() {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   // 「📁 ライブラリ」(NASの階層md保管庫)の開閉。作業ノートとは別レーンのため既定は閉じる。
   const [showLibrary, setShowLibrary] = useState(false);
+  // 本日のGemini使用回数(450到達でGPT-OSS 120Bへの乗り換え警告を出す——ユーザー指示)。
+  const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
   // 「ショートカット一覧」ボタンと同じflexコンテナに並ぶwidth:100%のメッセージが
   // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
@@ -185,6 +188,16 @@ export function App() {
         setAlarmActive(local.alarmActive ?? false);
       });
     }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 本日のGemini使用回数を読み、しきい値(450)到達で警告バナーを出す。自動タグ付け等で
+  // 回数が増えるため、起動時と30秒ごとに読み直す(日跨ぎはgeminiUsageDateKeyで数え直される)。
+  const refreshGeminiUsage = () =>
+    void getGeminiUsageCount(geminiUsageDateKey(clockNow())).then(setGeminiUsageToday);
+  useEffect(() => {
+    refreshGeminiUsage();
+    const interval = setInterval(refreshGeminiUsage, 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -373,6 +386,7 @@ export function App() {
       `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targets.length}件` +
         `${junkCount > 0 ? `・ゴミ判定${junkCount}件はNAS保管対象外` : ""})`,
     );
+    refreshGeminiUsage(); // 大量のGemini呼び出し直後は使用量を即時に反映する(警告の出遅れ防止)。
   }
 
   // 「☁️ Driveへ退避」: 自動同期を待たず、現在の全データを今すぐDriveへ書き出す(退避の即時版)。
@@ -468,6 +482,15 @@ export function App() {
       <Box p={{ initial: "3", sm: "5" }}>
         <Flex asChild direction="column" gap="4">
           <main data-testid="app-root">
+            {geminiUsageToday >= GEMINI_DAILY_WARN_THRESHOLD ? (
+              <Card data-testid="gemini-usage-warning">
+                <Text size="3" weight="medium" color="orange">
+                  ⚠️ 本日のGemini使用が{geminiUsageToday}回に達しました(しきい値
+                  {GEMINI_DAILY_WARN_THRESHOLD})。無料枠を使い切る前に、GPT-OSS 120Bへの乗り換えを
+                  検討してください。
+                </Text>
+              </Card>
+            ) : null}
             {countdown.kind === "upcoming" ? (
               <Card data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
                 <Text size="3" weight="medium">

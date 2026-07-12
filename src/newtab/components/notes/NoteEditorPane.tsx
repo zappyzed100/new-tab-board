@@ -262,11 +262,11 @@ export function NoteEditorPane({
             type="button"
             variant="soft"
             data-testid={`move-note-up-${note.id}`}
-            title="ひとつ上(順序でひとつ前)のノートと入れ替える"
+            title="優先度を上げる(ひとつ前=左上寄りへ移動。左上ほど優先度が高い)"
             disabled={isFirst}
             onClick={() => onMoveUp(note.id)}
           >
-            ⬆️ 上へ
+            ⬆️ 優先度
           </Button>
           {/* ノート名: 記述部の上・Markdownプレビューの左に、少し大きめの文字で編集可能に(ユーザー指示)。 */}
           <TextField.Root

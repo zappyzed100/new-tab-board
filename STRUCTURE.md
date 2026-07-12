@@ -549,6 +549,7 @@
 
 ### `src/lib/gemini/gemini.ts`
 - const DEFAULT_GEMINI_MODEL
+- const GEMINI_DAILY_WARN_THRESHOLD
 - function resetGeminiRateLimitForTests
 - type GeminiDeps
 - function callGemini
@@ -667,6 +668,9 @@
 - function setNasFolderPath
 - function getGeminiApiKey
 - function setGeminiApiKey
+- function geminiUsageDateKey
+- function getGeminiUsageCount
+- function recordGeminiUsage
 
 ### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS

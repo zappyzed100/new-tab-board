@@ -3,13 +3,26 @@
 // (Drive/syncへ乗らない)、呼び出し側が読み出してこの関数へ渡す。無料枠のflashモデルを既定にする。
 // ネットワークはfetchを依存注入で差し替え可能にし、テストは実APIを叩かずフェイクで検証する。
 import { logOp } from "../runtime/log";
+import { now as clockNow } from "../runtime/clock";
+import { geminiUsageDateKey, recordGeminiUsage } from "../storage/db";
 
-/** 既定モデル。gemini-2.0-flash等は実キーで無料枠が0(429)だったため、実疎通で無料枠が
- * 使えた gemini-flash-latest を採用(2026-07-12・実キーで検証)。「最新のflash」への別名で、
- * Googleがflashの安定版を差し替えても追従する。 */
-export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
+/** 既定モデル。ユーザー指示で Gemini 3.1 Flash Lite を採用(2026-07-13)。
+ * ※APIのモデルIDが実機で異なる場合(404)はここだけ差し替える(呼び出し側はdeps.modelで上書き可)。 */
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
+
+/** 1日の使用回数がこの値に達したら「GPT-OSS 120Bへ乗り換え」警告を出す(ユーザー指示)。 */
+export const GEMINI_DAILY_WARN_THRESHOLD = 450;
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+
+/** 既定の使用量記録: 今日の日付キーで1回分を加算する(fire-and-forget。DB不可の環境では諦める)。 */
+function defaultRecordUsage(): void {
+  try {
+    void recordGeminiUsage(geminiUsageDateKey(clockNow())).catch(() => {});
+  } catch {
+    // IndexedDB未利用環境(テスト等)では使用量記録を諦める——本体の呼び出しは止めない。
+  }
+}
 
 /** 429(レート制限)を食らった後、次の呼び出しまで待つクールダウン。
  * 保存のたびに自動タグ付けがGeminiを叩くため、枠を超えたら一定時間fetch自体を止めて
@@ -22,7 +35,7 @@ export function resetGeminiRateLimitForTests(): void {
   rateLimitedUntil = 0;
 }
 
-export type GeminiDeps = { fetch?: typeof fetch; model?: string };
+export type GeminiDeps = { fetch?: typeof fetch; model?: string; recordUsage?: () => void };
 
 /** プロンプトを投げてテキスト応答を返す。失敗(キー未設定・HTTPエラー・例外・クールダウン中)はnull。
  * APIキーはURLのkeyクエリで渡す(Gemini APIの標準)。キー文字列自体はログに出さない(§7)。 */
@@ -39,6 +52,7 @@ export async function callGemini(
   }
   const _fetch = deps.fetch ?? fetch;
   const model = deps.model ?? DEFAULT_GEMINI_MODEL;
+  const recordUsage = deps.recordUsage ?? defaultRecordUsage;
   try {
     const res = await _fetch(
       `${API_BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
@@ -48,6 +62,8 @@ export async function callGemini(
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       },
     );
+    // 実際にAPIへ1リクエスト投げた=1回分の使用として記録する(成功/429を問わず消費のため)。
+    recordUsage();
     if (!res.ok) {
       if (res.status === 429) {
         rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;

@@ -196,3 +196,41 @@ test("🏷️タグをふるボタンはGemini APIキー未設定なら案内を
     "Gemini APIキーを設定してください",
   );
 });
+
+test("本日のGemini使用が450に達すると乗り換え警告バナーが出る", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  // 通常は警告は出ない。
+  await expect(page.getByTestId("gemini-usage-warning")).toHaveCount(0);
+
+  // 今日の使用回数を450にしてIndexedDBへ直接書き込む(日付キーはgeminiUsageDateKeyと同じ算出)。
+  await page.evaluate(async () => {
+    // NONDETERMINISM-EXEMPT: アプリは実クロックの「今日」(geminiUsageDateKey(now()))で使用量を
+    // 集計するため、シード側も同じ実日付にしないとキーが噛み合わず警告が出ない。固定時刻へ置換する
+    // 方が逆に噛み合わなくなる正当なケース(結果は日付に依らず常に「バナーが出る」で決定的)。
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open("new-tab-board", 2);
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction("settings", "readwrite");
+        tx.objectStore("settings").put({ date: today, count: 450 }, "geminiUsage");
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+
+  // 再読み込みするとマウント時に使用量を読み、しきい値到達で警告バナーが出る。
+  await page.reload();
+  await expect(page.getByTestId("gemini-usage-warning")).toBeVisible();
+  await expect(page.getByTestId("gemini-usage-warning")).toContainText("GPT-OSS 120B");
+});

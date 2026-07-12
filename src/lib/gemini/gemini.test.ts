@@ -60,6 +60,29 @@ describe("callGemini", () => {
     expect(fetchFake.mock.calls[0][0]).toContain("/models/gemini-1.5-flash:generateContent");
   });
 
+  it("APIへ実際にリクエストしたらrecordUsageを1回呼ぶ(使用量カウント)", async () => {
+    const fetchFake = vi.fn().mockResolvedValue(okResponse("ok"));
+    const recordUsage = vi.fn();
+    await callGemini("x", "AIza-test", { fetch: fetchFake, recordUsage });
+    expect(recordUsage).toHaveBeenCalledTimes(1);
+  });
+
+  it("キー未設定/クールダウン中はリクエストしないのでrecordUsageも呼ばない", async () => {
+    const recordUsage = vi.fn();
+    // キー未設定
+    await callGemini("x", "", { fetch: vi.fn(), recordUsage });
+    expect(recordUsage).not.toHaveBeenCalled();
+    // 429でクールダウンに入れてから
+    await callGemini("x", "AIza-test", {
+      fetch: vi.fn().mockResolvedValue({ ok: false, status: 429 } as Response),
+      recordUsage,
+    });
+    recordUsage.mockClear();
+    // クールダウン中はfetchしない=recordUsageも呼ばない
+    await callGemini("x", "AIza-test", { fetch: vi.fn(), recordUsage });
+    expect(recordUsage).not.toHaveBeenCalled();
+  });
+
   it("429を食らったら、次の呼び出しはfetchせずnull(クールダウン)", async () => {
     const fetch429 = vi.fn().mockResolvedValue({ ok: false, status: 429 } as Response);
     // 1回目: 429 → null(fetchは呼ばれる)

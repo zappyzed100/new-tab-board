@@ -124,3 +124,35 @@ export async function setGeminiApiKey(key: string): Promise<void> {
   // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
   logOp("db", "put", "settings/geminiApiKey");
 }
+
+// Gemini APIの1日あたり使用回数(ユーザー指示: 450回でGPT-OSS 120Bへの乗り換え警告を出す)。
+const GEMINI_USAGE_KEY = "geminiUsage";
+type GeminiUsageRecord = { date: string; count: number };
+
+/** epoch ms からローカル日付キー(YYYY-MM-DD)を作る(1日単位の使用量集計・日跨ぎ判定用)。 */
+export function geminiUsageDateKey(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** 今日(today=日付キー)のGemini使用回数を返す。記録が別日なら0(日跨ぎで数え直し)。 */
+export async function getGeminiUsageCount(today: string): Promise<number> {
+  const db = await getDb();
+  const rec = (await db.get("settings", GEMINI_USAGE_KEY)) as GeminiUsageRecord | undefined;
+  return rec && rec.date === today ? rec.count : 0;
+}
+
+/** Gemini APIを1回使ったことを記録し、今日の累計回数を返す(日付が変われば1から数え直す)。
+ * 同時呼び出しで数え落とさないよう readwrite トランザクション内で read→+1→write する。 */
+export async function recordGeminiUsage(today: string): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction("settings", "readwrite");
+  const rec = (await tx.store.get(GEMINI_USAGE_KEY)) as GeminiUsageRecord | undefined;
+  const count = (rec && rec.date === today ? rec.count : 0) + 1;
+  await tx.store.put({ date: today, count }, GEMINI_USAGE_KEY);
+  await tx.done;
+  return count;
+}
