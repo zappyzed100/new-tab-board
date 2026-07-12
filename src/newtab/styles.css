@@ -461,6 +461,10 @@ button.note-tab-add {
   --rdp-day_button-height: 26px;
   --rdp-day_button-width: 26px;
   --rdp-weekday-padding: 2px 0;
+  /* 既定の--rdp-today-color(生の"blue")はダークモードの背景で視認性が低かった。
+     本日だけは色分けの例外として扱うが、赤は祝日の意味と衝突するため
+     warningトークン(アンバー)を使う。 */
+  --rdp-today-color: var(--warning);
   font-size: 11px;
 }
 
@@ -473,9 +477,17 @@ button.note-tab-add {
   width: auto;
 }
 
+/* 月ラベルは<a>化した際にブラウザ既定のリンク色/下線が付いていたため、
+   他の操作可能テキスト(note-tab等)と同じくデザイントークンに合わせる。 */
 [data-testid="calendar-month-label"] {
   font-weight: 600;
   white-space: nowrap;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+[data-testid="calendar-month-label"]:hover {
+  text-decoration: underline;
 }
 
 /* --- TODOリスト(TodoMVC参考: 入力欄+チェックボックス行+hover時のみ×) --- */
