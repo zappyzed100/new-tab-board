@@ -194,7 +194,7 @@ body {
 }
 
 [data-testid^="bookmark-label-"] {
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-muted);
   overflow: hidden;
