@@ -143,6 +143,38 @@ body {
   align-items: stretch;
 }
 
+/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。 */
+.scroll-jump {
+  position: fixed;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 20;
+}
+
+.scroll-jump-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.4;
+  box-shadow: var(--shadow);
+  transition: opacity 0.15s ease;
+}
+
+.scroll-jump-btn:hover,
+.scroll-jump-btn:focus-visible {
+  opacity: 1;
+}
+
 /* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
    スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
    下の本文が透けないよう背景を敷き、他要素より前面に出す。 */

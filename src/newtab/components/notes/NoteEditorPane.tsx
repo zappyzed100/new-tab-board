@@ -73,6 +73,15 @@ export function NoteEditorPane({
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
 
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(note.content);
+      onMessage(`「${note.title}」の本文をクリップボードにコピーしました`);
+    } catch (err) {
+      onMessage(`コピーに失敗しました(${err instanceof Error ? err.message : String(err)})`);
+    }
+  }
+
   async function handleTagThisNote() {
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
@@ -200,6 +209,15 @@ export function NoteEditorPane({
             onClick={() => void handleTagThisNote()}
           >
             {aiBusy === "tag" ? "タグ付け中…" : "🏷️ タグ"}
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`copy-note-${note.id}`}
+            title="このノートの本文をクリップボードにコピーする"
+            onClick={() => void handleCopy()}
+          >
+            📋 コピー
           </Button>
           {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
             <Text

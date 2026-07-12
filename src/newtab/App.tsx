@@ -570,6 +570,31 @@ export function App() {
           </main>
         </Flex>
       </Box>
+      {/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプ(ユーザー指示。少し大きめ)。 */}
+      <div className="scroll-jump">
+        <button
+          type="button"
+          className="scroll-jump-btn"
+          data-testid="scroll-to-top"
+          title="一番上へ"
+          aria-label="一番上へスクロール"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="scroll-jump-btn"
+          data-testid="scroll-to-bottom"
+          title="一番下へ"
+          aria-label="一番下へスクロール"
+          onClick={() =>
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })
+          }
+        >
+          ↓
+        </button>
+      </div>
     </Theme>
   );
 }
