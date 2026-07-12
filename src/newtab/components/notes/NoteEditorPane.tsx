@@ -6,13 +6,20 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
-import { isDefaultNoteTitle, removeNote, updateNote } from "../../../lib/entities/notes";
+import {
+  applyAutoTagToNote,
+  isDefaultNoteTitle,
+  removeNote,
+  updateNote,
+} from "../../../lib/entities/notes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
+import { writeNoteToNasStructure } from "../../../lib/externalIO/nasArchive";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
+import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
@@ -143,29 +150,43 @@ export function NoteEditorPane({
     );
   }
 
-  // 保存(スナップショット)時の自動タグ付け(ユーザー指示)。キー未設定・空・前回から変更なしは
-  // 静かに何もしない(自動なのでエラーは出さない)。junk判定はNASアーカイブ除外に使われる。
-  async function autoTagOnSnapshot(savedContent: string) {
+  // 保存(スナップショット)の瞬間に「自動タグ付け → タグ確定 → NASへ書く」を1本の非同期で直列化する
+  // (ユーザー指示: 必ずタグ確定後にNASへ書く)。保存タイミング(更新5分/200字/blur/paste)は
+  // SnapshotScheduler(useSnapshotScheduler)が唯一の発火源。時間依存の待ち(例: APIの後に3秒)は
+  // 入れず、analyzeNoteの戻り値を手元でマージして書くことで再レンダ待ちの競合を根本から無くす。
+  async function handleSaveMoment(savedContent: string) {
     if (savedContent.trim() === "") return;
-    if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return;
-    if (autoTagInFlight) return; // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
+    const analysis = await runAutoTag(savedContent); // タグ確定(スキップ時はnull)
+    // 確定したタグ/タイトル/junkを手元で合成してNASへ書く。junk(ゴミ)はNAS保管対象外。
+    const persisted = applyAutoTagToNote(note, savedContent, analysis, clockNow());
+    if (persisted.junk) return;
+    await writeNoteToNasStructure(persisted, clockNow());
+  }
+
+  // 保存時の自動タグ付け(ユーザー指示)。実行できたら結果(tags/junk/title)を返しつつ状態も更新する。
+  // キー未設定・前回から変更なし・別ペイン処理中・意味のある結果なしは null(タグ付けせず)。
+  async function runAutoTag(savedContent: string): Promise<NoteAnalysis | null> {
+    if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return null;
+    if (autoTagInFlight) return null; // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
     const apiKey = await getGeminiApiKey();
-    if (!apiKey) return;
+    if (!apiKey) return null;
     autoTagInFlight = true;
     try {
-      const { tags, junk, title } = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
-      if (tags.length === 0 && !junk && !title) return;
+      const analysis = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
+      if (analysis.tags.length === 0 && !analysis.junk && !analysis.title) return null;
       onNotesChange((prev) => {
         // 自動付与では、既定タイトル(ノートX)のときだけ生成タイトルを入れる(手動命名は尊重)。
         const cur = prev.find((n) => n.id === note.id);
-        const setTitle = title !== "" && cur !== undefined && isDefaultNoteTitle(cur.title);
+        const setTitle =
+          analysis.title !== "" && cur !== undefined && isDefaultNoteTitle(cur.title);
         return updateNote(prev, note.id, {
-          tags,
-          junk,
+          tags: analysis.tags,
+          junk: analysis.junk,
           taggedHash: contentHash(savedContent),
-          ...(setTitle ? { title } : {}),
+          ...(setTitle ? { title: analysis.title } : {}),
         });
       });
+      return analysis;
     } finally {
       autoTagInFlight = false;
     }
@@ -236,7 +257,7 @@ export function NoteEditorPane({
       onDrop={() => onDropNote(note.id)}
     >
       <Flex direction="column" gap="3">
-        <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
+        <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={handleSaveMoment} />
         {/* 1行目: ノート名を一番左上に、枠なし・太字・大きめで置く(クリックでそのまま編集)。
             その右に自由チェック(何とも連動しない)・ドラッグつまみ・同期状態、右端にピンアイコン。 */}
         <Flex align="center" gap="2">

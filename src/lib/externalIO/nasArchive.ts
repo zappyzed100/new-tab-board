@@ -30,15 +30,6 @@ import {
 } from "./nasNativeHost";
 import type { Note, Snapshot } from "../../types";
 
-// 「出先で確認」用に現在のノート群をまとめる単一ファイル(ファイル名固定・ユーザー指示)。
-const ACTIVE_NOTES_FILE = "active/New Tab Board.txt";
-
-/** ノート1件を「title: 見出し + 空行 + 本文」のプレーンテキストにする。
- * タイトルはファイル内で本文と混ざらないよう改行をスペースへ畳む(見出しは常に1行)。 */
-function noteSectionText(note: { title: string; body: string }): string {
-  return `title: ${note.title.replace(/\r?\n/g, " ")}\n\n${note.body}`;
-}
-
 /** YAMLスカラーとして安全な表現にする(front matter用)。特殊文字・空・数値見えは二重引用符で囲む。
  * 書き込み側(ここ)と読み込み側(native-host/build_index.py)で同じ規則を守る。 */
 function yamlScalar(value: string): string {
@@ -228,22 +219,6 @@ export async function readArchivedSnapshot(
     logOp("nasArchive", "read-error", archivePath);
   }
   return content;
-}
-
-/** 「出先で確認」用に、現在のノート群を単一ファイル(active/New Tab Board.txt)へ
- * まとめてミラーする。各ノートは `title: <ノート名>` の見出し付きで連結する
- * (ファイル名は固定——ユーザー指示: 出先で1ファイル開けば全部読める)。
- * NAS未設定/到達不可なら静かにfalse(編集のたびに呼ばれるためエラーを出さない)。 */
-export async function writeActiveNotesToNas(
-  notes: { title: string; body: string }[],
-  deps: NasDeps = {},
-): Promise<boolean> {
-  const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
-  const _writeFileToNas = deps.writeFileToNas ?? writeFileToNas;
-  const path = await _getNasFolderPath();
-  if (!path) return false; // NAS未設定ならhostに触れず何もしない
-  const text = notes.map(noteSectionText).join("\n\n");
-  return await _writeFileToNas(path, ACTIVE_NOTES_FILE, text);
 }
 
 /** archived済み/未archivedを問わず、スナップショットの本文を「gzip+base64の圧縮文字列」で返す

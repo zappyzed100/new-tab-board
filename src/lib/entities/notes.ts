@@ -52,6 +52,29 @@ export function isDefaultNoteTitle(title: string): boolean {
   return /^ノート[A-Z]+$/.test(title);
 }
 
+/** 保存時の自動タグ付け結果を、NAS/Drive書き込み用のノートへマージする純関数。
+ * user指示「必ずタグ確定後にNASへ書く」を、時間依存の待ちでなく“確定した値を手元で合成”して満たす
+ * ための土台(NoteEditorPane が analyzeNote の戻り値をそのまま渡す)。
+ * - analysis が null(タグ付けをスキップ)なら、既存の tags/junk/title のまま本文と updatedAt だけ更新。
+ * - tags/junk は常に反映。生成タイトルは**既定タイトル(ノートX)のときだけ**採用(手動命名を尊重)。 */
+export function applyAutoTagToNote(
+  note: Note,
+  savedContent: string,
+  analysis: { tags: string[]; junk: boolean; title: string } | null,
+  now: number,
+): Note {
+  if (!analysis) return { ...note, content: savedContent, updatedAt: now };
+  const setTitle = analysis.title !== "" && isDefaultNoteTitle(note.title);
+  return {
+    ...note,
+    content: savedContent,
+    updatedAt: now,
+    tags: analysis.tags,
+    junk: analysis.junk,
+    ...(setTitle ? { title: analysis.title } : {}),
+  };
+}
+
 /** newNote を afterId のノートの直後(表示順=sortedNotes基準)へ挿入し、order を振り直す。
  * 列固定masonryでは「afterId の一つ右(右端なら一段下の一番左)」に現れる(要約の配置——ユーザー指示)。
  * afterId が見つからなければ末尾へ追加する。 */

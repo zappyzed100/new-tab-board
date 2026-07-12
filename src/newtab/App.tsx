@@ -40,13 +40,8 @@ import {
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
-import { exceedsChangeThreshold } from "../lib/history/history";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
-import {
-  flushAllToNas,
-  reconcileActiveNotesOnNas,
-  writeNoteToNasStructure,
-} from "../lib/externalIO/nasArchive";
+import { flushAllToNas, reconcileActiveNotesOnNas } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
@@ -62,10 +57,6 @@ type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Se
 const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
-
-// NASへ統一構造(active/<id>.md + 日付フォルダ)を書き込むアイドル間隔。ユーザー指示の
-// 「更新から5分たった文書を保存」に合わせる(履歴スナップショットのIDLE_MSと同じ5分)。
-const NAS_SAVE_IDLE_MS = 300_000;
 
 // ノートボードの列数(1列あたり概ね280px、最大3列)。列固定masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
@@ -176,39 +167,10 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notes]);
 
-  // 統一構造の正本として、各ノートを active/<id>.md と <YYYY/M/D>/<id>.md(front matter付き)へ
-  // 書き出す。書き込みタイミングはユーザー指示の「更新から5分 or 200字以上の変更、かつ非空」に
-  // 合わせる(頻繁すぎるNAS書き込みを避ける——履歴スナップショットと同じ節度)。タグ/タイトルは
-  // 保存時の自動タグ付け(NoteEditorPane)でnotesへ反映済みのため、その値でmdを書く。空・ゴミ
-  // (junk)判定ノートは書かない。NAS未設定なら writeNoteToNasStructure が静かにfalseで何もしない。
-  const nasWriteStateRef = useRef<Map<string, { content: string; sig: string }>>(new Map());
-  useEffect(() => {
-    if (!notes) return;
-    const noteSig = (n: Note) =>
-      `${n.title} ${(n.tags ?? []).join(",")} ${n.content} ${n.junk ? "1" : ""}`;
-    const writeNote = async (n: Note) => {
-      if (await writeNoteToNasStructure(n, clockNow())) {
-        nasWriteStateRef.current.set(n.id, { content: n.content, sig: noteSig(n) });
-      }
-    };
-    // 「200字以上の変更」は即時に書く(前回NAS書き込み時の本文との文字数差で判定)。
-    for (const n of notes) {
-      if (n.content.trim() === "" || n.junk) continue;
-      const prev = nasWriteStateRef.current.get(n.id);
-      if (prev && exceedsChangeThreshold(prev.content, n.content)) void writeNote(n);
-    }
-    // 「更新から5分」: 編集が続く間はこのタイマーが毎回リセットされ、入力が5分止まって初めて
-    // 前回書き込みから変わった(本文/タグ/タイトル)非空ノートをまとめて書く。
-    const timer = setTimeout(() => {
-      void (async () => {
-        for (const n of notes) {
-          if (n.content.trim() === "" || n.junk) continue;
-          if (nasWriteStateRef.current.get(n.id)?.sig !== noteSig(n)) await writeNote(n);
-        }
-      })();
-    }, NAS_SAVE_IDLE_MS);
-    return () => clearTimeout(timer);
-  }, [notes]);
+  // 統一構造の正本(active/<id>.md + 日付フォルダ)へのノート書き込みは、各ペインの保存の瞬間
+  // (SnapshotScheduler)から「自動タグ付け→タグ確定→NASへ書く」で行う(NoteEditorPane.handleSaveMoment)。
+  // App側は削除の突合(下の reconcileActiveNotesOnNas)だけを担う——保存タイミングの唯一の発火源を
+  // useSnapshotScheduler に一本化し、タグ確定前に書いてしまう競合を根絶するため(ユーザー指示)。
 
   // 新規タブページが開くたびにFlow Launcher(native messaging host)へ接続し、
   // 保留中のファイルがあれば新規ノートとして取り込む(SPEC.md §4.10-d「pull型」)。

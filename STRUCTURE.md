@@ -563,6 +563,7 @@
 - function createNote
 - function addNote
 - function isDefaultNoteTitle
+- function applyAutoTagToNote
 - function addNoteAfter
 - function updateNote
 - function removeNote
@@ -595,7 +596,6 @@
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot
-- function writeActiveNotesToNas
 - function getSnapshotBody
 
 ### `src/lib/externalIO/nasNativeHost.ts`

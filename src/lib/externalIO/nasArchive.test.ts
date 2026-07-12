@@ -11,7 +11,6 @@ import {
   noteToMarkdown,
   readArchivedSnapshot,
   reconcileActiveNotesOnNas,
-  writeActiveNotesToNas,
   writeNoteMarkdownToNas,
   writeNoteToNasStructure,
 } from "./nasArchive";
@@ -187,37 +186,6 @@ describe("flushAllToNas(パス・NASクライアントを依存注入)", () => {
   });
 });
 
-describe("writeActiveNotesToNas", () => {
-  it("全ノートをtitle見出し付きで active/New Tab Board.txt へ連結して書く", async () => {
-    const nas = makeFakeNas();
-    const ok = await writeActiveNotesToNas(
-      [
-        { title: "ノートI", body: "本文1" },
-        { title: "ノートJ", body: "本文2" },
-      ],
-      { getNasFolderPath: async () => NAS_PATH, ...nas },
-    );
-    expect(ok).toBe(true);
-    expect(nas.files.get("active/New Tab Board.txt")).toBe(
-      "title: ノートI\n\n本文1\n\ntitle: ノートJ\n\n本文2",
-    );
-  });
-
-  it("タイトル内の改行はスペースへ畳む(見出しは常に1行)", async () => {
-    const nas = makeFakeNas();
-    await writeActiveNotesToNas([{ title: "a\nb", body: "z" }], {
-      getNasFolderPath: async () => NAS_PATH,
-      ...nas,
-    });
-    expect(nas.files.get("active/New Tab Board.txt")).toBe("title: a b\n\nz");
-  });
-
-  it("NAS未設定ならhostに触れずfalse", async () => {
-    // getNasFolderPathを注入しない=実getNasFolderPathが未設定(undefined)を返す
-    expect(await writeActiveNotesToNas([{ title: "x", body: "y" }])).toBe(false);
-  });
-});
-
 describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
   const baseNote: Note = {
     id: "note-1",
@@ -377,8 +345,8 @@ describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
   });
 
   it("NAS未設定なら0(削除しない)", async () => {
-    expect(
-      await reconcileActiveNotesOnNas([], { getNasFolderPath: async () => undefined }),
-    ).toBe(0);
+    expect(await reconcileActiveNotesOnNas([], { getNasFolderPath: async () => undefined })).toBe(
+      0,
+    );
   });
 });
