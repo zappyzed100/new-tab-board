@@ -3,7 +3,11 @@
 // 付与するAPIが無い(dialog.jsソース確認済み)。「外側クリックで閉じる」動作自体は
 // Radixが標準機能として提供するため、E2E側はoverlay要素をクラスセレクタ
 // (.rt-DialogOverlay)経由で参照するよう更新する(shortcuts-theme-calendar.spec.ts)。
-import { Dialog, Heading, IconButton } from "@radix-ui/themes";
+//
+// 性質の異なるショートカット群(全般操作・ノートへのジャンプ・ブックマークを開く・
+// エディタ内操作)を1つの見出し+フラットなリストへ詰め込んでいると見づらい
+// (ユーザー指摘)——グループごとに独立したCardへ分けている。
+import { Card, Dialog, Flex, Heading, IconButton } from "@radix-ui/themes";
 import { comboLabel, EDITOR_SHORTCUTS, type ShortcutDef } from "../../../lib/shortcuts/shortcuts";
 
 type Props = {
@@ -11,7 +15,33 @@ type Props = {
   onClose: () => void;
 };
 
+type DisplayItem = { testId: string; label: string; description: string };
+
+function ShortcutGroupCard({ title, items }: { title: string; items: DisplayItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <Card>
+      <Heading as="h3" size="3" className="panel-title" mb="2">
+        {title}
+      </Heading>
+      <ul>
+        {items.map((item) => (
+          <li key={item.testId} data-testid={item.testId}>
+            <span>{item.label}</span> — <span>{item.description}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export function ShortcutsModal({ registry, onClose }: Props) {
+  const general = registry.filter(
+    (d) => !d.id.startsWith("noteJump-") && !d.id.startsWith("bookmarkJump-"),
+  );
+  const noteJumps = registry.filter((d) => d.id.startsWith("noteJump-"));
+  const bookmarkJumps = registry.filter((d) => d.id.startsWith("bookmarkJump-"));
+
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Content data-testid="shortcuts-modal">
@@ -26,26 +56,40 @@ export function ShortcutsModal({ registry, onClose }: Props) {
         >
           ×
         </IconButton>
-        <Heading as="h3" size="3" className="panel-title">
-          アプリ全体
-        </Heading>
-        <ul>
-          {registry.map((def) => (
-            <li key={def.id} data-testid={`shortcut-entry-${def.id}`}>
-              <span>{comboLabel(def.combo)}</span> — <span>{def.description}</span>
-            </li>
-          ))}
-        </ul>
-        <Heading as="h3" size="3" className="panel-title">
-          ノート編集中(テキストエディタ)
-        </Heading>
-        <ul>
-          {EDITOR_SHORTCUTS.map((s, i) => (
-            <li key={s.keys} data-testid={`editor-shortcut-${i}`}>
-              <span>{s.keys}</span> — <span>{s.description}</span>
-            </li>
-          ))}
-        </ul>
+        <Flex direction="column" gap="3">
+          <ShortcutGroupCard
+            title="全般"
+            items={general.map((d) => ({
+              testId: `shortcut-entry-${d.id}`,
+              label: comboLabel(d.combo),
+              description: d.description,
+            }))}
+          />
+          <ShortcutGroupCard
+            title="ノートへジャンプ"
+            items={noteJumps.map((d) => ({
+              testId: `shortcut-entry-${d.id}`,
+              label: comboLabel(d.combo),
+              description: d.description,
+            }))}
+          />
+          <ShortcutGroupCard
+            title="ブックマークを開く"
+            items={bookmarkJumps.map((d) => ({
+              testId: `shortcut-entry-${d.id}`,
+              label: comboLabel(d.combo),
+              description: d.description,
+            }))}
+          />
+          <ShortcutGroupCard
+            title="ノート編集中(テキストエディタ)"
+            items={EDITOR_SHORTCUTS.map((s, i) => ({
+              testId: `editor-shortcut-${i}`,
+              label: s.keys,
+              description: s.description,
+            }))}
+          />
+        </Flex>
       </Dialog.Content>
     </Dialog.Root>
   );
