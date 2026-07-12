@@ -12,7 +12,13 @@ import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
-import { addNote, createNote, resolveVisibleNoteIds, sortedNotes } from "../lib/entities/notes";
+import {
+  addNote,
+  createNote,
+  MAX_VISIBLE_NOTES,
+  resolveVisibleNoteIds,
+  sortedNotes,
+} from "../lib/entities/notes";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
@@ -69,11 +75,11 @@ export function App() {
   function selectNote(noteId: string) {
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
-    // 横並び表示にも入れる(すでに3件表示中なら最も古いものと入れ替える)。
+    // 横並び表示にも入れる(上限に達していれば最も古いものと入れ替える)。
     setRequestedVisibleIds((prev) =>
       prev.includes(noteId)
         ? prev
-        : prev.length >= 3
+        : prev.length >= MAX_VISIBLE_NOTES
           ? [...prev.slice(1), noteId]
           : [...prev, noteId],
     );
@@ -86,7 +92,7 @@ export function App() {
     setRequestedVisibleIds((prev) =>
       prev.includes(noteId)
         ? prev.filter((id) => id !== noteId)
-        : prev.length >= 3
+        : prev.length >= MAX_VISIBLE_NOTES
           ? prev
           : [...prev, noteId],
     );

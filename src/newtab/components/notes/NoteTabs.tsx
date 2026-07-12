@@ -19,6 +19,8 @@ import { Tabs } from "radix-ui";
 import {
   addNote,
   createNote,
+  MAX_NOTES,
+  MAX_VISIBLE_NOTES,
   nextNoteLetterTitle,
   removeNote,
   reorderNotes,
@@ -53,7 +55,7 @@ export function NoteTabs({
   function handleAdd() {
     const title = nextNoteLetterTitle(notes.map((n) => n.title));
     if (title === null) {
-      window.alert("ノートを開きすぎです!(ノートA〜Zの26件が上限です)");
+      window.alert(`ノートを開きすぎです!(${MAX_NOTES}件が上限です)`);
       return;
     }
     const note = createNote(title, sorted.length);
@@ -101,9 +103,12 @@ export function NoteTabs({
                   {notes.length > 3 ? (
                     <Checkbox
                       data-testid={`note-tab-visible-${note.id}`}
-                      title="横並び表示に含める(最大3件)"
+                      title="横並び表示に含める(3列で下へ折り返して並ぶ)"
                       checked={visibleNoteIds.includes(note.id)}
-                      disabled={visibleNoteIds.length >= 3 && !visibleNoteIds.includes(note.id)}
+                      disabled={
+                        visibleNoteIds.length >= MAX_VISIBLE_NOTES &&
+                        !visibleNoteIds.includes(note.id)
+                      }
                       // Tabs.Triggerは(クリックではなく)mousedown、および子要素へフォーカスが
                       // 移った際のfocus(onFocus。ブラウザがクリック時に自動でボタンへフォーカス
                       // を移す副作用としてfocusinがバブリングする)の時点でcontext.onValueChangeを

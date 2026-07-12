@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addNote,
   createNote,
+  MAX_NOTES,
   nextNoteLetterTitle,
   removeNote,
   reorderNotes,
@@ -71,9 +72,29 @@ describe("nextNoteLetterTitle", () => {
     expect(nextNoteLetterTitle(["ノートA", "ノートC"])).toBe("ノートB");
   });
 
-  it("ノートA〜Zが全て使用中ならnull(拒否対象)", () => {
+  it("ノートA〜Zが全て使用中ならAA以降を解禁する(26→501へ拡張)", () => {
     const all26 = Array.from({ length: 26 }, (_, i) => `ノート${String.fromCharCode(65 + i)}`);
-    expect(nextNoteLetterTitle(all26)).toBeNull();
+    expect(nextNoteLetterTitle(all26)).toBe("ノートAA");
+  });
+
+  it("A〜Z＋AAが使用中ならABを返す(スプレッドシート列風の採番)", () => {
+    const used = [
+      ...Array.from({ length: 26 }, (_, i) => `ノート${String.fromCharCode(65 + i)}`),
+      "ノートAA",
+    ];
+    expect(nextNoteLetterTitle(used)).toBe("ノートAB");
+  });
+
+  it("MAX_NOTES件すべて使用中ならnull(拒否対象)", () => {
+    // 全501件(A〜Z, AA〜, …)を使用済みにする。501件目まで生成して埋める。
+    const used: string[] = [];
+    while (used.length < MAX_NOTES) {
+      const t = nextNoteLetterTitle(used);
+      if (t === null) break;
+      used.push(t);
+    }
+    expect(used).toHaveLength(MAX_NOTES);
+    expect(nextNoteLetterTitle(used)).toBeNull();
   });
 
   it("ノートA〜Z以外のタイトルは無視して判定する", () => {
@@ -100,10 +121,15 @@ describe("resolveVisibleNoteIds", () => {
     expect(resolveVisibleNoteIds(notes, [])).toEqual([]);
   });
 
-  it("requestedIdsが4件以上あっても先頭3件だけを使う", () => {
+  it("requestedIdsが4件以上でも全件表示できる(上限を3→MAX_VISIBLE_NOTESへ拡張)", () => {
     const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
     const [a, b, c, d] = notes;
-    expect(resolveVisibleNoteIds(notes, [d.id, c.id, b.id, a.id])).toEqual([d.id, c.id, b.id]);
+    expect(resolveVisibleNoteIds(notes, [d.id, c.id, b.id, a.id])).toEqual([
+      d.id,
+      c.id,
+      b.id,
+      a.id,
+    ]);
   });
 
   it("requestedIdsに削除済み(存在しない)IDが混じっていれば無視する(埋め直さない)", () => {

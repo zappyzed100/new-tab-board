@@ -442,6 +442,8 @@
 - function reorderBookmarks
 
 ### `src/lib/entities/notes.ts`
+- const MAX_NOTES
+- const MAX_VISIBLE_NOTES
 - function nextNoteLetterTitle
 - function createNote
 - function addNote
