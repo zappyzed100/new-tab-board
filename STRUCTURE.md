@@ -351,6 +351,7 @@
 
 ### `src/lib/display/calendarMonth.ts`
 - function buildGCalUrl
+- function buildGCalMonthUrl
 
 ### `src/lib/display/clockFormat.ts`
 - function formatClock

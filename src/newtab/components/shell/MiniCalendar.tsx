@@ -10,7 +10,7 @@ import { Button, Card, Flex, Text } from "@radix-ui/themes";
 import { DayPicker } from "react-day-picker";
 import { ja } from "react-day-picker/locale";
 import "react-day-picker/style.css";
-import { buildGCalUrl } from "../../../lib/display/calendarMonth";
+import { buildGCalMonthUrl, buildGCalUrl } from "../../../lib/display/calendarMonth";
 import { now } from "../../../lib/runtime/clock";
 
 export function MiniCalendar() {
@@ -45,8 +45,16 @@ export function MiniCalendar() {
         >
           ←
         </Button>
-        <Text size="1" weight="bold" data-testid="calendar-month-label">
-          {month.getFullYear()}年{month.getMonth() + 1}月
+        <Text asChild size="1" weight="bold">
+          <a
+            data-testid="calendar-month-label"
+            href={buildGCalMonthUrl(month.getFullYear(), month.getMonth())}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Googleカレンダーでこの月を開く"
+          >
+            {month.getFullYear()}年{month.getMonth() + 1}月
+          </a>
         </Text>
         <Button
           type="button"

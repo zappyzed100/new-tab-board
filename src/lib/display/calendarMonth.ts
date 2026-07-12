@@ -22,3 +22,8 @@ export function buildGCalUrl(timestamp: number, title = ""): string {
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
+
+/** 指定の年月のGoogleカレンダー月表示画面URLを組み立てる(month は0始まり)。 */
+export function buildGCalMonthUrl(year: number, month: number): string {
+  return `https://calendar.google.com/calendar/r/month/${year}/${month + 1}/1`;
+}

@@ -130,15 +130,6 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
           <Button
             type="button"
             variant="soft"
-            data-testid="data-connect-drive"
-            title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
-            onClick={() => void handleConnectDrive()}
-          >
-            ⚙️ GDrive設定
-          </Button>
-          <Button
-            type="button"
-            variant="soft"
             data-testid="data-restore-from-drive"
             title="Google Drive上の自動バックアップから全データを復元する"
             onClick={() => void handleRestoreFromDrive()}
@@ -153,6 +144,16 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
             onClick={() => void handleSetNasFolder()}
           >
             📁 NASフォルダを設定
+          </Button>
+          {/* 設定系ボタンとして配列の一番右に配置(ユーザー指示)。 */}
+          <Button
+            type="button"
+            variant="soft"
+            data-testid="data-connect-drive"
+            title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+            onClick={() => void handleConnectDrive()}
+          >
+            ⚙️ GDrive設定
           </Button>
         </div>
       </Flex>
