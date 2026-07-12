@@ -137,30 +137,50 @@ export function App() {
     }
   }, [notes]);
 
-  // NASの active/ を「編集中のノート一覧」に突き合わせ、ブラウザで消された/空になった/ゴミ判定の
-  // ノートの active/<id>.md を削除する(統一構造——ユーザー指示)。書き込みは下のsig差分effectが担う。
-  // NAS未設定なら静かに何もしない。debounceして編集の嵐で叩きすぎない。
+  // active/ の突き合わせ削除は「非空ノートIDの集合」が変わった時だけ走らせる(ユーザー指摘:
+  // 並べ替えや本文編集は集合を変えないので同期/Drive一覧を叩く必要がない)。集合の署名を ref に
+  // 覚え、削除/空化/新規非空でのみ再突合する。実際に突合できた署名だけ記録するので、debounce中に
+  // 並べ替えても取りこぼさない(未突合の削除は次の窓で再試行される)。
+
+  // NASの active/<id>.md を現在の非空・非junkノートへ突き合わせて消えたものを削除(統一構造)。
+  const nasReconciledSigRef = useRef<string>("");
   useEffect(() => {
     if (!notes) return;
-    const timer = setTimeout(() => void reconcileActiveNotesOnNas(notes), 5000);
+    const sig = notes
+      .filter((n) => n.content.trim() !== "" && !n.junk)
+      .map((n) => n.id)
+      .sort()
+      .join(",");
+    if (sig === nasReconciledSigRef.current) return; // 集合不変(並べ替え/本文編集)→突合不要
+    const timer = setTimeout(() => {
+      void reconcileActiveNotesOnNas(notes).then(() => {
+        nasReconciledSigRef.current = sig;
+      });
+    }, 5000);
     return () => clearTimeout(timer);
   }, [notes]);
 
-  // Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に突き合わせる(ユーザー指示)。
-  // 空でないノートの本文アップロードは各ペインのuseDriveSyncが行い、ここでは消された/空になった
-  // ノートのファイルを削除する。日付フォルダへの日次コピーは background.ts の日次ジョブが担う
-  // (ユーザー指示: Drive日付フォルダは一日一回)。Drive未接続(トークン無し)なら静かに何もしない。
-  // debounceして編集の嵐で叩きすぎないようにする。
+  // Google Drive の active/ を現在の非空ノートへ突き合わせて消えたものを削除する(ユーザー指示)。
+  // 本文アップロードは各ペインのuseDriveSync、日付フォルダへの日次コピーは background.ts が担う。
+  // Drive未接続(トークン無し)なら静かに何もしない。ここも集合が変わった時だけ叩く(同期回数削減)。
+  const driveReconciledSigRef = useRef<string>("");
   useEffect(() => {
     if (!notes) return;
+    const sig = notes
+      .filter((n) => n.content.trim() !== "")
+      .map((n) => n.id)
+      .sort()
+      .join(",");
+    if (sig === driveReconciledSigRef.current) return; // 集合不変→Drive一覧すら叩かない
     const timer = setTimeout(() => {
       void (async () => {
         try {
           const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
           if (!token) return;
           await reconcileDriveActive(notes, token);
+          driveReconciledSigRef.current = sig; // 突合できた集合だけ記録(未接続時は次回再試行)
         } catch {
-          // Drive同期の突合失敗はUIを止めない(次の編集で再試行される)。
+          // Drive同期の突合失敗はUIを止めない(次の集合変化で再試行される)。
         }
       })();
     }, 5000);

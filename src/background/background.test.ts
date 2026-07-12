@@ -138,7 +138,7 @@ describe("インストール/起動", () => {
     handlers.onInstalled();
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: POLL_ALARM_NAME,
-      opts: { periodInMinutes: 5 },
+      opts: { periodInMinutes: 15 },
     });
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: DAILY_ALARM_NAME,
@@ -152,7 +152,7 @@ describe("インストール/起動", () => {
     handlers.onStartup();
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: POLL_ALARM_NAME,
-      opts: { periodInMinutes: 5 },
+      opts: { periodInMinutes: 15 },
     });
   });
 });

@@ -11,7 +11,8 @@ import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
 import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
-const POLL_INTERVAL_MINUTES = 5;
+// カレンダー次予定の取得間隔。ユーザー指示で15分に一回(予定の10分前アラームは preEventAlarm 側)。
+const POLL_INTERVAL_MINUTES = 15;
 const PRE_EVENT_ALARM_NAME = "pre-event-alarm";
 const NOTIFICATION_ID = "pre-event-notification";
 // 日次メンテ(Drive日付フォルダへ前日分を格納 + NASのSQLite索引を再生成)。厳密な0:30起動は

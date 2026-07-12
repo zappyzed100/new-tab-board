@@ -6,7 +6,10 @@ import { syncJsonBackupToDrive } from "./jsonBackupSync";
 
 export type JsonBackupSyncStatus = "idle" | "syncing" | "synced" | "unauthenticated" | "error";
 
-const DEBOUNCE_MS = 3_000;
+// 全データJSONバックアップの自動退避間隔。ユーザー指示「同期回数が多すぎる」を受け、編集/並べ替えの
+// たびに全文を上げないよう5分へ(履歴スナップショット・Drive active と同じ節度)。並べ替えだけの
+// 変更もこの5分窓へ吸収される。明示退避(データ管理の「☁️ Driveへ退避」)は即時なので待たされない。
+const DEBOUNCE_MS = 300_000;
 
 export function useJsonBackupSync(
   json: string | null,
