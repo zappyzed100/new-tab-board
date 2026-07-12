@@ -31,9 +31,31 @@ HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.newtabboard.na
 このフォルダの`nas_bridge.bat`・`com.newtabboard.nas_bridge.json`(いずれも
 `install_windows.py`が生成した派生ファイル)も削除して構わない。
 
+## タグ検索用の索引 (build_index.py)
+
+拡張機能が `<NASフォルダ>/notes/<id>.md`(YAML front matter + 本文)を書き出す。
+これを外部ツールからSQLで検索したい場合は、次で `<NASフォルダ>/data/index.db`(SQLite)を
+再生成する(正本は .md。db は消えても再生成できる):
+
+```
+python build_index.py "Z:\NAS\backup"
+```
+
+生成される `index.db` の主なテーブルは `notes / tags / note_tags`。例: 「開発」タグのノート:
+
+```sql
+SELECT notes.title FROM notes
+JOIN note_tags ON notes.id = note_tags.note_id
+JOIN tags ON tags.id = note_tags.tag_id
+WHERE tags.name = '開発';
+```
+
+依存は標準ライブラリのみ(sqlite3)。拡張機能自身はこの db を読まない(ブラウザからSQLiteは
+使えないため。アプリ内のタグ検索はメモリ内フィルタで完結する)。
+
 ## テスト
 
 ```
 cd native-host
-uv run --with pytest pytest test_nas_bridge.py
+uv run --with pytest pytest
 ```

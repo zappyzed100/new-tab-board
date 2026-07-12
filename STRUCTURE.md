@@ -73,8 +73,10 @@
 ## `native-host/`
 
 - `native-host/README.md`
+- `native-host/build_index.py` — build_index.py — NAS上の notes/*.md (YAML front matter) から検索用SQLite index.db を再生成する
 - `native-host/install_windows.py` — install_windows.py — NASブリッジnative messaging hostをWindowsへ登録する
 - `native-host/nas_bridge.py` — nas_bridge.py — New Tab BoardのNASブリッジ native messaging host
+- `native-host/test_build_index.py` — test_build_index.py — build_index.py(notes/*.md → SQLite index.db 再生成)の単体テスト
 - `native-host/test_nas_bridge.py` — test_nas_bridge.py — nas_bridge.py(NASブリッジnative messaging host)の単体テスト
 
 ## `public/`
@@ -255,6 +257,12 @@
 - const test
 - const expect
 
+### `native-host/build_index.py`
+- def parse_front_matter
+- def create_schema
+- def build_index
+- def main
+
 ### `native-host/install_windows.py`
 - def main
 
@@ -266,6 +274,13 @@
 - def handle_read_file
 - def handle
 - def main
+
+### `native-host/test_build_index.py`
+- def test_parse_front_matter_basic
+- def test_parse_front_matter_quoted_and_empty_tags
+- def test_parse_front_matter_none
+- def test_build_index_creates_db_and_tag_join
+- def test_build_index_is_regenerable
 
 ### `native-host/test_nas_bridge.py`
 - def test_probe_success
