@@ -74,7 +74,6 @@
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
-- `e2e/specs/library.spec.ts` — library.spec.ts — 「📁 ライブラリ」(NASの階層md保管庫)のトグル開閉の回帰(2026-07-12)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
 - `e2e/specs/pasted-images.spec.ts` — pasted-images.spec.ts — Ctrl+Vで貼り付けた画像の一次保存/一覧/削除のE2E(2026-07-13)
@@ -211,7 +210,6 @@
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/clipboard/PastedImagesPanel.tsx` — PastedImagesPanel.tsx — Ctrl+Vで貼り付けた画像の一次保存(ローカルのみ・NASへは出さない)と、
-- `src/newtab/components/discovery/LibraryPanel.tsx` — LibraryPanel.tsx — NASの library/ 配下の階層mdを一覧・開いて編集・保存し直す(作業ノートとは別レーン)。
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — NASの索引(index.db)から タグ(AND/OR)＋本文(部分一致)＋期間(半開区間)で
@@ -771,9 +769,6 @@
 
 ### `src/newtab/components/clipboard/PastedImagesPanel.tsx`
 - function PastedImagesPanel
-
-### `src/newtab/components/discovery/LibraryPanel.tsx`
-- function LibraryPanel
 
 ### `src/newtab/components/discovery/SearchPanel.tsx`
 - const SearchPanel

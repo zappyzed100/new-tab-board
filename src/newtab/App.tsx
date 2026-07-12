@@ -7,7 +7,6 @@ import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
-import { LibraryPanel } from "./components/discovery/LibraryPanel";
 import { PastedImagesPanel } from "./components/clipboard/PastedImagesPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
@@ -106,8 +105,6 @@ export function App() {
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  // 「📁 ライブラリ」(NASの階層md保管庫)の開閉。作業ノートとは別レーンのため既定は閉じる。
-  const [showLibrary, setShowLibrary] = useState(false);
   // 本日のGemini使用回数(450到達でGPT-OSS 120Bへの乗り換え警告を出す——ユーザー指示)。
   const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
@@ -726,16 +723,6 @@ export function App() {
                     >
                       {tagging ? "タグ付け中…" : "🏷️ まとめてタグをふる"}
                     </Button>
-                    <Button
-                      type="button"
-                      variant={showLibrary ? "solid" : "soft"}
-                      size="1"
-                      data-testid="toggle-library"
-                      title="NASの階層md保管庫(ライブラリ)を開閉する(作業ノートとは別レーン)"
-                      onClick={() => setShowLibrary((v) => !v)}
-                    >
-                      📁 ライブラリ
-                    </Button>
                   </Flex>
                   <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
                     <SearchPanel
@@ -750,7 +737,6 @@ export function App() {
                   onSelectNote={selectNote}
                   onPasteResults={pasteSearchResults}
                 />
-                {showLibrary ? <LibraryPanel /> : null}
                 {orderedNotes.length > 0 ? (
                   // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
