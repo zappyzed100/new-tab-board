@@ -94,6 +94,16 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
           ...historyKeymap,
         ]),
         markdown(),
+        // 他のノート(や他の要素)を触ってフォーカスが外れたら、選択を解除してカーソルへ畳む
+        // (ユーザー指示)。drawSelection()の選択ハイライトはblurしても残り続けるため明示的に消す。
+        EditorView.domEventHandlers({
+          blur: (_event, view) => {
+            if (!view.state.selection.main.empty) {
+              view.dispatch({ selection: EditorSelection.cursor(view.state.selection.main.head) });
+            }
+            return false;
+          },
+        }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onContentChangeRef.current(update.state.doc.toString());

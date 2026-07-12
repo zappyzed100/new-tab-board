@@ -520,6 +520,19 @@ button.note-tab-add {
   border-left: 1.4px solid var(--text);
 }
 
+/* テキスト選択(Ctrl+A等)の背景。CM6のdrawSelection()が描く層(.cm-selectionBackground)。
+   既定は薄すぎ、特にダークモードでは真っ白に近く白文字が見えなくなる(ユーザー指摘)。
+   テーマごとに濃さを与え、選択中でも文字が読めるようにする。CM6ベーステーマに勝つため!important。 */
+[data-testid="notepad-editor"] .cm-selectionBackground,
+[data-testid="notepad-editor"] .cm-focused .cm-selectionBackground {
+  background: rgba(60, 110, 220, 0.3) !important;
+}
+
+:root[data-theme="dark"] [data-testid="notepad-editor"] .cm-selectionBackground,
+:root[data-theme="dark"] [data-testid="notepad-editor"] .cm-focused .cm-selectionBackground {
+  background: rgba(96, 125, 205, 0.55) !important;
+}
+
 /* Windowsメモ帳風のステータスバー(行/列・文字数) */
 [data-testid="notepad-status-bar"] {
   border: 1px solid var(--border);
