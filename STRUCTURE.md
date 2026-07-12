@@ -65,7 +65,7 @@
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/library.spec.ts` — library.spec.ts — 「📁 ライブラリ」(NASの階層md保管庫)のトグル開閉の回帰(2026-07-12)
-- `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — NoteTabs周りの状態競合バグの回帰まとめ(§13昇格対象)
+- `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(列固定masonry)の回帰(2026-07-12)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
@@ -196,6 +196,7 @@
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — タグでノートを絞り込むパネル(メモリ内・索引不要。tagSearch.tsの純粋ロジックを使う)
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
+- `src/newtab/components/notes/CLAUDE.md`
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
@@ -487,7 +488,7 @@
 
 ### `src/lib/entities/notes.ts`
 - const MAX_NOTES
-- const MAX_VISIBLE_NOTES
+- const TRAILING_EMPTY_NOTES
 - function nextNoteLetterTitle
 - function createNote
 - function addNote
@@ -495,7 +496,9 @@
 - function removeNote
 - function sortedNotes
 - function reorderNotes
-- function resolveVisibleNoteIds
+- function reorderNotesById
+- function moveNoteUp
+- function ensureTrailingEmptyNotes
 
 ### `src/lib/entities/tags.ts`
 - function extractTags

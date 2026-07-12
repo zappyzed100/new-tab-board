@@ -11,17 +11,17 @@
 // Tabs.TriggerのasChild先はdiv(interactive contentのネスト制約が無い要素)にしている。
 // 本家(adamschwartz/chrome-tabs)のドラッグ物理演算(draggabilly)の代わりに、
 // BookmarkGrid.tsxと同じ自前のHTML5 native drag-and-dropパターンで並べ替えを実装している。
-// ピン留め機能のUIは撤去済み(データ上のnote.pinned/sortedNotesの並び順ロジック自体は
-// 互換性のため維持——インポートしたデータのpinned:trueも並び順には反映され続ける)。
+// 「横並び3件を選ぶチェックボックス」は撤去済み——ノートは全件をボード(列固定masonry)で
+// 常時表示する設計へ移行した(App.tsx)。ピン/一つ上へ/ドラッグ交換のUIは各ノートペイン
+// (NoteEditorPane)側に持つ(note.pinned/sortedNotesの並び順ロジックはそのまま利用)。
 import { useState } from "react";
-import { Checkbox, IconButton, TextField } from "@radix-ui/themes";
+import { IconButton, TextField } from "@radix-ui/themes";
 import { Tabs } from "radix-ui";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import {
   addNote,
   createNote,
   MAX_NOTES,
-  MAX_VISIBLE_NOTES,
   nextNoteLetterTitle,
   removeNote,
   reorderNotes,
@@ -33,22 +33,11 @@ import type { Note } from "../../../types";
 type Props = {
   notes: Note[];
   activeNoteId: string | null;
-  /** 横並び表示中のノートID(3件以下なら常に全件と一致)。 */
-  visibleNoteIds: string[];
   onNotesChange: (update: Note[] | ((prev: Note[]) => Note[])) => void;
   onSelect: (noteId: string) => void;
-  /** 4件以上の時だけ使う「表示する3件」の選択トグル。 */
-  onToggleVisible: (noteId: string) => void;
 };
 
-export function NoteTabs({
-  notes,
-  activeNoteId,
-  visibleNoteIds,
-  onNotesChange,
-  onSelect,
-  onToggleVisible,
-}: Props) {
+export function NoteTabs({ notes, activeNoteId, onNotesChange, onSelect }: Props) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const sorted = sortedNotes(notes);
@@ -101,30 +90,6 @@ export function NoteTabs({
                   >
                     {note.title}
                   </span>
-                  {notes.length > 3 ? (
-                    <Checkbox
-                      data-testid={`note-tab-visible-${note.id}`}
-                      title="横並び表示に含める(3列で下へ折り返して並ぶ)"
-                      checked={visibleNoteIds.includes(note.id)}
-                      disabled={
-                        visibleNoteIds.length >= MAX_VISIBLE_NOTES &&
-                        !visibleNoteIds.includes(note.id)
-                      }
-                      // Tabs.Triggerは(クリックではなく)mousedown、および子要素へフォーカスが
-                      // 移った際のfocus(onFocus。ブラウザがクリック時に自動でボタンへフォーカス
-                      // を移す副作用としてfocusinがバブリングする)の時点でcontext.onValueChangeを
-                      // 呼ぶ(生radix-uiのTabsTrigger実装。RovingFocusGroup.Itemのフォーカス管理
-                      // 込み)。clickだけstopPropagationしてもmousedown/focusは止まらず素通りして
-                      // バブリングし、親のonSelect(selectNote)がrequestedVisibleIdsを別ロジック
-                      // (スワップ式)で書き換えてしまい、直後のonCheckedChangeによる追加/削除と
-                      // 競合して「チェックした直後に外れる」という再現しにくい競合の原因になって
-                      // いた。両方の段階で止める。
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onFocus={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                      onCheckedChange={() => onToggleVisible(note.id)}
-                    />
-                  ) : null}
                   <span
                     data-testid={`note-tab-delete-${note.id}`}
                     className="note-tab-close"

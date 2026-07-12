@@ -1,8 +1,8 @@
 // search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 // 横断TODO集約機能は撤去済み(ユーザーフィードバックにより不要と判断)。
-// ノートは3件以下なら全件が横並び表示される(SPEC.md §4.2)ため、このテストのように
-// 2件同時に開いていると.cm-content等のセレクタが複数ヒットする。「現在アクティブな
-// ペイン」(data-active="true")に絞り込むことで一意にする。
+// ノートは全件がボード表示される(列固定masonry)+末尾に常に空3つが補充されるため、
+// タブは `.last()` では狙えない(本文を書くと末尾へ新しい空が増える)。タブはタイトルで
+// 名指しし、編集対象ペインは「現在アクティブなペイン」(data-active="true")で一意にする。
 import { expect, test } from "../fixtures";
 
 const ACTIVE_PANE = '[data-testid^="note-editor-area-"][data-active="true"]';
@@ -12,22 +12,25 @@ test("検索・バックリンクが連動して動く", async ({ context, newTa
   await page.goto(newTabUrl);
   await expect(page.getByTestId("app-root")).toBeVisible();
 
+  const tabByTitle = (title: string) =>
+    page.locator('[data-testid^="note-tab-select-"]', { hasText: title });
+
   // --- ノート1: 「会議メモ」— 検索語・[[買い物リスト]]へのリンクを含む ---
-  await page.getByTestId("note-tab-add").click();
-  const note1Tab = page.locator('[data-testid^="note-tab-select-"]').last();
-  await note1Tab.dblclick();
+  // 起動直後の末尾空ノート(ノートA)をダブルクリックしてリネームする(新規追加せず既存の空を使う)。
+  await page.locator('[data-testid^="note-tab-select-"]').first().dblclick();
   await page.locator('[data-testid^="note-tab-rename-input-"]').fill("会議メモ");
   await page.locator('[data-testid^="note-tab-rename-input-"]').blur();
+  await tabByTitle("会議メモ").click();
   await page.locator(`${ACTIVE_PANE} .cm-content`).click();
   await page.keyboard.type("lookup keyword-xyz here\n[[買い物リスト]]");
   await page.evaluate(() => window.dispatchEvent(new Event("blur")));
 
-  // --- ノート2: 「買い物リスト」(バックリンク先) ---
-  await page.getByTestId("note-tab-add").click();
-  const note2Tab = page.locator('[data-testid^="note-tab-select-"]').last();
-  await note2Tab.dblclick();
+  // --- ノート2: 「買い物リスト」(バックリンク先)。別の空ノートをリネームして用意する ---
+  await tabByTitle("ノートB").dblclick();
   await page.locator('[data-testid^="note-tab-rename-input-"]').fill("買い物リスト");
   await page.locator('[data-testid^="note-tab-rename-input-"]').blur();
+  const note1Tab = tabByTitle("会議メモ");
+  const note2Tab = tabByTitle("買い物リスト");
 
   // --- 全文検索: ノート1の検索語がヒットする(検索バーは全ノート横断で常時表示) ---
   await note1Tab.click();

@@ -3,8 +3,8 @@ import type { Note } from "../../types";
 
 /** ノートの保持上限(ユーザー指示で26→501へ拡張)。A〜Z(26)を超えたらAA以降を解禁する。 */
 export const MAX_NOTES = 501;
-/** 横並び表示に含められる最大件数(ユーザー指示で3→上限まで。3列で下へ折り返して並ぶ)。 */
-export const MAX_VISIBLE_NOTES = MAX_NOTES;
+/** 末尾に常時確保する空ノートの数(ユーザー指示: スプレッドシートの末尾空行と同じ発想)。 */
+export const TRAILING_EMPTY_NOTES = 3;
 
 /** 1始まりの通し番号を、スプレッドシート列風の英字(1→A, 26→Z, 27→AA, 28→AB…)へ変換する。 */
 function columnLetters(n: number): string {
@@ -70,15 +70,53 @@ export function reorderNotes(notes: Note[], fromIndex: number, toIndex: number):
   return sorted.map((n, i) => ({ ...n, order: i }));
 }
 
-/** 横並び表示するノートIDを解決する(SPEC.md §4.2)。
- * ノートが3件以下なら全件を自動表示(選択不要)。4件以上ならrequestedIds(ユーザーが
- * チェックボックスで選んだもの)をそのままMAX_VISIBLE_NOTES件まで反映する——どの表示数でも
- * ユーザーの選択どおりにする(自動で埋め戻さない。削除済みIDはrequestedIdsから自然に除外)。
- * 表示は3列で下へ折り返して並ぶ(CSS側。ユーザー指示で「3件並んだ下にまた並べて」を繰り返す)。 */
-export function resolveVisibleNoteIds(notes: Note[], requestedIds: string[]): string[] {
+/** 表示順(sortedNotes基準)で fromId の要素を toId の位置へ移動する。
+ * ノートペインをまたぐドラッグ交換で、index ではなく id で指定するための薄いラッパー
+ * (どちらかの id が存在しなければ何もしない)。 */
+export function reorderNotesById(notes: Note[], fromId: string, toId: string): Note[] {
   const sorted = sortedNotes(notes);
-  if (sorted.length <= 3) return sorted.map((n) => n.id);
+  const fromIndex = sorted.findIndex((n) => n.id === fromId);
+  const toIndex = sorted.findIndex((n) => n.id === toId);
+  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return notes;
+  return reorderNotes(notes, fromIndex, toIndex);
+}
 
-  const validIds = new Set(sorted.map((n) => n.id));
-  return requestedIds.filter((id) => validIds.has(id)).slice(0, MAX_VISIBLE_NOTES);
+/** 指定ノートを順序列で1つ前(=表示上ひとつ左上)のノートと入れ替える。
+ * 先頭(index 0)や存在しないidはそのまま返す(「ひとつ上へ」ボタン用)。 */
+export function moveNoteUp(notes: Note[], id: string): Note[] {
+  const sorted = sortedNotes(notes);
+  const i = sorted.findIndex((n) => n.id === id);
+  if (i <= 0) return notes;
+  return reorderNotes(notes, i, i - 1);
+}
+
+/** 順序列(sortedNotes基準)の末尾にある空ノートが `desired` 件に満たなければ、
+ * `nextNoteLetterTitle` で命名した空ノートを補充して返す純関数(冪等: 既に足りていれば
+ * 元の配列をそのまま返す)。MAX_NOTES 上限に達したら打ち止める。
+ * 「常に末尾に空のノートが N 個ある」(ユーザー指示: 付箋を貼るための余白)を保つ土台。 */
+export function ensureTrailingEmptyNotes(
+  notes: Note[],
+  desired: number,
+  createdAt?: number,
+): Note[] {
+  const sorted = sortedNotes(notes);
+  // 末尾から数えて連続する空ノート(content が空白のみ)の数。
+  let trailingEmpty = 0;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].content.trim() === "") trailingEmpty += 1;
+    else break;
+  }
+  const additions: Note[] = [];
+  const titles = notes.map((n) => n.title);
+  let nextOrder = sorted.length; // reorder は sortedNotes 経由なので order は連番でなくてよい
+  for (let count = trailingEmpty; count < desired; count++) {
+    const title = nextNoteLetterTitle(titles);
+    if (title === null) break; // MAX_NOTES 上限
+    const note = createNote(title, nextOrder, createdAt);
+    additions.push(note);
+    titles.push(title);
+    nextOrder += 1;
+  }
+  // 補充が無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
+  return additions.length === 0 ? notes : [...notes, ...additions];
 }

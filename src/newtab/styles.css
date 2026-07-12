@@ -131,16 +131,44 @@ body {
   flex: 1;
 }
 
-/* ノートは「1行に最大3件」まで並べ、はみ出したら下の行へ折り返して下へどんどん伸びる
-   (ユーザー指示: 1行3件まで・幅はこれまでどおり)。flex-basisを(100%-2*gap)/3にすることで
-   数式上ちょうど3件で1行が埋まり、4件目以降は必ず次の行へ回る(画面が広くても4列にならない)。
-   grow:1で1〜3件のときは幅を埋める(従来の気に入っている見た目)。align-items:stretch(既定)で
-   各行のノートは等高になり、行同士は隙間なく積み上がる。狭い画面ではmin-widthで2列以下へ緩む。 */
-.note-editor-panes {
+/* ノートボード = 列固定masonry(ユーザー指示「列固定・安定」)。App.tsxが order順の全ノートを
+   i%列数 で各列へ振り分け、`.note-column` ごとに縦積みする。flex-wrapの等高(align-items:stretch)を
+   やめ、各列を独立した縦スタックにすることで「短いノートの真下に次が詰まり、長いノートで隣の列が
+   引き伸ばされない」を実現する(flexの行折り返しでは原理上できなかった詰め上げ)。列同士は
+   align-items:flex-startで上端揃え(縦の高さは列ごとにバラバラでよい)。 */
+.note-board {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--space-3);
-  align-items: stretch;
+  align-items: flex-start;
+}
+
+.note-column {
+  flex: 1 1 0;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ノート位置入れ替え用のドラッグつまみ(ヘッダ左端)。エディタ本文ではなくここを掴む
+   (本文をdraggableにするとテキスト選択と衝突するため)。 */
+.note-drag-handle {
+  cursor: grab;
+  user-select: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 var(--space-1);
+  color: var(--text-muted, var(--text));
+  opacity: 0.6;
+}
+
+.note-drag-handle:hover,
+.note-drag-handle:focus-visible {
+  opacity: 1;
+}
+
+.note-drag-handle:active {
+  cursor: grabbing;
 }
 
 /* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。 */
@@ -415,13 +443,11 @@ button.note-tab-add {
 
 /* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク。1ペイン=1ノート。
    NoteEditorPane.tsxが `note-editor-area-<noteId>` を付与するため前方一致で拾う)
-   外枠はCard(NoteEditorPane.tsx)に任せ、伸縮指定だけここで持つ。この要素が
-   .note-editor-panes の flex item 本体なので、1行3件までの基準幅もここに持たせる
-   (basisを(100%-2*gap)/3にすると数式上ちょうど3件で1行が埋まり4件目は次行へ。
-   この規則が .note-editor-panes > * より後方=後勝ちのため、基準幅はこちらに書く)。 --- */
+   外枠はCard(NoteEditorPane.tsx)に任せる。列固定masonryでは各ペインは所属する
+   `.note-column`(縦flex)の中で横幅いっぱい・高さは中身なり(等高stretchしない)。 --- */
 [data-testid^="note-editor-area-"] {
-  flex: 1 1 calc((100% - 2 * var(--space-3)) / 3);
-  min-width: 240px;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 

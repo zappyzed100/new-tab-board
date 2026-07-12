@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   addNote,
   createNote,
+  ensureTrailingEmptyNotes,
   MAX_NOTES,
+  moveNoteUp,
   nextNoteLetterTitle,
   removeNote,
   reorderNotes,
-  resolveVisibleNoteIds,
+  reorderNotesById,
   sortedNotes,
   updateNote,
 } from "./notes";
@@ -102,39 +104,91 @@ describe("nextNoteLetterTitle", () => {
   });
 });
 
-describe("resolveVisibleNoteIds", () => {
-  it("3件以下なら選択に関わらず全件を表示順で返す", () => {
+describe("reorderNotesById", () => {
+  it("fromId を toId の位置へ移動する(表示順基準)", () => {
     const a = createNote("A", 0);
     const b = createNote("B", 1);
-    expect(resolveVisibleNoteIds([a, b], [])).toEqual([a.id, b.id]);
-    expect(resolveVisibleNoteIds([a, b], ["dummy"])).toEqual([a.id, b.id]);
+    const c = createNote("C", 2);
+    const after = reorderNotesById([a, b, c], a.id, c.id);
+    expect(after.map((n) => n.title).sort()).toEqual(["A", "B", "C"]);
+    expect(sortedNotes(after).map((n) => n.title)).toEqual(["B", "C", "A"]);
   });
 
-  it("4件以上ならrequestedIdsをそのまま(自動で埋めずに)返す", () => {
-    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    const [, , , d] = notes;
-    expect(resolveVisibleNoteIds(notes, [d.id])).toEqual([d.id]);
+  it("同じidや存在しないidなら元配列をそのまま返す", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const notes = [a, b];
+    expect(reorderNotesById(notes, a.id, a.id)).toBe(notes);
+    expect(reorderNotesById(notes, "gone", b.id)).toBe(notes);
+  });
+});
+
+describe("moveNoteUp", () => {
+  it("順序列で1つ前のノートと入れ替える", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const c = createNote("C", 2);
+    // C(index2)を1つ上へ → B と入れ替わって A, C, B
+    expect(sortedNotes(moveNoteUp([a, b, c], c.id)).map((n) => n.title)).toEqual(["A", "C", "B"]);
   });
 
-  it("requestedIdsが空なら0件(表示なし)を返す", () => {
-    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    expect(resolveVisibleNoteIds(notes, [])).toEqual([]);
+  it("先頭ノートは動かさない(元配列をそのまま返す)", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const notes = [a, b];
+    expect(moveNoteUp(notes, a.id)).toBe(notes);
+    expect(moveNoteUp(notes, "gone")).toBe(notes);
+  });
+});
+
+describe("ensureTrailingEmptyNotes", () => {
+  it("末尾の空ノートが足りなければ命名して補充する", () => {
+    const a = { ...createNote("会議メモ", 0), content: "本文" };
+    const after = ensureTrailingEmptyNotes([a], 3);
+    expect(after).toHaveLength(4);
+    // 補充分はすべて空で、ノートA/B/Cと命名される(既存タイトルを避ける)
+    const added = after.filter((n) => n.id !== a.id);
+    expect(added.every((n) => n.content === "")).toBe(true);
+    expect(added.map((n) => n.title).sort()).toEqual(["ノートA", "ノートB", "ノートC"]);
   });
 
-  it("requestedIdsが4件以上でも全件表示できる(上限を3→MAX_VISIBLE_NOTESへ拡張)", () => {
-    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    const [a, b, c, d] = notes;
-    expect(resolveVisibleNoteIds(notes, [d.id, c.id, b.id, a.id])).toEqual([
-      d.id,
-      c.id,
-      b.id,
-      a.id,
-    ]);
+  it("末尾に既に空が3つあれば何もしない(冪等・同一参照)", () => {
+    const notes = [
+      { ...createNote("X", 0), content: "本文" },
+      createNote("ノートA", 1),
+      createNote("ノートB", 2),
+      createNote("ノートC", 3),
+    ];
+    expect(ensureTrailingEmptyNotes(notes, 3)).toBe(notes);
   });
 
-  it("requestedIdsに削除済み(存在しない)IDが混じっていれば無視する(埋め直さない)", () => {
-    const notes = [createNote("A", 0), createNote("B", 1), createNote("C", 2), createNote("D", 3)];
-    const [, , c] = notes;
-    expect(resolveVisibleNoteIds(notes, ["gone", c.id])).toEqual([c.id]);
+  it("末尾の空が2つなら1つだけ補充する", () => {
+    const notes = [
+      { ...createNote("X", 0), content: "本文" },
+      createNote("ノートA", 1),
+      createNote("ノートB", 2),
+    ];
+    const after = ensureTrailingEmptyNotes(notes, 3);
+    expect(after).toHaveLength(4);
+    expect(after.filter((n) => n.content === "")).toHaveLength(3);
+  });
+
+  it("空欄の並びが末尾になければ(間にあるだけなら)末尾側に補充する", () => {
+    // 空(A) → 本文(X) の順。末尾は本文なので trailingEmpty=0 で3件補充される。
+    const notes = [createNote("ノートA", 0), { ...createNote("X", 1), content: "本文" }];
+    const after = ensureTrailingEmptyNotes(notes, 3);
+    expect(after).toHaveLength(5);
+  });
+
+  it("MAX_NOTES 上限では補充を打ち止める", () => {
+    const used: string[] = [];
+    while (used.length < MAX_NOTES) {
+      const t = nextNoteLetterTitle(used);
+      if (t === null) break;
+      used.push(t);
+    }
+    // 全501件を「本文あり」で埋める(末尾に空が無い状態)。
+    const full = used.map((title, i) => ({ ...createNote(title, i), content: "本文" }));
+    expect(ensureTrailingEmptyNotes(full, 3)).toHaveLength(MAX_NOTES);
   });
 });

@@ -17,9 +17,11 @@ import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib
 import {
   addNote,
   createNote,
-  MAX_VISIBLE_NOTES,
-  resolveVisibleNoteIds,
+  ensureTrailingEmptyNotes,
+  moveNoteUp,
+  reorderNotesById,
   sortedNotes,
+  TRAILING_EMPTY_NOTES,
   updateNote,
 } from "../lib/entities/notes";
 import { getGeminiApiKey } from "../lib/storage/db";
@@ -52,14 +54,16 @@ const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
 
+// ノートボードの列数(1列あたり概ね280px、最大3列)。列固定masonryの振り分けに使う。
+function noteColumnCountFor(width: number): number {
+  return Math.max(1, Math.min(3, Math.floor(width / 280)));
+}
+
 export function App() {
   const [sync, setSync] = useState<SyncState | null>(null);
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  // 4件以上ある時だけ意味を持つ「表示する3件」のユーザー選択(3件以下なら常に全件
-  // 表示のため無視される。resolveVisibleNoteIdsが実際に描画する集合へ解決する)。
-  const [requestedVisibleIds, setRequestedVisibleIds] = useState<string[]>([]);
   // 全文検索バーは常時表示(開閉トグルは撤去済み——ユーザー指示)。Cmd/Ctrl+Fは
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -86,30 +90,12 @@ export function App() {
   // 「ユーザーが自分でノートを選んだ」時だけノート本文へオートフォーカスする
   // (それ以外=起動直後の自動選択ではフォーカスを奪わない)。
   const userSelectedNoteRef = useRef(false);
+  // ドラッグ交換で「掴んでいるノートid」を保持するref(同期更新——下記handleNoteDragStart参照)。
+  const dragNoteIdRef = useRef<string | null>(null);
   function selectNote(noteId: string) {
+    // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
-    // 横並び表示にも入れる(上限に達していれば最も古いものと入れ替える)。
-    setRequestedVisibleIds((prev) =>
-      prev.includes(noteId)
-        ? prev
-        : prev.length >= MAX_VISIBLE_NOTES
-          ? [...prev.slice(1), noteId]
-          : [...prev, noteId],
-    );
-  }
-
-  // タブクリック(selectNote)と違い、チェックボックスでの明示的な選択操作は
-  // 「入りきらないから何かを追い出す」ことをせず、単純な追加/削除にとどめる
-  // (これにより0件・1件・2件・3件のどの表示数もユーザーの意図どおりに選べる)。
-  function toggleVisible(noteId: string) {
-    setRequestedVisibleIds((prev) =>
-      prev.includes(noteId)
-        ? prev.filter((id) => id !== noteId)
-        : prev.length >= MAX_VISIBLE_NOTES
-          ? prev
-          : [...prev, noteId],
-    );
   }
 
   useEffect(() => {
@@ -120,14 +106,6 @@ export function App() {
       setNotes(localData.notes);
       setTodos(localData.todos ?? []);
       setActiveNoteId(localData.notes[0]?.id ?? null);
-      // 4件以上あるノートの初期表示。resolveVisibleNoteIdsはもう自動補完しないため、
-      // 何も指定しないと初回表示が0件になってしまう——表示順の先頭3件を既定値として
-      // シードする(以前の「常に3件表示」だった挙動に近い、素直な初期状態)。
-      setRequestedVisibleIds(
-        sortedNotes(localData.notes)
-          .slice(0, 3)
-          .map((n) => n.id),
-      );
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
     });
@@ -142,6 +120,16 @@ export function App() {
   useEffect(() => {
     void flushAllToNas();
   }, []);
+
+  // 常に末尾へ空ノートを3つ確保する(ユーザー指示: 付箋を貼るための余白。スプレッドシートの
+  // 末尾空行と同じ発想)。ensureTrailingEmptyNotesは不足時のみ新しい配列を返すため冪等——
+  // 補充が必要な時だけ更新し、無限ループにならない(補充後は trailing=3 で同一参照が返る)。
+  useEffect(() => {
+    if (!notes) return;
+    if (ensureTrailingEmptyNotes(notes, TRAILING_EMPTY_NOTES, clockNow()) !== notes) {
+      updateNotes((prev) => ensureTrailingEmptyNotes(prev, TRAILING_EMPTY_NOTES, clockNow()));
+    }
+  }, [notes]);
 
   // 「出先で確認」用に、ボード上の全ノートを単一ファイル(active/New Tab Board.txt)へ
   // debounce付きで自動ミラーする(ファイル名固定・各ノートはtitle見出し付き——ユーザー指示)。
@@ -213,14 +201,21 @@ export function App() {
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
-  // 横並び表示する最大3件(3件以下なら全件・4件以上ならrequestedVisibleIds+自動補完)。
-  const visibleNoteIds = useMemo(
-    () => resolveVisibleNoteIds(orderedNotes, requestedVisibleIds),
-    [orderedNotes, requestedVisibleIds],
-  );
-  const visibleNotes = visibleNoteIds
-    .map((id) => notes?.find((n) => n.id === id))
-    .filter((n): n is Note => n !== undefined);
+  // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。列固定masonryでは
+  // ノートを order 順に i%列数 で各列へ振り分けるため、列数はJSで知っている必要がある。
+  const [columnCount, setColumnCount] = useState(() => noteColumnCountFor(window.innerWidth));
+  useEffect(() => {
+    const onResize = () => setColumnCount(noteColumnCountFor(window.innerWidth));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  // order 順の全ノートを i%列数 で各列へ振り分ける(左上めがけて詰める。短いノートの真下に
+  // 次のノートが詰まり、削除で全員がひとつ左上へ寄る——ユーザー指示の「列固定・安定」)。
+  const noteColumns = useMemo(() => {
+    const cols: Note[][] = Array.from({ length: columnCount }, () => []);
+    orderedNotes.forEach((note, i) => cols[i % columnCount].push(note));
+    return cols;
+  }, [orderedNotes, columnCount]);
 
   // 全データ(ブックマーク/ノート/設定/TODO)のJSONバックアップをdebounce付きで自動的に
   // Driveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
@@ -318,6 +313,31 @@ export function App() {
   function updateTodos(nextTodos: Todo[]) {
     setTodos(nextTodos);
     void saveLocalData({ notes: notes ?? [], todos: nextTodos, nextEventCache, alarmActive });
+  }
+
+  // ノートボードの並べ替え/ピン(すべてlinear order=sortedNotes上の操作。列固定masonryの
+  // 見た目はApp側の振り分けが追従する)。
+  function togglePinNote(noteId: string) {
+    updateNotes((prev) => {
+      const target = prev.find((n) => n.id === noteId);
+      return updateNote(prev, noteId, { pinned: !target?.pinned });
+    });
+  }
+  function moveNoteUpOne(noteId: string) {
+    updateNotes((prev) => moveNoteUp(prev, noteId));
+  }
+  // ペインをまたぐドラッグ交換: 掴んだノートidをrefに置き(refは同期更新なので再レンダ待ちに
+  // 依存しない)、別ペインへdropしたらその位置へ移動する。DataTransferは使わない
+  // (合成DnDテスト環境ではペイン間でDataTransferが運ばれないため、refで確実に受け渡す)。
+  function handleNoteDragStart(noteId: string) {
+    dragNoteIdRef.current = noteId;
+  }
+  function handleNoteDrop(targetId: string) {
+    const fromId = dragNoteIdRef.current;
+    dragNoteIdRef.current = null;
+    if (fromId && fromId !== targetId) {
+      updateNotes((prev) => reorderNotesById(prev, fromId, targetId));
+    }
   }
 
   // 「🏷️ タグをふる」で全ノートにGeminiタグを付ける。前回タグ付け以降変更のないノートは
@@ -568,10 +588,8 @@ export function App() {
                     <NoteTabs
                       notes={notes}
                       activeNoteId={activeNoteId}
-                      visibleNoteIds={visibleNoteIds}
                       onNotesChange={updateNotes}
                       onSelect={selectNote}
-                      onToggleVisible={toggleVisible}
                     />
                   </Flex>
                   <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
@@ -584,23 +602,38 @@ export function App() {
                 </div>
                 <TagSearchPanel notes={notes} onSelectNote={selectNote} />
                 {showLibrary ? <LibraryPanel /> : null}
-                {visibleNotes.length > 0 ? (
-                  <div className="note-editor-panes">
-                    {visibleNotes.map((note) => (
-                      <NoteEditorPane
-                        key={note.id}
-                        note={note}
-                        notes={notes}
-                        isActive={note.id === activeNoteId}
-                        autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
-                        manualSyncSignal={manualSyncSignal}
-                        onNotesChange={updateNotes}
-                        onSelectNote={selectNote}
-                        onSelectNoteByTitle={selectNoteByTitle}
-                        onCreateNote={openFileAsNote}
-                        onAddTodos={addTodos}
-                        onMessage={setDataPanelMessage}
-                      />
+                {orderedNotes.length > 0 ? (
+                  // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
+                  // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
+                  <div className="note-board" data-testid="note-board">
+                    {noteColumns.map((column, colIndex) => (
+                      <div
+                        key={colIndex}
+                        className="note-column"
+                        data-testid={`note-column-${colIndex}`}
+                      >
+                        {column.map((note) => (
+                          <NoteEditorPane
+                            key={note.id}
+                            note={note}
+                            notes={notes}
+                            isActive={note.id === activeNoteId}
+                            isFirst={orderedNotes[0]?.id === note.id}
+                            autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                            manualSyncSignal={manualSyncSignal}
+                            onNotesChange={updateNotes}
+                            onSelectNote={selectNote}
+                            onSelectNoteByTitle={selectNoteByTitle}
+                            onCreateNote={openFileAsNote}
+                            onAddTodos={addTodos}
+                            onMessage={setDataPanelMessage}
+                            onTogglePin={togglePinNote}
+                            onMoveUp={moveNoteUpOne}
+                            onDragStartNote={handleNoteDragStart}
+                            onDropNote={handleNoteDrop}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 ) : (

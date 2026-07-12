@@ -1,5 +1,12 @@
 # plan.md — 設計根拠
 
+## ノートボードを列固定masonry化(全件表示+ピン/並べ替え/末尾空3つ・2026-07-12)
+「最大3件を横並び+チェックボックス選択」を廃し、ノート全件を1枚のボードで常時表示する。
+`sortedNotes`(ピン→order)を `i%列数` で各列へ振り分ける「列固定・安定」方式(ユーザー選択)——
+短いノートの真下に次が詰まり(旧flex等高のパディング伸びを解消)、削除で全員が左上へ寄る。
+各ペインにピン/一つ上へ/ドラッグ交換を持たせ、末尾には常に空ノートを3つ確保する。設計詳細と
+ハマりどころは `src/newtab/components/notes/CLAUDE.md`。
+
 ## native-host/ (NASブリッジ native messaging host・2026-07-12)
 NASフォルダへの書き込みは`showDirectoryPicker()`を使っていたが、Chrome拡張機能の
 ページから呼ぶと選択後もAbortErrorになる既知バグ(WICG/file-system-access#314、

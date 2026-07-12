@@ -45,6 +45,8 @@ type Props = {
   note: Note;
   notes: Note[];
   isActive: boolean;
+  /** 順序列の先頭ノートか(「ひとつ上へ」を無効化するため)。 */
+  isFirst: boolean;
   autoFocus: boolean;
   /** Cmd/Ctrl+Sが押されるたびに増える共有カウンタ。表示中の全ペインがこれを監視し、
    * 自分のノートを即時スナップショット+Drive同期する(「見えている全部を保存する」)。 */
@@ -62,12 +64,21 @@ type Props = {
   onAddTodos: (texts: string[]) => void;
   /** データ管理パネルの結果メッセージ欄へ通知する。 */
   onMessage: (message: string) => void;
+  /** ピン留めの切替(ピンしたノートは最優先で左上へ)。 */
+  onTogglePin: (noteId: string) => void;
+  /** 順序列で1つ前(表示上ひとつ左上)のノートと入れ替える。 */
+  onMoveUp: (noteId: string) => void;
+  /** ドラッグ交換: つまみを掴んだ時に自分のidを「掴んだノート」として通知する。 */
+  onDragStartNote: (noteId: string) => void;
+  /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
+  onDropNote: (targetNoteId: string) => void;
 };
 
 export function NoteEditorPane({
   note,
   notes,
   isActive,
+  isFirst,
   autoFocus,
   manualSyncSignal,
   onNotesChange,
@@ -76,6 +87,10 @@ export function NoteEditorPane({
   onCreateNote,
   onAddTodos,
   onMessage,
+  onTogglePin,
+  onMoveUp,
+  onDragStartNote,
+  onDropNote,
 }: Props) {
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -193,10 +208,54 @@ export function NoteEditorPane({
   }, [manualSyncSignal]);
 
   return (
-    <Card data-testid={`note-editor-area-${note.id}`} data-active={isActive || undefined}>
+    <Card
+      data-testid={`note-editor-area-${note.id}`}
+      data-active={isActive || undefined}
+      // ドラッグ交換の drop 先。掴んだノート(App側のrefが保持)をこのノートの位置へ移動する。
+      // dropを許可するためdragOverでpreventDefaultする。本文中央はCodeMirrorがdropを飲むため、
+      // 実質的にヘッダのつまみ帯へ落とす運用になる(掴んだノートidはApp側のrefで受け渡す)。
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => onDropNote(note.id)}
+    >
       <Flex direction="column" gap="3">
         <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
         <Flex align="center" gap="3" wrap="wrap">
+          <span
+            className="note-drag-handle"
+            data-testid={`note-drag-handle-${note.id}`}
+            role="button"
+            tabIndex={0}
+            aria-label="ドラッグでノートの位置を入れ替える"
+            title="つまんでドラッグすると、ノートの位置を入れ替えられます"
+            draggable
+            onDragStart={(e) => {
+              onDragStartNote(note.id);
+              // FirefoxはsetDataしないとドラッグが開始しない。値自体はApp側refで受け渡すためダミー。
+              e.dataTransfer.setData("text/plain", note.id);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+          >
+            ⠿
+          </span>
+          <Button
+            type="button"
+            variant={note.pinned ? "solid" : "soft"}
+            data-testid={`pin-note-${note.id}`}
+            title={note.pinned ? "ピンを外す" : "ピン留めして最優先で左上に置く"}
+            onClick={() => onTogglePin(note.id)}
+          >
+            {note.pinned ? "📌 ピン中" : "📌 ピン"}
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`move-note-up-${note.id}`}
+            title="ひとつ上(順序でひとつ前)のノートと入れ替える"
+            disabled={isFirst}
+            onClick={() => onMoveUp(note.id)}
+          >
+            ⬆️ 上へ
+          </Button>
           <Button
             type="button"
             variant={showPreview ? "solid" : "soft"}
