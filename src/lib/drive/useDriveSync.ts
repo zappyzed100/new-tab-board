@@ -26,6 +26,9 @@ export function useDriveSync(
     if (result.status === "synced") {
       setStatus("synced");
       onSyncedRef.current(result.driveFileId, result.lastSyncedAt);
+    } else if (result.status === "skipped-empty") {
+      // 空ノートは上げない(ユーザー指示)。同期状態としてはidle(バッジを出さない)。
+      setStatus("idle");
     } else {
       setStatus(result.status);
     }

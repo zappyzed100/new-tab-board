@@ -46,6 +46,8 @@ import {
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
+import { getAuthToken } from "../lib/drive/googleAuth";
+import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
 
@@ -148,6 +150,26 @@ export function App() {
     const timer = setTimeout(() => void writeActiveNotesToNas(activeNotesPayload), 3000);
     return () => clearTimeout(timer);
   }, [activeNotesPayload]);
+
+  // Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に突き合わせる(ユーザー指示)。
+  // 空でないノートの本文アップロードは各ペインのuseDriveSyncが行い、ここでは①消された/空になった
+  // ノートのファイルを削除②日付フォルダへその日のコピーを格納する。Drive未接続(トークン無し)なら
+  // 静かに何もしない。debounceして編集の嵐で叩きすぎないようにする。
+  useEffect(() => {
+    if (!notes) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
+          if (!token) return;
+          await reconcileDriveActive(notes, clockNow(), token);
+        } catch {
+          // Drive同期の突合失敗はUIを止めない(次の編集で再試行される)。
+        }
+      })();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [notes]);
 
   // タグ検索の正本として、各ノートを notes/<id>.md (YAML front matter付き) へ書き出す(ユーザー設計)。
   // 空・ゴミ(junk)判定ノートは書かない。変更のあったノートだけ書く(全501件を毎回書かない)。

@@ -117,8 +117,11 @@
 - `src/lib/display/noteFont.ts` — noteFont.ts — ノート本文(エディタ)の文字サイズ(px)の既定値・範囲・クランプ。
 - `src/lib/display/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
 - `src/lib/display/theme.ts` — theme.ts — テーマ設定(light/dark/auto)の解決(純関数。SPEC.md §4.8)
+- `src/lib/drive/CLAUDE.md`
 - `src/lib/drive/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
 - `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
+- `src/lib/drive/driveActiveMirror.test.ts` — driveActiveMirror.test.ts — active/ の突き合わせ削除と日付フォルダ格納の単体テスト
+- `src/lib/drive/driveActiveMirror.ts` — driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
 - `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
 - `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(launchWebAuthFlowラッパー)の単体テスト
@@ -449,10 +452,22 @@
 
 ### `src/lib/drive/drive.ts`
 - type FetchLike
+- function resetDriveFolderCacheForTests
+- function getOrCreateFolder
+- function resolveFolderPath
+- function deleteDriveFile
+- function listNoteFilesInFolder
 - function findFileForNote
 - function uploadNote
 
+### `src/lib/drive/driveActiveMirror.ts`
+- function dateFolderParts
+- type ReconcileDeps
+- function reconcileDriveActive
+
 ### `src/lib/drive/driveSync.ts`
+- const ACTIVE_FOLDER_PATH
+- const ACTIVE_KIND
 - type SyncResult
 - type SyncDeps
 - function syncNoteToDrive

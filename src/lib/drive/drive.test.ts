@@ -1,6 +1,14 @@
 // drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
-import { describe, expect, it, vi } from "vitest";
-import { findFileForNote, uploadNote } from "./drive";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  deleteDriveFile,
+  findFileForNote,
+  getOrCreateFolder,
+  listNoteFilesInFolder,
+  resetDriveFolderCacheForTests,
+  resolveFolderPath,
+  uploadNote,
+} from "./drive";
 
 function fakeResponse(body: unknown, ok = true, status = 200): Response {
   return {
@@ -68,5 +76,74 @@ describe("uploadNote", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(fetchImpl.mock.calls[0][1].method).toBe("PATCH");
     expect(fetchImpl.mock.calls[1][1].method).toBe("POST"); // フォールバックは新規作成
+  });
+});
+
+describe("getOrCreateFolder / resolveFolderPath", () => {
+  beforeEach(() => resetDriveFolderCacheForTests());
+
+  it("既存フォルダが見つかればそのIDを返し、作成はしない", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ files: [{ id: "folder-x" }] }));
+    const id = await getOrCreateFolder("active", "parent-1", "tok", fetchImpl);
+    expect(id).toBe("folder-x");
+    expect(fetchImpl).toHaveBeenCalledTimes(1); // 検索のみ(作成POSTなし)
+  });
+
+  it("無ければ作成する(検索→作成の2回)", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [] })) // 検索: 無し
+      .mockResolvedValueOnce(fakeResponse({ id: "new-folder" })); // 作成
+    const id = await getOrCreateFolder("active", null, "tok", fetchImpl);
+    expect(id).toBe("new-folder");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[1][1].method).toBe("POST");
+  });
+
+  it("resolveFolderPathは各段をget-or-createして末端IDを返す(2度目はキャッシュで叩かない)", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [{ id: "app-id" }] })) // app
+      .mockResolvedValueOnce(fakeResponse({ files: [{ id: "board-id" }] })) // New Tab Board
+      .mockResolvedValueOnce(fakeResponse({ files: [{ id: "active-id" }] })); // active
+    const parts = ["app", "New Tab Board", "active"];
+    expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // 2度目はキャッシュヒットで通信ゼロ。
+    expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("deleteDriveFile", () => {
+  it("DELETEを投げる。404は成功扱い(既に無い)", async () => {
+    const ok = vi.fn().mockResolvedValue(fakeResponse({}, true, 204));
+    await expect(deleteDriveFile("f1", "tok", ok)).resolves.toBeUndefined();
+    expect(ok.mock.calls[0][1].method).toBe("DELETE");
+    const gone = vi.fn().mockResolvedValue(fakeResponse({}, false, 404));
+    await expect(deleteDriveFile("f1", "tok", gone)).resolves.toBeUndefined();
+  });
+
+  it("404以外のエラーは例外", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({}, false, 500));
+    await expect(deleteDriveFile("f1", "tok", fetchImpl)).rejects.toThrow("HTTP 500");
+  });
+});
+
+describe("listNoteFilesInFolder", () => {
+  it("noteIdを持つファイルだけ{id,noteId}で返す", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      fakeResponse({
+        files: [
+          { id: "a", appProperties: { noteId: "n1" } },
+          { id: "b", appProperties: {} }, // noteId無し→除外
+          { id: "c", appProperties: { noteId: "n2" } },
+        ],
+      }),
+    );
+    expect(await listNoteFilesInFolder("folder-1", "tok", fetchImpl)).toEqual([
+      { id: "a", noteId: "n1" },
+      { id: "c", noteId: "n2" },
+    ]);
   });
 });
