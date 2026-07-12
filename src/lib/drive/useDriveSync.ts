@@ -6,7 +6,10 @@ import type { Note } from "../../types";
 
 export type DriveSyncStatus = "idle" | "syncing" | "synced" | "unauthenticated" | "error";
 
-const DEBOUNCE_MS = 3_000;
+// Drive の active/ 更新は「5分単位」(ユーザー指示)。編集が止まって5分でアップロードする
+// (NAS active の保存タイミング・履歴スナップショットのアイドル5分と揃える)。Cmd/Ctrl+S の
+// syncNow(interactive)は即時アップロードするため、明示保存はこのdebounceを待たない。
+const DEBOUNCE_MS = 300_000;
 
 export function useDriveSync(
   note: Note | null,
