@@ -1,8 +1,10 @@
 // driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
 // 突き合わせる(ユーザー指示)。①空でないノートは per-note の syncNoteToDrive が active/ へ上げる。
-// ②ここでは active/ にあってもう存在しない/空になったノートのファイルを削除する(ブラウザで
-// 消されたら Drive でも消す)。③さらに NAS と同一構造の日付フォルダ app/New Tab Board/YYYY/M/D/ へ
-// その日のコピーも格納する。ファイルは <id>.md(Markdown+front matter)。空ノートは上げない。
+// ②reconcileDriveActive は active/ にあってもう存在しない/空になったノートのファイルを削除する
+// (ブラウザで消されたら Drive でも消す)。③copyNotesToDriveDateFolder は NAS と同一構造の日付
+// フォルダ app/New Tab Board/YYYY/M/D/ へその日のコピーを格納する——こちらは**日次**の
+// background ジョブから呼ぶ(ユーザー指示: Drive日付フォルダは一日一回)。ファイルは
+// <id>.md(Markdown+front matter)。空ノートは上げない。
 import { deleteDriveFile, listNoteFilesInFolder, resolveFolderPath, uploadNote } from "./drive";
 import { ACTIVE_FOLDER_PATH } from "./driveSync";
 import { noteToMarkdown } from "../externalIO/nasArchive";
@@ -24,23 +26,19 @@ export type ReconcileDeps = {
   uploadNote?: typeof uploadNote;
 };
 
-/** active/ を現在の非空ノート一覧へ突き合わせ(消えた/空になったノートのファイルを削除)、
- * 日付フォルダへその日のコピーを格納する。削除件数・日付格納件数を返す。 */
+/** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になったノートのファイルを削除する。
+ * 削除件数を返す。日付フォルダへの格納は copyNotesToDriveDateFolder(日次ジョブ)が担う。 */
 export async function reconcileDriveActive(
   notes: Note[],
-  now: number,
   token: string,
   deps: ReconcileDeps = {},
-): Promise<{ deleted: number; dated: number }> {
+): Promise<{ deleted: number }> {
   const _resolve = deps.resolveFolderPath ?? resolveFolderPath;
   const _list = deps.listNoteFilesInFolder ?? listNoteFilesInFolder;
   const _delete = deps.deleteDriveFile ?? deleteDriveFile;
-  const _upload = deps.uploadNote ?? uploadNote;
 
-  const nonEmpty = notes.filter((n) => n.content.trim() !== "");
-  const keepIds = new Set(nonEmpty.map((n) => n.id));
+  const keepIds = new Set(notes.filter((n) => n.content.trim() !== "").map((n) => n.id));
 
-  // ① active/ の突き合わせ削除(現在の非空ノートに無いファイル=消された/空になったノート)。
   const activeFolder = await _resolve(ACTIVE_FOLDER_PATH, token);
   const activeFiles = await _list(activeFolder, token);
   let deleted = 0;
@@ -51,14 +49,31 @@ export async function reconcileDriveActive(
     }
   }
 
-  // ② 日付フォルダ app/New Tab Board/YY/MM/DD/ へその日のコピー(空ノートは上げない)。
-  const dateKind = `date:${dateFolderParts(now).join("/")}`;
-  const dateFolder = await _resolve([...APP_ROOT, ...dateFolderParts(now)], token);
+  logOp("driveActiveMirror", "reconcile", `deleted=${deleted}`);
+  return { deleted };
+}
+
+/** 日付フォルダ app/New Tab Board/YYYY/M/D/ へ、その日のノートのコピー(<id>.md・Markdown+front
+ * matter)を格納する(NASの日付フォルダと同一構造)。空ノートは上げない。dayMs はどの日の
+ * フォルダへ入れるか(日次ジョブは「前日」を渡す——ユーザー指示)。格納件数を返す。 */
+export async function copyNotesToDriveDateFolder(
+  notes: Note[],
+  dayMs: number,
+  token: string,
+  deps: ReconcileDeps = {},
+): Promise<{ dated: number }> {
+  const _resolve = deps.resolveFolderPath ?? resolveFolderPath;
+  const _list = deps.listNoteFilesInFolder ?? listNoteFilesInFolder;
+  const _upload = deps.uploadNote ?? uploadNote;
+
+  const nonEmpty = notes.filter((n) => n.content.trim() !== "");
+  const dateKind = `date:${dateFolderParts(dayMs).join("/")}`;
+  const dateFolder = await _resolve([...APP_ROOT, ...dateFolderParts(dayMs)], token);
   const dateFiles = await _list(dateFolder, token);
   const dateIdByNote = new Map(dateFiles.map((f) => [f.noteId, f.id]));
   let dated = 0;
   for (const note of nonEmpty) {
-    // NASと同一構造: <id>.md へ Markdown+front matter で書く。
+    // NASと同一構造: <id>.md へ Markdown+front matter で書く。同日の既存ファイルは上書き。
     await _upload(
       { id: note.id, title: note.title, content: noteToMarkdown(note) },
       token,
@@ -69,6 +84,6 @@ export async function reconcileDriveActive(
     dated += 1;
   }
 
-  logOp("driveActiveMirror", "reconcile", `deleted=${deleted} dated=${dated}`);
-  return { deleted, dated };
+  logOp("driveActiveMirror", "date-archive", `day=${dateKind} dated=${dated}`);
+  return { dated };
 }

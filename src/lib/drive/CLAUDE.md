@@ -19,9 +19,12 @@
   `reconcileDriveActive` が App の debounce effect から走り、active/ を列挙して**現在の非空ノートに
   無いファイル(=ブラウザで削除された/空になった)を削除**する。per-note 側は削除を担当しない
   ——削除は必ず board 側の突合で行う(ペインが unmount した削除ノートは per-note 経由では消せない)。
-- **日付フォルダにも格納**: 同じ effect が **`app/New Tab Board/YYYY/M/D/`**(4桁年・非ゼロ埋め。
-  例 `2026/7/13`)へその日のコピー(`<id>.md`)を入れる。**NASの日付フォルダと完全一致**(2026-07-13に
-  旧 `YY/MM/DD` から変更してNASと揃えた)。
+  `reconcileDriveActive` は**active/ の削除だけ**を行う(日付フォルダには触れない)。
+- **日付フォルダは日次ジョブで格納**: `copyNotesToDriveDateFolder(notes, dayMs, token)` が
+  **`app/New Tab Board/YYYY/M/D/`**(4桁年・非ゼロ埋め。例 `2026/7/13`)へコピー(`<id>.md`)を入れる。
+  **NASの日付フォルダと完全一致**。呼ぶのは `background.ts` の `runDailyMaintenance`(一日一回・
+  **前日**分・ユーザー指示: Drive日付フォルダは一日一回0:30くらいに前日データ)——App の編集
+  effect からは呼ばない。同じジョブが NAS の SQLite 索引(`rebuild-index`)も日次で再生成する。
 
 ## appProperties で active と 日付 のファイルを区別する
 

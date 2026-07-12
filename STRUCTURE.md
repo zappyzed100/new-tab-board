@@ -513,6 +513,7 @@
 - function dateFolderParts
 - type ReconcileDeps
 - function reconcileDriveActive
+- function copyNotesToDriveDateFolder
 
 ### `src/lib/drive/driveSync.ts`
 - const ACTIVE_FOLDER_PATH

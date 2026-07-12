@@ -156,9 +156,10 @@ export function App() {
   }, [notes]);
 
   // Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に突き合わせる(ユーザー指示)。
-  // 空でないノートの本文アップロードは各ペインのuseDriveSyncが行い、ここでは①消された/空になった
-  // ノートのファイルを削除②日付フォルダへその日のコピーを格納する。Drive未接続(トークン無し)なら
-  // 静かに何もしない。debounceして編集の嵐で叩きすぎないようにする。
+  // 空でないノートの本文アップロードは各ペインのuseDriveSyncが行い、ここでは消された/空になった
+  // ノートのファイルを削除する。日付フォルダへの日次コピーは background.ts の日次ジョブが担う
+  // (ユーザー指示: Drive日付フォルダは一日一回)。Drive未接続(トークン無し)なら静かに何もしない。
+  // debounceして編集の嵐で叩きすぎないようにする。
   useEffect(() => {
     if (!notes) return;
     const timer = setTimeout(() => {
@@ -166,7 +167,7 @@ export function App() {
         try {
           const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
           if (!token) return;
-          await reconcileDriveActive(notes, clockNow(), token);
+          await reconcileDriveActive(notes, token);
         } catch {
           // Drive同期の突合失敗はUIを止めない(次の編集で再試行される)。
         }

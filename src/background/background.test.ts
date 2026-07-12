@@ -10,15 +10,33 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
+import { getNasFolderPath } from "../lib/storage/db";
+import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
+import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
 import type { LocalData } from "../types";
 
 vi.mock("../lib/drive/googleAuth", () => ({ getAuthToken: vi.fn() }));
 vi.mock("../lib/nextEvent/calendar", () => ({ fetchNextEvent: vi.fn() }));
+vi.mock("../lib/storage/db", () => ({ getNasFolderPath: vi.fn() }));
+vi.mock("../lib/externalIO/nasNativeHost", () => ({ rebuildNasIndex: vi.fn() }));
+vi.mock("../lib/drive/driveActiveMirror", () => ({ copyNotesToDriveDateFolder: vi.fn() }));
 
 const FIXED_NOW = 1_700_000_000_000;
 const POLL_ALARM_NAME = "next-event-poll";
 const PRE_EVENT_ALARM_NAME = "pre-event-alarm";
+const DAILY_ALARM_NAME = "daily-maintenance";
 const NOTIFICATION_ID = "pre-event-notification";
+
+// background.ts の dayKey / previousDayMs と同じローカル日付計算(TZに依らず一致する)。
+const TODAY_KEY = (() => {
+  const d = new Date(FIXED_NOW);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+})();
+const YESTERDAY_MS = (() => {
+  const d = new Date(FIXED_NOW);
+  d.setDate(d.getDate() - 1);
+  return d.getTime();
+})();
 
 type Handlers = {
   onInstalled: () => void;
@@ -114,13 +132,17 @@ afterEach(() => {
 });
 
 describe("インストール/起動", () => {
-  it("onInstalledで定期ポーリング用アラームを作成する", () => {
+  it("onInstalledで定期ポーリング用アラームと日次メンテ用アラームを作成する", () => {
     const fake = makeFakeChrome();
     vi.stubGlobal("chrome", fake.chromeStub);
     handlers.onInstalled();
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: POLL_ALARM_NAME,
       opts: { periodInMinutes: 5 },
+    });
+    expect(fake.calls.alarmsCreate).toContainEqual({
+      name: DAILY_ALARM_NAME,
+      opts: { periodInMinutes: 60 },
     });
   });
 
@@ -132,6 +154,76 @@ describe("インストール/起動", () => {
       name: POLL_ALARM_NAME,
       opts: { periodInMinutes: 5 },
     });
+  });
+});
+
+describe("daily-maintenance アラーム(前日Drive格納 + SQLite再生成・一日一回)", () => {
+  it("日付が変わっていれば前日フォルダへDrive格納しSQLite再生成し、実行日を記録する", async () => {
+    const fake = makeFakeChrome({ localData: { notes: [{ id: "n1", content: "本文" }] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    vi.mocked(getNasFolderPath).mockResolvedValue("Z:\\NAS\\backup");
+    vi.mocked(copyNotesToDriveDateFolder).mockResolvedValue({ dated: 1 });
+    vi.mocked(rebuildNasIndex).mockResolvedValue({ notes: 1, snapshots: 0 });
+
+    handlers.onAlarm({ name: DAILY_ALARM_NAME });
+    await flushMicrotasks();
+
+    // Drive: 前日フォルダ(YESTERDAY_MS)へ現在のノートを格納。
+    expect(copyNotesToDriveDateFolder).toHaveBeenCalledWith(
+      [{ id: "n1", content: "本文" }],
+      YESTERDAY_MS,
+      "token-abc",
+    );
+    // NAS: SQLite索引を再生成。
+    expect(rebuildNasIndex).toHaveBeenCalledWith("Z:\\NAS\\backup");
+    // 実行日を記録(同日の二重実行を防ぐガード)。
+    expect((fake.store.localData as LocalData).lastDailyMaintenanceDay).toBe(TODAY_KEY);
+  });
+
+  it("同じ日には二重実行しない(lastDailyMaintenanceDayが今日なら何もしない)", async () => {
+    const fake = makeFakeChrome({
+      localData: { notes: [{ id: "n1", content: "本文" }], lastDailyMaintenanceDay: TODAY_KEY },
+    });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    vi.mocked(getNasFolderPath).mockResolvedValue("Z:\\NAS\\backup");
+
+    handlers.onAlarm({ name: DAILY_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(copyNotesToDriveDateFolder).not.toHaveBeenCalled();
+    expect(rebuildNasIndex).not.toHaveBeenCalled();
+  });
+
+  it("Drive未接続(token無し)でもSQLite再生成は実行する(2つは独立)", async () => {
+    const fake = makeFakeChrome({ localData: { notes: [{ id: "n1", content: "本文" }] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue(null); // 未接続
+    vi.mocked(getNasFolderPath).mockResolvedValue("Z:\\NAS\\backup");
+    vi.mocked(rebuildNasIndex).mockResolvedValue({ notes: 1, snapshots: 0 });
+
+    handlers.onAlarm({ name: DAILY_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(copyNotesToDriveDateFolder).not.toHaveBeenCalled();
+    expect(rebuildNasIndex).toHaveBeenCalledWith("Z:\\NAS\\backup");
+    expect((fake.store.localData as LocalData).lastDailyMaintenanceDay).toBe(TODAY_KEY);
+  });
+
+  it("NAS未設定でもDrive格納は実行する(2つは独立)", async () => {
+    const fake = makeFakeChrome({ localData: { notes: [{ id: "n1", content: "本文" }] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    vi.mocked(getNasFolderPath).mockResolvedValue(undefined); // NAS未設定
+    vi.mocked(copyNotesToDriveDateFolder).mockResolvedValue({ dated: 1 });
+
+    handlers.onAlarm({ name: DAILY_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(copyNotesToDriveDateFolder).toHaveBeenCalled();
+    expect(rebuildNasIndex).not.toHaveBeenCalled();
+    expect((fake.store.localData as LocalData).lastDailyMaintenanceDay).toBe(TODAY_KEY);
   });
 });
 

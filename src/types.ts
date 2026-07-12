@@ -82,6 +82,9 @@ export type LocalData = {
     fetchedAt: number;
   };
   alarmActive?: boolean;
+  /** 日次メンテ(Drive日付フォルダ格納 + SQLite再生成)を最後に実行した日 "YYYY/M/D"。
+   * 同じ日には二重実行しないためのガード(background.ts の runDailyMaintenance)。 */
+  lastDailyMaintenanceDay?: string;
 };
 
 export type Snapshot = {
