@@ -20,6 +20,7 @@
     "offscreen",
     "nativeMessaging"
   ],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
   "oauth2": {
     "client_id": "872015431238-8ul2vrsn7crorkdqsh1s6f47hffejdnb.apps.googleusercontent.com",
     "scopes": [

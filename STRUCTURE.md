@@ -143,6 +143,8 @@
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
 - `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
 - `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込みの唯一の入出口(SPEC.md §4.10-a)
+- `src/lib/gemini/gemini.test.ts` — gemini.test.ts — gemini.ts(Gemini API呼び出し)の単体テスト。実APIは叩かずfetchをフェイクにする。
+- `src/lib/gemini/gemini.ts` — gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -488,6 +490,11 @@
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
 
+### `src/lib/gemini/gemini.ts`
+- const DEFAULT_GEMINI_MODEL
+- type GeminiDeps
+- function callGemini
+
 ### `src/lib/history/gzip.ts`
 - function gzipCompress
 - function gzipDecompress
@@ -575,6 +582,8 @@
 - function getAllIndexEntries
 - function getNasFolderPath
 - function setNasFolderPath
+- function getGeminiApiKey
+- function setGeminiApiKey
 
 ### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS

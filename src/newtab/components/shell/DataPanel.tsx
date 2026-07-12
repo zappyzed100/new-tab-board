@@ -9,7 +9,12 @@
 // 表示位置がガタつく(ユーザー指摘)。
 import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
-import { getNasFolderPath, setNasFolderPath } from "../../../lib/storage/db";
+import {
+  getGeminiApiKey,
+  getNasFolderPath,
+  setGeminiApiKey,
+  setNasFolderPath,
+} from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
@@ -33,12 +38,31 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
   // 押した時だけその右に出す(ブックマーク/ノートの編集フォームと同じ「押したら
   // その場に出る」パターン)。
   const [showNasInput, setShowNasInput] = useState(false);
+  // Gemini APIキー入力(タグ/要約/TODO抽出で使う)。秘匿情報なので保存済みの値は
+  // 画面に出さず、設定済みかどうかだけを示す(再入力で上書き)。
+  const [showGeminiInput, setShowGeminiInput] = useState(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState("");
+  const [geminiKeySet, setGeminiKeySet] = useState(false);
 
   useEffect(() => {
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
+    void getGeminiApiKey().then((key) => setGeminiKeySet(Boolean(key)));
   }, []);
+
+  async function handleSaveGeminiKey() {
+    const key = geminiKeyInput.trim();
+    if (!key) {
+      onMessage("Gemini APIキーを入力してください(AI Studioで発行できます)");
+      return;
+    }
+    await setGeminiApiKey(key);
+    setGeminiKeyInput("");
+    setGeminiKeySet(true);
+    setShowGeminiInput(false);
+    onMessage("Gemini APIキーを保存しました");
+  }
   async function handleConnectDrive() {
     const { token, error } = await getAuthTokenWithError(true);
     onMessage(
@@ -196,6 +220,40 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
         >
           ⚙️ GDrive設定
         </Button>
+        <Button
+          type="button"
+          variant={showGeminiInput ? "solid" : "soft"}
+          data-testid="data-set-gemini-key"
+          title="Gemini APIキーを設定する(タグ付け/要約/TODO抽出で使用。AI Studioで発行)"
+          onClick={() => setShowGeminiInput((v) => !v)}
+        >
+          🔑 Gemini APIキー{geminiKeySet ? "(設定済み)" : ""}
+        </Button>
+        {showGeminiInput ? (
+          <>
+            <TextField.Root
+              aria-label="Gemini APIキー"
+              type="password"
+              placeholder={geminiKeySet ? "設定済み(再入力で上書き)" : "AIza... を貼り付け"}
+              data-testid="data-gemini-key-input"
+              autoFocus
+              value={geminiKeyInput}
+              onChange={(e) => setGeminiKeyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveGeminiKey();
+              }}
+            />
+            <Button
+              type="button"
+              variant="soft"
+              data-testid="data-save-gemini-key"
+              title="入力したAPIキーを保存する"
+              onClick={() => void handleSaveGeminiKey()}
+            >
+              保存
+            </Button>
+          </>
+        ) : null}
       </div>
     </Flex>
   );

@@ -4,6 +4,10 @@ import type { IndexEntry, Snapshot } from "../../types";
 import { logOp } from "../runtime/log";
 
 const NAS_FOLDER_PATH_KEY = "nasFolderPath";
+// Gemini APIキーは秘匿情報。この設定ストア(IndexedDB)はchrome.storage.syncにも
+// Driveの全データJSONバックアップ(buildExportPayloadはsync+notesのみ)にも乗らないため、
+// キーが同期・バックアップ経由で外部へ漏れない(§7 秘匿)。
+const GEMINI_API_KEY_KEY = "geminiApiKey";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -106,4 +110,17 @@ export async function setNasFolderPath(path: string): Promise<void> {
   const db = await getDb();
   await db.put("settings", path, NAS_FOLDER_PATH_KEY);
   logOp("db", "put", "settings/nasFolderPath");
+}
+
+/** Gemini APIキーを返す。未設定ならundefined。 */
+export async function getGeminiApiKey(): Promise<string | undefined> {
+  const db = await getDb();
+  return db.get("settings", GEMINI_API_KEY_KEY) as Promise<string | undefined>;
+}
+
+export async function setGeminiApiKey(key: string): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", key, GEMINI_API_KEY_KEY);
+  // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
+  logOp("db", "put", "settings/geminiApiKey");
 }
