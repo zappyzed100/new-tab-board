@@ -492,10 +492,13 @@ button.note-tab-add {
   --rdp-day_button-width: 26px;
   --rdp-weekday-padding: 2px 0;
   /* 既定の--rdp-today-color(生の"blue")はダークモードの背景で視認性が低かった。
-     本日だけは色分けの例外として扱うが、赤は祝日の意味と衝突するため
-     warningトークン(アンバー)を使う。 */
-  --rdp-today-color: var(--warning);
+     本日は赤太字で強調する(ユーザー指示)。 */
+  --rdp-today-color: var(--danger);
   font-size: 11px;
+}
+
+[data-testid="mini-calendar"] .rdp-today:not(.rdp-outside) {
+  font-weight: 700;
 }
 
 [data-testid="mini-calendar"] .rdp-month_grid {
