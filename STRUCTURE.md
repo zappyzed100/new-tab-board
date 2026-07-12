@@ -463,6 +463,7 @@
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot
+- function writeActiveNotesToNas
 - function getSnapshotBody
 
 ### `src/lib/externalIO/nasNativeHost.ts`

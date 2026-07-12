@@ -22,7 +22,7 @@ import {
 import { resolveTheme } from "../lib/display/theme";
 import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
-import { flushAllToNas } from "../lib/externalIO/nasArchive";
+import { flushAllToNas, writeActiveNotesToNas } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
@@ -122,6 +122,19 @@ export function App() {
   useEffect(() => {
     void flushAllToNas();
   }, []);
+
+  // 「出先で確認」用に、ボード上の全ノートを単一ファイル(active/New Tab Board.txt)へ
+  // debounce付きで自動ミラーする(ファイル名固定・各ノートはtitle見出し付き——ユーザー指示)。
+  // notesが変わるたび(=編集のたび)に再計算されるpayloadを依存にし、3秒静止してから書く。
+  const activeNotesPayload = useMemo(
+    () => (notes ? sortedNotes(notes).map((n) => ({ title: n.title, body: n.content })) : []),
+    [notes],
+  );
+  useEffect(() => {
+    if (activeNotesPayload.length === 0) return;
+    const timer = setTimeout(() => void writeActiveNotesToNas(activeNotesPayload), 3000);
+    return () => clearTimeout(timer);
+  }, [activeNotesPayload]);
 
   // 新規タブページが開くたびにFlow Launcher(native messaging host)へ接続し、
   // 保留中のファイルがあれば新規ノートとして取り込む(SPEC.md §4.10-d「pull型」)。
