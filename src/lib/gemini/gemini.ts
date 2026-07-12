@@ -4,8 +4,10 @@
 // ネットワークはfetchを依存注入で差し替え可能にし、テストは実APIを叩かずフェイクで検証する。
 import { logOp } from "../runtime/log";
 
-/** 無料枠に収まりやすい既定モデル(1日数百件のタグ/要約想定——ユーザー要件)。 */
-export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+/** 既定モデル。gemini-2.0-flash等は実キーで無料枠が0(429)だったため、実疎通で無料枠が
+ * 使えた gemini-flash-latest を採用(2026-07-12・実キーで検証)。「最新のflash」への別名で、
+ * Googleがflashの安定版を差し替えても追従する。 */
+export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
