@@ -64,5 +64,8 @@ crbug.com/issues/40240444——選択後もAbortErrorになり、実機でエラ
 
 ## 前提(すでに完了済み)
 - Google Cloud ConsoleでのOAuthクライアントID発行・テストユーザー登録は完了済み
-  (`public/manifest.json`の`oauth2.client_id`に反映済み)
+  (`public/manifest.json`の`oauth2.client_id`に反映済み。2026-07-12: 元のclient_idが
+  プロジェクト内に実体を持たない値だったため、Google Auth Platformの新UIで
+  ブランディング/対象(テストユーザー登録)/データアクセス(スコープ追加)/クライアント
+  (種類「Chrome拡張機能」・Application ID=拡張機能ID)を再設定し、新規発行し直した)
 - 拡張機能IDは`gimpafmoklcgklcggonojldigofjbnnj`に固定済み(`manifest.json`の`key`)
