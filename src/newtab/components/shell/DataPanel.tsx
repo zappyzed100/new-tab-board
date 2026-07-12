@@ -12,7 +12,7 @@ import { setNasDirectoryHandle } from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
-import { getAuthToken } from "../../../lib/drive/googleAuth";
+import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import type { AppLaunch, Bookmark, Note, Settings } from "../../../types";
 
@@ -27,11 +27,13 @@ type Props = {
 
 export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: Props) {
   async function handleConnectDrive() {
-    const token = await getAuthToken(true);
+    const { token, error } = await getAuthTokenWithError(true);
     onMessage(
       token
         ? "Googleアカウントに接続しました(以後は自動でDriveへバックアップされます)"
-        : "Googleアカウントへの接続に失敗しました(ポップアップを閉じた場合は再度お試しください)",
+        : // 「失敗しました」とだけ出しても原因の手がかりが一切残らないため、
+          // 実際のエラー内容をそのまま案内に含める(NAS設定と同じ方針)。
+          `Googleアカウントへの接続に失敗しました(${error}。ポップアップを閉じた場合は再度お試しください)`,
     );
   }
 

@@ -374,6 +374,7 @@
 
 ### `src/lib/drive/googleAuth.ts`
 - function getAuthToken
+- function getAuthTokenWithError
 - function invalidateToken
 
 ### `src/lib/drive/jsonBackup.ts`
