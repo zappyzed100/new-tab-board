@@ -12,7 +12,8 @@
 // crbug.com/issues/40240444。extensionコンテキスト特有)。実機で「ボタンを押しても
 // 何も起きない(ダイアログが一切出ない、あるいは選んだ直後に無反応で終わる)」という
 // 形で再現した。読み込みは標準の`<input type="file">`、書き出しは`chrome.downloads`
-// (要"downloads"権限)へ置き換え、この既知バグの影響を受けない実装にしている。
+// (要"downloads"権限。保存先ダイアログは`saveAs: true`)へ置き換え、この既知バグの
+// 影響を受けない実装にしている。
 import { logOp } from "../runtime/log";
 import type { Note } from "../../types";
 
@@ -61,41 +62,64 @@ export async function pickAndReadTextFile(): Promise<{ name: string; content: st
   });
 }
 
-/** 各ノートを個別の.mdファイルとしてダウンロードフォルダ配下へ書き出す
- * (`new-tab-board-notes/`サブフォルダへ集約)。 */
-export async function exportNotesToFolder(notes: Note[]): Promise<void> {
+export type ExportResult = { exported: number; cancelled: boolean };
+
+/** 各ノートを個別の.mdファイルとして書き出す。1件ずつchrome.downloadsの
+ * 保存先選択ダイアログ(Explorer/Finder相当)を出し、ユーザーが保存先を選ぶ
+ * (「ファイルを開く」と同じくOSのネイティブダイアログを毎回表示する——
+ * chrome.downloadsのfilenameは既定のダウンロードフォルダ配下の相対パスしか
+ * 指定できず、NASフォルダ等の任意の場所を持続的に覚えておく方法が無いため、
+ * 複数ファイルでも1件ずつ選んでもらう設計にしている)。
+ * 保存先ダイアログでキャンセルされたら、そこまでの件数を添えて打ち切る。 */
+export async function exportNotesToFolder(notes: Note[]): Promise<ExportResult> {
+  let exported = 0;
   for (const note of notes) {
     const blob = new Blob([note.content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     try {
-      await downloadBlobUrl(url, `new-tab-board-notes/${sanitizeFileName(note.title)}.md`);
+      const outcome = await downloadBlobUrl(url, `${sanitizeFileName(note.title)}.md`);
+      if (outcome === "cancelled") {
+        logOp("fileSystem", "export", `notes=${exported}/${notes.length}(cancelled)`);
+        return { exported, cancelled: true };
+      }
+      exported++;
     } finally {
       URL.revokeObjectURL(url);
     }
   }
-  logOp("fileSystem", "export", `notes=${notes.length}`);
+  logOp("fileSystem", "export", `notes=${exported}`);
+  return { exported, cancelled: false };
 }
 
-/** ダウンロードが完了(またはエラーで中断)するまで待ってから解決する。
+/** ダウンロードが完了・キャンセル・エラー中断のいずれかになるまで待ってから解決する。
  * chrome.downloads.downloadのコールバックはダウンロード「開始」時点で呼ばれるため、
  * ここでrevokeObjectURLしてしまうとブラウザがblobの中身を読み切る前にURLが失効し
  * ファイルが空/欠落する恐れがある——onChangedで実際の完了を確認してから返す。 */
-function downloadBlobUrl(url: string, filename: string): Promise<void> {
+function downloadBlobUrl(url: string, filename: string): Promise<"done" | "cancelled"> {
   return new Promise((resolve, reject) => {
-    chrome.downloads.download({ url, filename, saveAs: false }, (downloadId) => {
+    chrome.downloads.download({ url, filename, saveAs: true }, (downloadId) => {
       if (chrome.runtime.lastError || downloadId === undefined) {
         const message = chrome.runtime.lastError?.message ?? "downloadId is undefined";
+        // saveAs:trueのダイアログ自体をユーザーが閉じた場合もここに来ることがある。
+        if (message.toLowerCase().includes("cancel")) {
+          resolve("cancelled");
+          return;
+        }
         logOp("fileSystem", "export-error", message);
         reject(new Error(message));
         return;
       }
       function onChanged(delta: chrome.downloads.DownloadDelta) {
-        if (delta.id !== downloadId || !delta.state) return;
-        if (delta.state.current === "complete") {
+        if (delta.id !== downloadId) return;
+        if (delta.state?.current === "complete") {
           chrome.downloads.onChanged.removeListener(onChanged);
-          resolve();
-        } else if (delta.state.current === "interrupted") {
+          resolve("done");
+        } else if (delta.state?.current === "interrupted") {
           chrome.downloads.onChanged.removeListener(onChanged);
+          if (delta.error?.current === "USER_CANCELED") {
+            resolve("cancelled");
+            return;
+          }
           logOp("fileSystem", "export-error", `download interrupted: ${filename}`);
           reject(new Error(`download interrupted: ${filename}`));
         }

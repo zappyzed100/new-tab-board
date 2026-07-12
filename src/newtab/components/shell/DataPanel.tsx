@@ -73,8 +73,12 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
   }
 
   async function handleExportFolder() {
-    await exportNotesToFolder(notes);
-    setMessage("ダウンロードフォルダの new-tab-board-notes/ へ書き出しました");
+    const result = await exportNotesToFolder(notes);
+    setMessage(
+      result.cancelled
+        ? `保存先の選択をキャンセルしたため打ち切りました(${result.exported}/${notes.length}件は書き出し済み)`
+        : `${result.exported}件のノートを書き出しました`,
+    );
   }
 
   async function handleSetNasFolder() {
@@ -122,7 +126,7 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote }: Props
             type="button"
             variant="soft"
             data-testid="data-export-folder"
-            title="全ノートをそれぞれ.mdファイルとしてダウンロードフォルダのnew-tab-board-notes/へ書き出す"
+            title="全ノートをそれぞれ.mdファイルとして書き出す(ノートごとに保存先を選ぶダイアログが出ます)"
             onClick={() => void handleExportFolder()}
           >
             🗂️ フォルダへ書き出し

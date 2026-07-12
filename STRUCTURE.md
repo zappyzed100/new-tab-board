@@ -446,6 +446,7 @@
 
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
+- type ExportResult
 - function exportNotesToFolder
 
 ### `src/lib/history/gzip.ts`

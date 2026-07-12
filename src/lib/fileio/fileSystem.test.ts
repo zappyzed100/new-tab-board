@@ -60,24 +60,36 @@ describe("exportNotesToFolder", () => {
     { id: "n2", title: "TODO/リスト", content: "本文2", pinned: false, order: 1 },
   ];
 
-  function fakeChromeDownloads(onDownload: (filename: string) => void) {
+  type Delta = { id: number; state?: { current: string }; error?: { current: string } };
+
+  function fakeChromeDownloads(
+    onDownload: (filename: string) => void,
+    outcomeOf: (filename: string) => "complete" | "interrupted" | "cancelled",
+  ) {
     let nextId = 1;
-    const changedListeners: Array<(delta: { id: number; state?: { current: string } }) => void> =
-      [];
+    const changedListeners: Array<(delta: Delta) => void> = [];
     return {
       downloads: {
         download(opts: { filename: string }, callback: (id: number | undefined) => void) {
           const id = nextId++;
           onDownload(opts.filename);
+          const outcome = outcomeOf(opts.filename);
           callback(id);
           queueMicrotask(() => {
-            changedListeners.forEach((cb) => cb({ id, state: { current: "complete" } }));
+            if (outcome === "complete") {
+              changedListeners.forEach((cb) => cb({ id, state: { current: "complete" } }));
+            } else if (outcome === "interrupted") {
+              changedListeners.forEach((cb) => cb({ id, state: { current: "interrupted" } }));
+            } else {
+              changedListeners.forEach((cb) =>
+                cb({ id, state: { current: "interrupted" }, error: { current: "USER_CANCELED" } }),
+              );
+            }
           });
         },
         onChanged: {
-          addListener: (cb: (delta: { id: number; state?: { current: string } }) => void) =>
-            changedListeners.push(cb),
-          removeListener: (cb: (delta: { id: number; state?: { current: string } }) => void) => {
+          addListener: (cb: (delta: Delta) => void) => changedListeners.push(cb),
+          removeListener: (cb: (delta: Delta) => void) => {
             const i = changedListeners.indexOf(cb);
             if (i >= 0) changedListeners.splice(i, 1);
           },
@@ -87,42 +99,46 @@ describe("exportNotesToFolder", () => {
     };
   }
 
-  it("各ノートを個別の.mdファイルとしてnew-tab-board-notes/へ書き出す(ファイル名は禁則文字を置換)", async () => {
+  it("各ノートを個別の.mdファイルとして書き出す(ファイル名は禁則文字を置換)", async () => {
     const filenames: string[] = [];
     vi.stubGlobal(
       "chrome",
-      fakeChromeDownloads((f) => filenames.push(f)),
+      fakeChromeDownloads(
+        (f) => filenames.push(f),
+        () => "complete",
+      ),
     );
-    vi.stubGlobal("URL", {
-      createObjectURL: () => "blob:fake",
-      revokeObjectURL: () => {},
-    });
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} });
 
-    await exportNotesToFolder(notes);
+    await expect(exportNotesToFolder(notes)).resolves.toEqual({ exported: 2, cancelled: false });
 
     expect(filenames).toEqual([
-      "new-tab-board-notes/会議メモ.md",
-      "new-tab-board-notes/TODO_リスト.md", // "/"は禁則文字なので"_"に置換
+      "会議メモ.md",
+      "TODO_リスト.md", // "/"は禁則文字なので"_"に置換
     ]);
   });
 
-  it("ダウンロードが中断(interrupted)されたら例外を投げる", async () => {
-    let onChangedCb: ((delta: { id: number; state?: { current: string } }) => void) | undefined;
-    vi.stubGlobal("chrome", {
-      downloads: {
-        download: (_opts: unknown, callback: (id: number | undefined) => void) => {
-          callback(1);
-          queueMicrotask(() => onChangedCb?.({ id: 1, state: { current: "interrupted" } }));
-        },
-        onChanged: {
-          addListener: (cb: typeof onChangedCb) => {
-            onChangedCb = cb;
-          },
-          removeListener: () => {},
-        },
-      },
-      runtime: { lastError: undefined },
-    });
+  it("保存先ダイアログをキャンセルすると、そこまでの件数で打ち切る", async () => {
+    vi.stubGlobal(
+      "chrome",
+      fakeChromeDownloads(
+        () => {},
+        (filename) => (filename === "会議メモ.md" ? "complete" : "cancelled"),
+      ),
+    );
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} });
+
+    await expect(exportNotesToFolder(notes)).resolves.toEqual({ exported: 1, cancelled: true });
+  });
+
+  it("ダウンロードが中断(interrupted・キャンセル以外)されたら例外を投げる", async () => {
+    vi.stubGlobal(
+      "chrome",
+      fakeChromeDownloads(
+        () => {},
+        () => "interrupted",
+      ),
+    );
     vi.stubGlobal("URL", { createObjectURL: () => "blob:fake", revokeObjectURL: () => {} });
 
     await expect(exportNotesToFolder(notes)).rejects.toThrow("interrupted");
