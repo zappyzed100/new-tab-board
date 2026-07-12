@@ -1,15 +1,16 @@
 // driveActiveMirror.test.ts — active/ の突き合わせ削除と日付フォルダ格納の単体テスト
 import { describe, expect, it, vi } from "vitest";
 import { dateFolderParts, reconcileDriveActive } from "./driveActiveMirror";
+import { noteToMarkdown } from "../externalIO/nasArchive";
 import type { Note } from "../../types";
 
 const note = (id: string, content: string): Note =>
   ({ id, title: id, content, pinned: false, order: 0 }) as Note;
 
 describe("dateFolderParts", () => {
-  it("YY/MM/DD(2桁年・ゼロ埋め月日)を返す", () => {
-    expect(dateFolderParts(new Date(2026, 6, 13).getTime())).toEqual(["26", "07", "13"]);
-    expect(dateFolderParts(new Date(2026, 0, 5).getTime())).toEqual(["26", "01", "05"]);
+  it("YYYY/M/D(4桁年・非ゼロ埋め。NASと同一書式)を返す", () => {
+    expect(dateFolderParts(new Date(2026, 6, 13).getTime())).toEqual(["2026", "7", "13"]);
+    expect(dateFolderParts(new Date(2026, 0, 5).getTime())).toEqual(["2026", "1", "5"]);
   });
 });
 
@@ -40,12 +41,15 @@ describe("reconcileDriveActive", () => {
     // n2(現在存在しない)のactiveファイルを削除。n1(残る)は削除しない。
     expect(deleteDriveFile).toHaveBeenCalledTimes(1);
     expect(deleteDriveFile).toHaveBeenCalledWith("fa-gone", "tok");
-    // 日付フォルダには非空(n1)だけ格納。空(n3)は上げない。
+    // 日付フォルダには非空(n1)だけ、<id>.md へ Markdown+front matter で格納。空(n3)は上げない。
     expect(uploadNote).toHaveBeenCalledTimes(1);
-    expect(uploadNote).toHaveBeenCalledWith(notes[0], "tok", null, undefined, {
-      folderId: "date-folder",
-      kind: "date:26/07/13",
-    });
+    expect(uploadNote).toHaveBeenCalledWith(
+      { id: "n1", title: "n1", content: noteToMarkdown(notes[0]) },
+      "tok",
+      null,
+      undefined,
+      { folderId: "date-folder", kind: "date:2026/7/13", filename: "n1.md" },
+    );
     expect(res).toEqual({ deleted: 1, dated: 1 });
   });
 

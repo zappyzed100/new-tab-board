@@ -2,6 +2,7 @@
 // 履歴は上げない・現行内容のみ上書き。競合はlast-write-winsで単純化(SPEC.md §8)。
 import { getAuthToken } from "./googleAuth";
 import { findFileForNote, resolveFolderPath, uploadNote } from "./drive";
+import { noteToMarkdown } from "../externalIO/nasArchive";
 import { logOp } from "../runtime/log";
 import type { Note } from "../../types";
 
@@ -46,10 +47,14 @@ export async function syncNoteToDrive(
     const folderId = await _resolveFolderPath(ACTIVE_FOLDER_PATH, token);
     const existingId =
       note.driveFileId ?? (await _findFileForNote(note.id, token, undefined, ACTIVE_KIND));
-    const fileId = await _uploadNote(note, token, existingId, undefined, {
-      folderId,
-      kind: ACTIVE_KIND,
-    });
+    // NASと同一構造: active/<id>.md へ Markdown+front matter で書く(uploadNoteのcontentへmdを渡す)。
+    const fileId = await _uploadNote(
+      { id: note.id, title: note.title, content: noteToMarkdown(note) },
+      token,
+      existingId,
+      undefined,
+      { folderId, kind: ACTIVE_KIND, filename: `${note.id}.md` },
+    );
     return { status: "synced", driveFileId: fileId, lastSyncedAt: now };
   } catch (err) {
     logOp("driveSync", "sync-error", `note=${note.id}`, { error: err });

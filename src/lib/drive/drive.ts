@@ -134,14 +134,14 @@ export async function uploadNote(
   token: string,
   existingFileId: string | null,
   fetchImpl: FetchLike = fetch,
-  opts: { folderId?: string; kind?: string } = {},
+  opts: { folderId?: string; kind?: string; filename?: string } = {},
 ): Promise<string> {
   const boundary = `newtabboard-${note.id}`;
   const metadata: Record<string, unknown> = {
     appProperties: { noteId: note.id, ...(opts.kind ? { ntbKind: opts.kind } : {}) },
   };
   if (!existingFileId) {
-    metadata.name = `${note.title}.md`;
+    metadata.name = opts.filename ?? `${note.title}.md`;
     metadata.mimeType = "text/markdown";
     if (opts.folderId) metadata.parents = [opts.folderId];
   }

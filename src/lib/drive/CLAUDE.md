@@ -4,7 +4,8 @@
 
 1. **per-note active ミラー**(`driveSync.ts` + `useDriveSync.ts` + `drive.ts`)
    各ペインが自分のノートを debounce して Drive の **`app/New Tab Board/active/`** フォルダへ
-   1ノート=1ファイル(`<title>.md`)で上げる。ペインの「同期済」バッジはこれ。
+   1ノート=1ファイル(**`<id>.md`**・Markdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
+   ファイル名とファイル内容(front matter付き md)は NAS の `active/<id>.md` と完全一致(2026-07-13)。
 2. **全データJSONバックアップ**(`jsonBackup*.ts` + `useJsonBackupSync.ts`)
    ブックマーク/ノート/設定/TODO を1つのJSONにして上げる(データ管理の「☁️ Driveへ退避/復元」)。
 
@@ -18,13 +19,14 @@
   `reconcileDriveActive` が App の debounce effect から走り、active/ を列挙して**現在の非空ノートに
   無いファイル(=ブラウザで削除された/空になった)を削除**する。per-note 側は削除を担当しない
   ——削除は必ず board 側の突合で行う(ペインが unmount した削除ノートは per-note 経由では消せない)。
-- **日付フォルダにも格納**: 同じ effect が **`app/New Tab Board/YY/MM/DD/`**(2桁年・ゼロ埋め。
-  例 `26/07/13`)へその日のコピーを入れる(NASの日付フォルダと同様)。
+- **日付フォルダにも格納**: 同じ effect が **`app/New Tab Board/YYYY/M/D/`**(4桁年・非ゼロ埋め。
+  例 `2026/7/13`)へその日のコピー(`<id>.md`)を入れる。**NASの日付フォルダと完全一致**(2026-07-13に
+  旧 `YY/MM/DD` から変更してNASと揃えた)。
 
 ## appProperties で active と 日付 のファイルを区別する
 
 同じ `noteId` でも「active フォルダのファイル」と「日付フォルダのファイル」が両方できるため、
-`appProperties.ntbKind`(`"active"` / `"date:26/07/13"`)で区別する。`findFileForNote` は
+`appProperties.ntbKind`(`"active"` / `"date:2026/7/13"`)で区別する。`findFileForNote` は
 第4引数 `kind` で絞り込める。`resolveFolderPath` はセッション内でフォルダIDをキャッシュする
 (`resetDriveFolderCacheForTests` で解除)。
 

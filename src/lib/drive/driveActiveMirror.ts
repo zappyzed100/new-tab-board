@@ -1,22 +1,20 @@
 // driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
 // 突き合わせる(ユーザー指示)。①空でないノートは per-note の syncNoteToDrive が active/ へ上げる。
 // ②ここでは active/ にあってもう存在しない/空になったノートのファイルを削除する(ブラウザで
-// 消されたら Drive でも消す)。③さらに NAS と同様に日付フォルダ app/New Tab Board/YY/MM/DD/ へ
-// その日のコピーも格納する。空ノートは上げない。
+// 消されたら Drive でも消す)。③さらに NAS と同一構造の日付フォルダ app/New Tab Board/YYYY/M/D/ へ
+// その日のコピーも格納する。ファイルは <id>.md(Markdown+front matter)。空ノートは上げない。
 import { deleteDriveFile, listNoteFilesInFolder, resolveFolderPath, uploadNote } from "./drive";
 import { ACTIVE_FOLDER_PATH } from "./driveSync";
+import { noteToMarkdown } from "../externalIO/nasArchive";
 import { logOp } from "../runtime/log";
 import type { Note } from "../../types";
 
 const APP_ROOT = ["app", "New Tab Board"];
 
-/** epoch ms を YY/MM/DD(2桁年・ゼロ埋め月日)のパス片にする(ユーザー例: 26/07/13)。 */
+/** epoch ms を YYYY/M/D(4桁年・非ゼロ埋め。NASと同一書式)のパス片にする(例: 2026/7/13)。 */
 export function dateFolderParts(ms: number): string[] {
   const d = new Date(ms);
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return [yy, mm, dd];
+  return [String(d.getFullYear()), String(d.getMonth() + 1), String(d.getDate())];
 }
 
 export type ReconcileDeps = {
@@ -60,10 +58,14 @@ export async function reconcileDriveActive(
   const dateIdByNote = new Map(dateFiles.map((f) => [f.noteId, f.id]));
   let dated = 0;
   for (const note of nonEmpty) {
-    await _upload(note, token, dateIdByNote.get(note.id) ?? null, undefined, {
-      folderId: dateFolder,
-      kind: dateKind,
-    });
+    // NASと同一構造: <id>.md へ Markdown+front matter で書く。
+    await _upload(
+      { id: note.id, title: note.title, content: noteToMarkdown(note) },
+      token,
+      dateIdByNote.get(note.id) ?? null,
+      undefined,
+      { folderId: dateFolder, kind: dateKind, filename: `${note.id}.md` },
+    );
     dated += 1;
   }
 
