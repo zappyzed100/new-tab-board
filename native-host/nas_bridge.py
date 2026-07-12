@@ -178,12 +178,110 @@ def handle_list_tree(message: dict) -> dict:
         return {"type": "list-tree-result", "ok": False, "error": str(exc)}
 
 
+def handle_top_tags(message: dict) -> dict:
+    """notes のタグを頻度降順で返す(検索UIの上位タグチップ用)。index.db が無ければ ok:false
+    (先に rebuild-index が要る)。"""
+    try:
+        base = message["path"]
+        limit = int(message.get("limit", 50))
+        db_path = os.path.join(base, "data", "index.db")
+        if not os.path.isfile(db_path):
+            return {
+                "type": "top-tags-result",
+                "ok": False,
+                "error": "index.db が無い(先に rebuild-index を実行)",
+            }
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute(
+                "SELECT t.name, COUNT(*) c FROM note_tags nt JOIN tags t ON t.id=nt.tag_id"
+                " GROUP BY t.name ORDER BY c DESC, t.name LIMIT ?",
+                (limit,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return {
+            "type": "top-tags-result",
+            "ok": True,
+            "tags": [{"tag": r[0], "count": r[1]} for r in rows],
+        }
+    except (OSError, sqlite3.Error, KeyError, ValueError) as exc:
+        return {"type": "top-tags-result", "ok": False, "error": str(exc)}
+
+
+def handle_search_notes(message: dict) -> dict:
+    """notes(現在の.md)を対象に タグ(AND/OR)＋本文LIKE＋created_at半開区間 で検索する。
+    検索結果をノートへ貼り付けるため**本文(content)全文**も返す。index.db が無ければ ok:false。
+    期間は半開区間(created_at >= from AND created_at < to)。from/to は ISO8601 文字列。"""
+    try:
+        base = message["path"]
+        db_path = os.path.join(base, "data", "index.db")
+        if not os.path.isfile(db_path):
+            return {
+                "type": "search-notes-result",
+                "ok": False,
+                "error": "index.db が無い(先に rebuild-index を実行)",
+            }
+        tags = message.get("tags", [])
+        text = message.get("text", "")
+        mode = message.get("mode", "and")
+        date_from = message.get("from")
+        date_to = message.get("to")
+        limit = int(message.get("limit", 500))
+        where: list[str] = []
+        params: list = []
+        if tags:
+            placeholders = ",".join("?" * len(tags))
+            if mode == "or":
+                where.append(
+                    "d.id IN (SELECT nt.note_id FROM note_tags nt"
+                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders}))"
+                )
+                params += tags
+            else:
+                where.append(
+                    "d.id IN (SELECT nt.note_id FROM note_tags nt"
+                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders})"
+                    " GROUP BY nt.note_id HAVING COUNT(DISTINCT t.name)=?)"
+                )
+                params += [*tags, len(tags)]
+        if text:
+            where.append("d.content LIKE ?")
+            params.append(f"%{text}%")
+        if date_from:
+            where.append("d.created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            where.append("d.created_at < ?")  # 半開区間(< to)
+            params.append(date_to)
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute(
+                "SELECT d.id, d.title, d.created_at, d.content, substr(d.content, 1, 160)"
+                f" FROM notes d{clause}"
+                " ORDER BY d.created_at DESC LIMIT ?",
+                [*params, limit],
+            ).fetchall()
+        finally:
+            conn.close()
+        result = [
+            {"note_id": r[0], "title": r[1], "created_at": r[2], "content": r[3], "snippet": r[4]}
+            for r in rows
+        ]
+        return {"type": "search-notes-result", "ok": True, "rows": result}
+    except (OSError, sqlite3.Error, KeyError, ValueError) as exc:
+        return {"type": "search-notes-result", "ok": False, "error": str(exc)}
+
+
 HANDLERS = {
     "probe": handle_probe,
     "write-file": handle_write_file,
     "read-file": handle_read_file,
     "rebuild-index": handle_rebuild_index,
     "search": handle_search,
+    "search-notes": handle_search_notes,
+    "top-tags": handle_top_tags,
     "list-tree": handle_list_tree,
 }
 

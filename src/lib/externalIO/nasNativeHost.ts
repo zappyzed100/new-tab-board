@@ -23,6 +23,22 @@ export type HistoryHit = {
   snippet: string;
 };
 type SearchResult = { type: "search-result"; ok: boolean; rows?: HistoryHit[]; error?: string };
+/** search-notes の1件。検索結果をノートへ貼り付けるため content(全文)も返る。 */
+export type NoteHit = {
+  note_id: string;
+  title: string | null;
+  created_at: string | null;
+  content: string;
+  snippet: string;
+};
+type SearchNotesResult = {
+  type: "search-notes-result";
+  ok: boolean;
+  rows?: NoteHit[];
+  error?: string;
+};
+export type TagCount = { tag: string; count: number };
+type TopTagsResult = { type: "top-tags-result"; ok: boolean; tags?: TagCount[]; error?: string };
 type RebuildResult = {
   type: "rebuild-result";
   ok: boolean;
@@ -36,6 +52,8 @@ type HostResponse =
   | WriteResult
   | ReadResult
   | SearchResult
+  | SearchNotesResult
+  | TopTagsResult
   | RebuildResult
   | ListTreeResult
   | { type: "error"; error: string };
@@ -153,6 +171,50 @@ export async function searchNasHistory(
     connectNative,
   );
   if (result?.type === "search-result" && result.ok) {
+    return result.rows ?? [];
+  }
+  return null;
+}
+
+/** NASの索引(index.db)から、タグを頻度降順で取得する(検索UIの上位タグチップ用)。失敗はnull。 */
+export async function topNasTags(
+  path: string,
+  limit = 50,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<TagCount[] | null> {
+  const result = await callHost({ type: "top-tags", path, limit }, connectNative);
+  if (result?.type === "top-tags-result" && result.ok) {
+    return result.tags ?? [];
+  }
+  return null;
+}
+
+/** NASの“ノート”(現在の.md)を タグ(AND/OR)＋本文(部分一致)＋期間(半開区間 from<=..<to)で
+ * SQL検索する(Python側)。貼り付け用に本文全文も返る。from/to は ISO8601 文字列(未指定は無制限)。失敗はnull。 */
+export async function searchNasNotes(
+  path: string,
+  query: {
+    tags?: string[];
+    text?: string;
+    mode?: "and" | "or";
+    from?: string;
+    to?: string;
+  },
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<NoteHit[] | null> {
+  const result = await callHost(
+    {
+      type: "search-notes",
+      path,
+      tags: query.tags ?? [],
+      text: query.text ?? "",
+      mode: query.mode ?? "and",
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+    },
+    connectNative,
+  );
+  if (result?.type === "search-notes-result" && result.ok) {
     return result.rows ?? [];
   }
   return null;

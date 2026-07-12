@@ -137,3 +137,40 @@ export function ensureTrailingEmptyNotes(
   // 補充が無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
   return additions.length === 0 ? notes : [...notes, ...additions];
 }
+
+/** 検索結果(title/content)をノート末尾へ貼り付ける(ユーザー指示)。末尾側の白紙ノートを
+ * 上から順に上書きし、足りなければ追加する。最後に末尾空を desired 個(既定TRAILING_EMPTY_NOTES)維持。
+ * 既存の updateNote / createNote / ensureTrailingEmptyNotes を再利用する。 */
+export function pasteResultsIntoNotes(
+  notes: Note[],
+  results: { title: string; content: string }[],
+  createdAt: number,
+  desiredTrailing: number = TRAILING_EMPTY_NOTES,
+): Note[] {
+  if (results.length === 0) return notes;
+  const sorted = sortedNotes(notes);
+  // 末尾から連続する白紙ノートのidを、表示順(上→下)に並べて集める。
+  const trailingBlankIds: string[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].content.trim() === "") trailingBlankIds.unshift(sorted[i].id);
+    else break;
+  }
+  let result = [...notes];
+  let nextOrder = sorted.length;
+  results.forEach((r, i) => {
+    if (i < trailingBlankIds.length) {
+      // 白紙ノートを上書き(id/order/pinnedは保つ)。
+      result = updateNote(result, trailingBlankIds[i], {
+        title: r.title || result.find((n) => n.id === trailingBlankIds[i])?.title || "",
+        content: r.content,
+        updatedAt: createdAt,
+      });
+    } else {
+      const fallback = nextNoteLetterTitle(result.map((n) => n.title)) ?? "貼り付け";
+      const note = createNote(r.title || fallback, nextOrder, createdAt);
+      result = [...result, { ...note, content: r.content }];
+      nextOrder += 1;
+    }
+  });
+  return ensureTrailingEmptyNotes(result, desiredTrailing, createdAt);
+}

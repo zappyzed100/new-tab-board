@@ -126,6 +126,80 @@ def test_search_without_index_returns_error(tmp_path) -> None:
     assert "index.db" in res["error"]
 
 
+def _seed_notes_for_search(nas: str) -> None:
+    """検索用に notes/*.md を複数(タグ・created_at入り)で用意する。"""
+    notes = os.path.join(nas, "notes")
+    os.makedirs(notes, exist_ok=True)
+
+    def write(nid: str, title: str, tags: list, created: str, body: str) -> None:
+        tag_lines = "".join(f"  - {t}\n" for t in tags)
+        with open(os.path.join(notes, f"{nid}.md"), "w", encoding="utf-8") as f:
+            f.write(
+                f"---\nid: {nid}\ntitle: {title}\ntags:\n{tag_lines}"
+                f"created_at: {created}\n---\n\n{body}"
+            )
+
+    write("a" + "0" * 35, "登山計画", ["登山", "計画"], "2026-07-01T00:00:00.000Z", "高尾山へ行く")
+    write("b" + "0" * 35, "買い物", ["買い物"], "2026-07-10T00:00:00.000Z", "牛乳を買う")
+    write("c" + "0" * 35, "登山メモ", ["登山"], "2026-08-05T00:00:00.000Z", "筑波山のメモ")
+
+
+def test_top_tags_returns_by_frequency(tmp_path) -> None:
+    nas = str(tmp_path)
+    _seed_notes_for_search(nas)
+    assert handle({"type": "rebuild-index", "path": nas})["ok"] is True
+
+    res = handle({"type": "top-tags", "path": nas, "limit": 10})
+    assert res["ok"] is True
+    # 「登山」が2件で最頻。先頭に来る。
+    assert res["tags"][0] == {"tag": "登山", "count": 2}
+    names = {t["tag"] for t in res["tags"]}
+    assert names == {"登山", "計画", "買い物"}
+
+
+def test_search_notes_by_tag_and_or(tmp_path) -> None:
+    nas = str(tmp_path)
+    _seed_notes_for_search(nas)
+    handle({"type": "rebuild-index", "path": nas})
+
+    # AND: 登山かつ計画 → 登山計画のみ
+    res_and = handle({"type": "search-notes", "path": nas, "tags": ["登山", "計画"], "mode": "and"})
+    assert [r["title"] for r in res_and["rows"]] == ["登山計画"]
+    # 本文全文が返る(貼り付け用)
+    assert res_and["rows"][0]["content"] == "高尾山へ行く"
+
+    # OR: 登山または買い物 → 3件
+    res_or = handle({"type": "search-notes", "path": nas, "tags": ["登山", "買い物"], "mode": "or"})
+    assert {r["title"] for r in res_or["rows"]} == {"登山計画", "買い物", "登山メモ"}
+
+
+def test_search_notes_by_text_and_date_range(tmp_path) -> None:
+    nas = str(tmp_path)
+    _seed_notes_for_search(nas)
+    handle({"type": "rebuild-index", "path": nas})
+
+    # 本文LIKE
+    res_text = handle({"type": "search-notes", "path": nas, "text": "高尾山"})
+    assert [r["title"] for r in res_text["rows"]] == ["登山計画"]
+
+    # 期間(半開区間): 2026-07 全体 → a(07-01)とb(07-10)、c(08-05)は含まない
+    res_date = handle(
+        {
+            "type": "search-notes",
+            "path": nas,
+            "from": "2026-07-01T00:00:00.000Z",
+            "to": "2026-08-01T00:00:00.000Z",
+        }
+    )
+    assert {r["title"] for r in res_date["rows"]} == {"登山計画", "買い物"}
+
+
+def test_search_notes_without_index_returns_error(tmp_path) -> None:
+    res = handle({"type": "search-notes", "path": str(tmp_path), "text": "x"})
+    assert res["ok"] is False
+    assert "index.db" in res["error"]
+
+
 def test_list_tree_lists_md_recursively(tmp_path) -> None:
     lib = os.path.join(str(tmp_path), "library", "仕事", "2026")
     os.makedirs(lib, exist_ok=True)

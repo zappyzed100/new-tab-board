@@ -111,6 +111,36 @@ Python側(nas_bridge.py)がindex.dbへSQLを実行し、結果だけ返す。`in
 ] }
 ```
 
+### ノートのタグ+本文+期間検索(search-notes)
+
+現在の `notes`(.md)を対象に、タグ(AND/OR)＋本文の部分一致(LIKE)＋期間(created_at の**半開区間**
+`>= from AND < to`、ISO8601)で検索する。検索結果をノートへ貼り付けるため**本文(content)全文**も返す。
+`index.db` が無ければ `ok:false`。
+
+```json
+{ "type": "search-notes", "path": "Z:\\NAS\\backup", "tags": ["登山"], "text": "高尾山",
+  "mode": "and", "from": "2026-07-01T00:00:00.000Z", "to": "2026-08-01T00:00:00.000Z" }
+```
+
+```json
+{ "type": "search-notes-result", "ok": true, "rows": [
+  { "note_id": "…", "title": "登山計画", "created_at": "2026-07-01T00:00:00.000Z",
+    "content": "…本文全文…", "snippet": "…高尾山…" }
+] }
+```
+
+### 上位タグ(top-tags)
+
+`notes` のタグを頻度降順で返す(検索UIの上位タグチップ用)。`index.db` が無ければ `ok:false`。
+
+```json
+{ "type": "top-tags", "path": "Z:\\NAS\\backup", "limit": 50 }
+```
+
+```json
+{ "type": "top-tags-result", "ok": true, "tags": [ { "tag": "登山", "count": 12 } ] }
+```
+
 ### フォルダの.md一覧(list-tree)
 
 `subdir`(例: `library`)配下の `.md` を相対パスで再帰列挙する(ライブラリのツリー閲覧用)。

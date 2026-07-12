@@ -70,6 +70,7 @@
 - `e2e/specs/pasted-images.spec.ts` — pasted-images.spec.ts — Ctrl+Vで貼り付けた画像の一次保存/一覧/削除のE2E(2026-07-13)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
+- `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
 
 ## `native-host/`
@@ -203,7 +204,7 @@
 - `src/newtab/components/discovery/LibraryPanel.tsx` — LibraryPanel.tsx — NASの library/ 配下の階層mdを一覧・開いて編集・保存し直す(作業ノートとは別レーン)。
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
-- `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — タグでノートを絞り込むパネル(メモリ内・索引不要。tagSearch.tsの純粋ロジックを使う)
+- `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — NASの索引(index.db)から タグ(AND/OR)＋本文(部分一致)＋期間(半開区間)で
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/notes/CLAUDE.md`
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
@@ -288,6 +289,8 @@
 - def handle_rebuild_index
 - def handle_search
 - def handle_list_tree
+- def handle_top_tags
+- def handle_search_notes
 - def handle
 - def main
 
@@ -311,6 +314,10 @@
 - def test_write_file_rejects_path_traversal
 - def test_rebuild_index_then_search_by_tag_and_text
 - def test_search_without_index_returns_error
+- def test_top_tags_returns_by_frequency
+- def test_search_notes_by_tag_and_or
+- def test_search_notes_by_text_and_date_range
+- def test_search_notes_without_index_returns_error
 - def test_list_tree_lists_md_recursively
 - def test_list_tree_missing_folder_is_empty
 - def test_unknown_message_type_returns_error
@@ -522,6 +529,7 @@
 - function reorderNotesById
 - function moveNoteUp
 - function ensureTrailingEmptyNotes
+- function pasteResultsIntoNotes
 
 ### `src/lib/entities/tagCandidates.ts`
 - function addTagCandidate
@@ -550,12 +558,16 @@
 - const NAS_HOST_NAME
 - type ConnectNativeFn
 - type HistoryHit
+- type NoteHit
+- type TagCount
 - function probeNasPath
 - function writeFileToNas
 - function readFileFromNas
 - function rebuildNasIndex
 - function listNasTree
 - function searchNasHistory
+- function topNasTags
+- function searchNasNotes
 
 ### `src/lib/externalIO/nativeMessaging.ts`
 - const NATIVE_HOST_NAME

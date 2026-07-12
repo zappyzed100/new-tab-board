@@ -4,6 +4,7 @@ import {
   addNote,
   addNoteAfter,
   createNote,
+  pasteResultsIntoNotes,
   ensureTrailingEmptyNotes,
   MAX_NOTES,
   moveNoteUp,
@@ -88,6 +89,48 @@ describe("addNoteAfter", () => {
     const a = createNote("A", 0);
     const s = createNote("S", 1);
     expect(addNoteAfter([a], s, "gone")).toEqual([a, s]);
+  });
+});
+
+describe("pasteResultsIntoNotes", () => {
+  it("末尾の白紙ノートを上書きし、末尾空3つを維持する", () => {
+    const full = { ...createNote("既存", 0), content: "本文" };
+    const notes = [
+      full,
+      createNote("ノートA", 1),
+      createNote("ノートB", 2),
+      createNote("ノートC", 3),
+    ];
+    const after = pasteResultsIntoNotes(notes, [{ title: "結果1", content: "内容1" }], 1000);
+    const sorted = sortedNotes(after);
+    // 既存(本文)は残り、末尾の白紙1つが結果で上書きされ、末尾空は3つ維持。
+    expect(sorted.map((n) => n.title)).toContain("結果1");
+    expect(sorted.find((n) => n.title === "結果1")?.content).toBe("内容1");
+    const trailingEmpty = sorted.filter((n) => n.content.trim() === "").length;
+    expect(trailingEmpty).toBe(3);
+  });
+
+  it("白紙より結果が多ければ追加し、順序が保たれる", () => {
+    const notes = [createNote("ノートA", 0)]; // 白紙1つだけ
+    const after = pasteResultsIntoNotes(
+      notes,
+      [
+        { title: "r1", content: "c1" },
+        { title: "r2", content: "c2" },
+      ],
+      1000,
+    );
+    const sorted = sortedNotes(after);
+    const nonEmpty = sorted.filter((n) => n.content.trim() !== "");
+    expect(nonEmpty.map((n) => n.title)).toEqual(["r1", "r2"]);
+    expect(nonEmpty.map((n) => n.content)).toEqual(["c1", "c2"]);
+    // 末尾空3つ維持。
+    expect(sorted.filter((n) => n.content.trim() === "").length).toBe(3);
+  });
+
+  it("結果が空なら元配列をそのまま返す", () => {
+    const notes = [createNote("ノートA", 0)];
+    expect(pasteResultsIntoNotes(notes, [], 1000)).toBe(notes);
   });
 });
 

@@ -7,6 +7,8 @@ import {
   readFileFromNas,
   rebuildNasIndex,
   searchNasHistory,
+  searchNasNotes,
+  topNasTags,
   writeFileToNas,
 } from "./nasNativeHost";
 
@@ -188,6 +190,83 @@ describe("searchNasHistory", () => {
     const fake = makeFakePort();
     const promise = searchNasHistory("Z:\\NAS", { text: "x" }, () => fake.port);
     fake.emitMessage({ type: "search-result", ok: false, error: "index.db が無い" });
+    expect(await promise).toBeNull();
+  });
+});
+
+describe("topNasTags", () => {
+  it("top-tags-resultのtagsを返し、limit付きで送る", async () => {
+    const fake = makeFakePort();
+    const promise = topNasTags("Z:\\NAS", 20, () => fake.port);
+    const tags = [
+      { tag: "登山", count: 2 },
+      { tag: "計画", count: 1 },
+    ];
+    fake.emitMessage({ type: "top-tags-result", ok: true, tags });
+    expect(await promise).toEqual(tags);
+    expect(fake.sentMessages).toEqual([{ type: "top-tags", path: "Z:\\NAS", limit: 20 }]);
+  });
+
+  it("ok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = topNasTags("Z:\\NAS", 50, () => fake.port);
+    fake.emitMessage({ type: "top-tags-result", ok: false, error: "index.db が無い" });
+    expect(await promise).toBeNull();
+  });
+});
+
+describe("searchNasNotes", () => {
+  it("tags/text/mode/from/to を送り、rowsを返す", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasNotes(
+      "Z:\\NAS",
+      {
+        tags: ["登山"],
+        text: "高尾山",
+        mode: "and",
+        from: "2026-07-01T00:00:00.000Z",
+        to: "2026-08-01T00:00:00.000Z",
+      },
+      () => fake.port,
+    );
+    const rows = [
+      {
+        note_id: "a",
+        title: "登山計画",
+        created_at: "2026-07-01T00:00:00.000Z",
+        content: "高尾山へ行く",
+        snippet: "高尾山へ行く",
+      },
+    ];
+    fake.emitMessage({ type: "search-notes-result", ok: true, rows });
+    expect(await promise).toEqual(rows);
+    expect(fake.sentMessages).toEqual([
+      {
+        type: "search-notes",
+        path: "Z:\\NAS",
+        tags: ["登山"],
+        text: "高尾山",
+        mode: "and",
+        from: "2026-07-01T00:00:00.000Z",
+        to: "2026-08-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("from/to未指定なら送らない(無制限)", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasNotes("Z:\\NAS", { tags: ["x"] }, () => fake.port);
+    fake.emitMessage({ type: "search-notes-result", ok: true, rows: [] });
+    expect(await promise).toEqual([]);
+    expect(fake.sentMessages).toEqual([
+      { type: "search-notes", path: "Z:\\NAS", tags: ["x"], text: "", mode: "and" },
+    ]);
+  });
+
+  it("ok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasNotes("Z:\\NAS", { text: "x" }, () => fake.port);
+    fake.emitMessage({ type: "search-notes-result", ok: false, error: "index.db が無い" });
     expect(await promise).toBeNull();
   });
 });

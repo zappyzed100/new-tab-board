@@ -21,6 +21,7 @@ import {
   createNote,
   ensureTrailingEmptyNotes,
   isDefaultNoteTitle,
+  pasteResultsIntoNotes,
   moveNoteUp,
   reorderNotesById,
   sortedNotes,
@@ -489,6 +490,13 @@ export function App() {
     selectNote(note.id);
   }
 
+  // NAS検索結果をノート末尾へ貼り付ける(白紙ノートは上書き。ユーザー指示)。
+  function pasteSearchResults(results: { title: string; content: string }[]) {
+    if (results.length === 0) return;
+    updateNotes((prev) => pasteResultsIntoNotes(prev, results, clockNow()));
+    setDataPanelMessage(`検索結果 ${results.length}件をノートへ貼り付けました`);
+  }
+
   const countdown = computeCountdown(nextEventCache, clockNow());
 
   if (!sync || !notes) {
@@ -684,7 +692,11 @@ export function App() {
                     />
                   </Suspense>
                 </div>
-                <TagSearchPanel notes={notes} onSelectNote={selectNote} />
+                <TagSearchPanel
+                  notes={notes}
+                  onSelectNote={selectNote}
+                  onPasteResults={pasteSearchResults}
+                />
                 {showLibrary ? <LibraryPanel /> : null}
                 {orderedNotes.length > 0 ? (
                   // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
