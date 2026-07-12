@@ -130,8 +130,8 @@
 - `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
-- `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み/書き出し)の単体テスト
-- `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込み/書き出しの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
+- `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
+- `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込みの唯一の入出口(SPEC.md §4.10-a)
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -446,8 +446,6 @@
 
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
-- type ExportResult
-- function exportNotesToFolder
 
 ### `src/lib/history/gzip.ts`
 - function gzipCompress

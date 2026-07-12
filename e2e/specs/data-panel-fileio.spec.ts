@@ -4,9 +4,8 @@
 // (WICG/file-system-access#314、crbug.com/issues/40240444)があり、ボタンを押しても
 // 何も起きないように見えていた。<input type="file">への置き換え後は通常のfile chooser
 // イベントとして観測できる(src/lib/fileio/fileSystem.tsのヘッダー参照)。
-// 「フォルダへ書き出し」はNAS周りの機能と同じくshowDirectoryPickerを使う設計へ
-// 戻したため(ユーザー指示)、実ダイアログに依存しE2E自動化できない
-// ——docs/manual-verification.mdの手動確認チェックリストで扱う。
+// 「フォルダへ書き出し」ボタンは同じ既知バグが実機で解消できず(選択後にエラー
+// メッセージすら出ない無反応のままだった)、ユーザー指示により撤去した。
 import { expect, test } from "../fixtures";
 
 test("ファイルを開くで.txtの中身が新規ノートとして取り込まれる", async ({ context, newTabUrl }) => {

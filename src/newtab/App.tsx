@@ -360,7 +360,6 @@ export function App() {
               <nav>
                 <DataPanel
                   sync={sync}
-                  notes={notes}
                   onImportData={importData}
                   onOpenFileAsNote={openFileAsNote}
                   onMessage={setDataPanelMessage}

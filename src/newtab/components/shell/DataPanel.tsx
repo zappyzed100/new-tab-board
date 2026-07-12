@@ -10,7 +10,7 @@
 import { Button, Flex } from "@radix-ui/themes";
 import { setNasDirectoryHandle } from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
-import { exportNotesToFolder, pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
+import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { getAuthToken } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
@@ -20,13 +20,12 @@ type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Se
 
 type Props = {
   sync: SyncState;
-  notes: Note[];
   onImportData: (data: { sync: SyncState; notes: Note[] }) => void;
   onOpenFileAsNote: (title: string, content: string) => void;
   onMessage: (message: string) => void;
 };
 
-export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote, onMessage }: Props) {
+export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: Props) {
   async function handleConnectDrive() {
     const token = await getAuthToken(true);
     onMessage(
@@ -74,21 +73,6 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote, onMessa
     onMessage(`「${title}」をノートとして読み込みました`);
   }
 
-  async function handleExportFolder() {
-    const result = await exportNotesToFolder(notes);
-    if (result.cancelled) {
-      // Chromium拡張機能コンテキストのshowDirectoryPickerには、フォルダを選んでも
-      // AbortErrorになる既知バグがある(fileSystem.tsのヘッダー参照)。ユーザーの
-      // 意図的なキャンセルと区別できないため、両方をまとめて案内する
-      // (handleSetNasFolderの既存メッセージと同じ方針)。
-      onMessage(
-        "フォルダ選択がキャンセルされたか、選択後に失敗しました(Chromiumの既知の問題で、選択が実際は成功していても失敗扱いになることがあります。もう一度試すか、Chromeを最新版に更新してください)",
-      );
-      return;
-    }
-    onMessage(`${result.exported}件のノートを書き出しました`);
-  }
-
   async function handleSetNasFolder() {
     try {
       const handle = await window.showDirectoryPicker();
@@ -128,15 +112,6 @@ export function DataPanel({ sync, notes, onImportData, onOpenFileAsNote, onMessa
           onClick={() => void handleOpenFile()}
         >
           📄 ファイルを開く
-        </Button>
-        <Button
-          type="button"
-          variant="soft"
-          data-testid="data-export-folder"
-          title="選んだフォルダへ全ノートをそれぞれ.mdファイルとして書き出す"
-          onClick={() => void handleExportFolder()}
-        >
-          🗂️ フォルダへ書き出し
         </Button>
         <Button
           type="button"
