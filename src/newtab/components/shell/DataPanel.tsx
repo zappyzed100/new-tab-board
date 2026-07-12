@@ -90,7 +90,11 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
         );
         return;
       }
-      onMessage("NASフォルダの設定に失敗しました");
+      // 原因の切り分けのため、実際のエラー名/メッセージをそのまま案内に含める
+      // (「失敗しました」とだけ出しても、キャンセルとの違いはおろか原因の手がかりが
+      // 一切残らず調査できないため)。
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      onMessage(`NASフォルダの設定に失敗しました(${detail})`);
     }
   }
 
