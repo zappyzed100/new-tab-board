@@ -21,7 +21,7 @@
     "nativeMessaging"
   ],
   "oauth2": {
-    "client_id": "872015431238-s02e50l89fomsocgrfnh5gfqmtfk2446.apps.googleusercontent.com",
+    "client_id": "872015431238-8ul2vrsn7crorkdqsh1s6f47hffejdnb.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/drive.file",
       "https://www.googleapis.com/auth/calendar.readonly"

@@ -64,8 +64,11 @@ crbug.com/issues/40240444——選択後もAbortErrorになり、実機でエラ
 
 ## 前提(すでに完了済み)
 - Google Cloud ConsoleでのOAuthクライアントID発行・テストユーザー登録は完了済み
-  (`public/manifest.json`の`oauth2.client_id`に反映済み。2026-07-12: 元のclient_idが
-  プロジェクト内に実体を持たない値だったため、Google Auth Platformの新UIで
-  ブランディング/対象(テストユーザー登録)/データアクセス(スコープ追加)/クライアント
-  (種類「Chrome拡張機能」・Application ID=拡張機能ID)を再設定し、新規発行し直した)
+  (`public/manifest.json`の`oauth2.client_id`に反映済み)。2026-07-12: 認証方式を
+  `chrome.identity.getAuthToken`から`launchWebAuthFlow`へ移行したのに伴い、OAuthクライアントの
+  種類は「**ウェブ アプリケーション**」で、**承認済みのリダイレクトURIに
+  `https://gimpafmoklcgklcggonojldigofjbnnj.chromiumapp.org/` を登録**しておく必要がある
+  (「Chrome拡張機能」型はブラウザ本体が未サインインの環境で旧カスタムURIスキーム経路へ
+  フォールバックし、2023-10のGoogleセキュリティ変更でinvalid_requestになるため不可。
+  `src/lib/drive/googleAuth.ts`ヘッダー参照)
 - 拡張機能IDは`gimpafmoklcgklcggonojldigofjbnnj`に固定済み(`manifest.json`の`key`)
