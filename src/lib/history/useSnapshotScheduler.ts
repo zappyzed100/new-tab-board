@@ -22,6 +22,7 @@ const MAX_CAP_CHECK_INTERVAL_MS = 30_000;
 
 /** Cmd/Ctrl+S(即時スナップショット保存。SPEC.md §6)から呼ぶ、無条件で1件保存する関数。 */
 export async function forceSnapshot(noteId: string, content: string): Promise<void> {
+  if (content.trim() === "") return; // 空ノートは保存対象にしない(ユーザー指示)
   const compressed = await gzipCompress(content);
   const snapshotId = crypto.randomUUID();
   await putSnapshot({

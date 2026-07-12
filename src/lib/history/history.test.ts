@@ -51,6 +51,20 @@ describe("shouldSnapshot", () => {
       }),
     ).toBe(true);
   });
+
+  it("本文が空(空白のみ含む)なら刻まない(空ノートは保存対象外)", () => {
+    expect(
+      shouldSnapshot({ now: 1000, lastSnapshotAt: null, lastContent: null, currentContent: "" }),
+    ).toBe(false);
+    expect(
+      shouldSnapshot({
+        now: 1000,
+        lastSnapshotAt: null,
+        lastContent: null,
+        currentContent: "  \n\t ",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("exceedsChangeThreshold", () => {

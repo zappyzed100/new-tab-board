@@ -26,6 +26,7 @@ export type SnapshotGateInput = {
  */
 export function shouldSnapshot(input: SnapshotGateInput): boolean {
   const { now, lastSnapshotAt, lastContent, currentContent } = input;
+  if (currentContent.trim() === "") return false; // 空ノートは保存対象にしない(ユーザー指示)
   if (currentContent === lastContent) return false;
   if (lastSnapshotAt !== null && now - lastSnapshotAt < MIN_FLOOR_MS) return false;
   return true;
