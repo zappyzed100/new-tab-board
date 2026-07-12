@@ -69,7 +69,12 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
 
   async function handleOpenFile() {
     const result = await pickAndReadTextFile();
-    if (!result) return;
+    if (!result) {
+      // キャンセル時も無反応に見えないよう明示的に案内する(NAS設定と同じ方針——
+      // 「何も起きない」と「機能が壊れている」をユーザーが区別できるようにする)。
+      onMessage("ファイル選択がキャンセルされました");
+      return;
+    }
     const title = result.name.replace(/\.txt$/i, "");
     onOpenFileAsNote(title, result.content);
     onMessage(`「${title}」をノートとして読み込みました`);
