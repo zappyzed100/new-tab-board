@@ -143,3 +143,49 @@ test("ドラッグつまみでノートの位置を入れ替えられる", async
 
   await expect.poll(async () => (await tabTitles(page))[0]).toBe(before[2]);
 });
+
+test("ノートペイン先頭でノート名を編集するとタブにも反映される", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.locator('[data-testid^="note-tab-select-"]')).toHaveCount(3);
+
+  const firstPane = page.locator('[data-testid^="note-editor-area-"]').first();
+  await firstPane.locator(".note-pane-title input").fill("議事録");
+
+  // 同じノートのタブ表示も新しい名前になる(タイトルはlinear orderで一意にひもづく)。
+  await expect(
+    page.locator('[data-testid^="note-tab-select-"]', { hasText: "議事録" }),
+  ).toBeVisible();
+});
+
+test("ノートペインの🗑でそのノートを削除できる", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.locator('[data-testid^="note-tab-select-"]')).toHaveCount(3);
+
+  // 末尾補充で名前が復活しないよう、英字連番でない固有名に変えてから削除する。
+  const firstPane = page.locator('[data-testid^="note-editor-area-"]').first();
+  await firstPane.locator(".note-pane-title input").fill("削除対象テスト");
+  await expect(
+    page.locator('[data-testid^="note-tab-select-"]', { hasText: "削除対象テスト" }),
+  ).toBeVisible();
+
+  await firstPane.locator('[data-testid^="delete-note-"]').click();
+  await expect(
+    page.locator('[data-testid^="note-tab-select-"]', { hasText: "削除対象テスト" }),
+  ).toHaveCount(0);
+});
+
+test("対応済みチェックでノートが淡色(data-done)になる", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.locator('[data-testid^="note-tab-select-"]')).toHaveCount(3);
+
+  const firstPane = page.locator('[data-testid^="note-editor-area-"]').first();
+  await expect(firstPane).not.toHaveAttribute("data-done", "true");
+  await firstPane.locator('[data-testid^="done-note-"]').click();
+  await expect(firstPane).toHaveAttribute("data-done", "true");
+});

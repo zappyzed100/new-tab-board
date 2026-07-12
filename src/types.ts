@@ -56,6 +56,9 @@ export type Note = {
   sourceNoteId?: string;
   /** AI生成ノートの生成元(front matterのgenerated_by。例: "gemini")。 */
   generatedBy?: string;
+  /** 「対応済み」チェック(ユーザー指示。名称なしのcheckボタンでノートを済み扱いにする)。
+   * 済みのノートはボード上で淡色表示になる(削除はしない——見返せるよう残す)。 */
+  done?: boolean;
 };
 
 /** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス

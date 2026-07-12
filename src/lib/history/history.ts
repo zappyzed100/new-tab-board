@@ -83,15 +83,23 @@ function firstChangedLine(current: string, previous: string): string | null {
 
 /**
  * 履歴一覧に出す「一文サマリ」を算出する(SPEC.md §4.3 履歴の視認性)。
- * 前回スナップショットからの変更箇所(最初に異なる行)を優先し、無ければ本文の最初の行を返す。
+ * 「頭だけ見せられても分からない」というユーザー指摘への対応(2026-07-12):
+ * - **無から生み出された文章**(前スナップショットが無い/空)なら、本文の最初の行(頭)を出す。
+ * - **既存を編集した作業**なら、`(編集)` を冠して**変更箇所**(最初に異なる行)を出す。
  * 空白は畳み、長すぎる場合は省略する(一覧で1行に収める)。
  */
 export function summarizeSnapshot(current: string, previous: string | null): string {
+  const isEdit = previous !== null && previous.trim() !== "";
   const raw =
-    (previous !== null ? firstChangedLine(current, previous) : null) ?? firstNonEmptyLine(current);
+    isEdit && previous !== null
+      ? (firstChangedLine(current, previous) ?? firstNonEmptyLine(current))
+      : firstNonEmptyLine(current);
   const collapsed = raw.replace(/\s+/g, " ").trim();
-  if (collapsed === "") return "(空)";
-  return collapsed.length > SUMMARY_MAX_CHARS
-    ? `${collapsed.slice(0, SUMMARY_MAX_CHARS)}…`
-    : collapsed;
+  const body =
+    collapsed === ""
+      ? "(空)"
+      : collapsed.length > SUMMARY_MAX_CHARS
+        ? `${collapsed.slice(0, SUMMARY_MAX_CHARS)}…`
+        : collapsed;
+  return isEdit ? `(編集) ${body}` : body;
 }

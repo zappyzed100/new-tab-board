@@ -118,25 +118,29 @@ describe("isLargeDeletion", () => {
 });
 
 describe("summarizeSnapshot", () => {
-  it("previousがnullなら本文の最初の非空行を返す", () => {
+  it("無から生み出された文章(previousがnull)は頭(最初の非空行)だけを返す", () => {
     expect(summarizeSnapshot("\n\n  見出し行  \n本文", null)).toBe("見出し行");
   });
 
-  it("previousとの最初に異なる行(current側)を返す", () => {
+  it("前スナップショットが空(空→本文)も『無から』扱いで頭を返す((編集)を付けない)", () => {
+    expect(summarizeSnapshot("はじめて書いた本文", "   ")).toBe("はじめて書いた本文");
+  });
+
+  it("既存を編集した作業は(編集)を冠して変更箇所(最初に異なる行)を返す", () => {
     const prev = "a\nb\nc";
     const cur = "a\nB変更\nc";
-    expect(summarizeSnapshot(cur, prev)).toBe("B変更");
+    expect(summarizeSnapshot(cur, prev)).toBe("(編集) B変更");
   });
 
-  it("行の追加は、追加された行を返す", () => {
-    expect(summarizeSnapshot("a\nb\n新しい行", "a\nb")).toBe("新しい行");
+  it("行の追加は(編集)付きで、追加された行を返す", () => {
+    expect(summarizeSnapshot("a\nb\n新しい行", "a\nb")).toBe("(編集) 新しい行");
   });
 
-  it("純粋な削除は(削除)付きで、消えた行を示す", () => {
-    expect(summarizeSnapshot("a\nb", "a\nb\n消えた行")).toBe("(削除) 消えた行");
+  it("純粋な削除は(編集)(削除)付きで、消えた行を示す", () => {
+    expect(summarizeSnapshot("a\nb", "a\nb\n消えた行")).toBe("(編集) (削除) 消えた行");
   });
 
-  it("空白は畳み、長すぎる場合は省略記号を付ける", () => {
+  it("空白は畳み、長すぎる場合は省略記号を付ける(無からの頭)", () => {
     const long = "あ".repeat(SUMMARY_MAX_CHARS + 10);
     const result = summarizeSnapshot(long, null);
     expect(result.endsWith("…")).toBe(true);
@@ -147,7 +151,7 @@ describe("summarizeSnapshot", () => {
     expect(summarizeSnapshot("   \n  ", null)).toBe("(空)");
   });
 
-  it("変更が無ければ(dedupで通常起きないが)本文の最初にフォールバックする", () => {
-    expect(summarizeSnapshot("同じ\n本文", "同じ\n本文")).toBe("同じ");
+  it("変更が無ければ(dedupで通常起きないが)本文の最初にフォールバックする((編集)は付く)", () => {
+    expect(summarizeSnapshot("同じ\n本文", "同じ\n本文")).toBe("(編集) 同じ");
   });
 });

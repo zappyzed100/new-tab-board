@@ -3,10 +3,10 @@
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
+import { Badge, Button, Card, Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
-import { updateNote } from "../../../lib/entities/notes";
+import { removeNote, updateNote } from "../../../lib/entities/notes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
@@ -211,6 +211,7 @@ export function NoteEditorPane({
     <Card
       data-testid={`note-editor-area-${note.id}`}
       data-active={isActive || undefined}
+      data-done={note.done || undefined}
       // ドラッグ交換の drop 先。掴んだノート(App側のrefが保持)をこのノートの位置へ移動する。
       // dropを許可するためdragOverでpreventDefaultする。本文中央はCodeMirrorがdropを飲むため、
       // 実質的にヘッダのつまみ帯へ落とす運用になる(掴んだノートidはApp側のrefで受け渡す)。
@@ -219,7 +220,9 @@ export function NoteEditorPane({
     >
       <Flex direction="column" gap="3">
         <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
-        <Flex align="center" gap="3" wrap="wrap">
+        {/* タイトル帯: つまみ・対応済みチェック・編集可能なノート名・削除(ユーザー指示:
+            ノート名を書く側の先頭に置き、そこで編集/削除/対応済みにできる)。 */}
+        <Flex align="center" gap="2">
           <span
             className="note-drag-handle"
             data-testid={`note-drag-handle-${note.id}`}
@@ -237,6 +240,37 @@ export function NoteEditorPane({
           >
             ⠿
           </span>
+          <Checkbox
+            data-testid={`done-note-${note.id}`}
+            checked={note.done ?? false}
+            title={note.done ? "対応済みを解除する" : "対応済みにする"}
+            onCheckedChange={(checked) =>
+              onNotesChange((prev) => updateNote(prev, note.id, { done: checked === true }))
+            }
+          />
+          <TextField.Root
+            className="note-pane-title"
+            data-testid={`note-title-${note.id}`}
+            aria-label="ノート名"
+            title="ここでノート名を編集できます"
+            value={note.title}
+            onChange={(e) =>
+              onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
+            }
+            style={{ flex: 1 }}
+          />
+          <IconButton
+            type="button"
+            variant="soft"
+            color="red"
+            data-testid={`delete-note-${note.id}`}
+            title="このノートを削除する"
+            onClick={() => onNotesChange((prev) => removeNote(prev, note.id))}
+          >
+            🗑
+          </IconButton>
+        </Flex>
+        <Flex align="center" gap="3" wrap="wrap">
           <Button
             type="button"
             variant={note.pinned ? "solid" : "soft"}
