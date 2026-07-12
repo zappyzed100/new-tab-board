@@ -4,12 +4,20 @@ import { useEffect, useRef } from "react";
 import { now as clockNow } from "../runtime/clock";
 import { putSnapshot } from "../storage/db";
 import { gzipCompress } from "./gzip";
-import { exceedsChangeThreshold, exceedsMaxCap, shouldSnapshot } from "./history";
+import {
+  exceedsChangeThreshold,
+  exceedsMaxCap,
+  shouldSnapshot,
+  summarizeSnapshot,
+} from "./history";
 import { logOp } from "../runtime/log";
 import { indexSnapshot } from "../search/search";
 
-const IDLE_MS = 2_500;
-const MAX_CAP_CHECK_INTERVAL_MS = 5_000;
+// アイドル保存の間隔。「5分放置されたら保存」(ユーザー指示——頻繁すぎる自動保存を抑える)。
+const IDLE_MS = 300_000;
+// 最長キャップの判定を回す間隔(実際に刻むのはexceedsMaxCap成立時のみ)。キャップ自体が
+// 5分なので、5秒ごとに細かく確認する必要はなく30秒間隔で十分。
+const MAX_CAP_CHECK_INTERVAL_MS = 30_000;
 
 /** Cmd/Ctrl+S(即時スナップショット保存。SPEC.md §6)から呼ぶ、無条件で1件保存する関数。 */
 export async function forceSnapshot(noteId: string, content: string): Promise<void> {
@@ -21,6 +29,7 @@ export async function forceSnapshot(noteId: string, content: string): Promise<vo
     timestamp: clockNow(),
     content: compressed,
     archived: false,
+    summary: summarizeSnapshot(content, null),
   });
   await indexSnapshot(snapshotId, content);
   logOp("history", "snapshot", `note=${noteId} reason=manual`);
@@ -53,6 +62,7 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
       timestamp: now,
       content: compressed,
       archived: false,
+      summary: summarizeSnapshot(currentContent, lastContentRef.current),
     });
     await indexSnapshot(snapshotId, currentContent);
     logOp("history", "snapshot", `note=${noteId} reason=${reason}`);

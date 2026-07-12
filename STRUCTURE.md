@@ -500,6 +500,8 @@
 - function shouldSnapshot
 - function exceedsChangeThreshold
 - function exceedsMaxCap
+- const SUMMARY_MAX_CHARS
+- function summarizeSnapshot
 
 ### `src/lib/history/useSnapshotScheduler.ts`
 - function forceSnapshot

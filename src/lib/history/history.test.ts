@@ -7,6 +7,8 @@ import {
   MAX_CAP_MS,
   MIN_FLOOR_MS,
   shouldSnapshot,
+  SUMMARY_MAX_CHARS,
+  summarizeSnapshot,
 } from "./history";
 
 describe("shouldSnapshot", () => {
@@ -75,5 +77,40 @@ describe("exceedsMaxCap", () => {
 
   it("キャップ以上ならtrue", () => {
     expect(exceedsMaxCap(MAX_CAP_MS, 0)).toBe(true);
+  });
+});
+
+describe("summarizeSnapshot", () => {
+  it("previousがnullなら本文の最初の非空行を返す", () => {
+    expect(summarizeSnapshot("\n\n  見出し行  \n本文", null)).toBe("見出し行");
+  });
+
+  it("previousとの最初に異なる行(current側)を返す", () => {
+    const prev = "a\nb\nc";
+    const cur = "a\nB変更\nc";
+    expect(summarizeSnapshot(cur, prev)).toBe("B変更");
+  });
+
+  it("行の追加は、追加された行を返す", () => {
+    expect(summarizeSnapshot("a\nb\n新しい行", "a\nb")).toBe("新しい行");
+  });
+
+  it("純粋な削除は(削除)付きで、消えた行を示す", () => {
+    expect(summarizeSnapshot("a\nb", "a\nb\n消えた行")).toBe("(削除) 消えた行");
+  });
+
+  it("空白は畳み、長すぎる場合は省略記号を付ける", () => {
+    const long = "あ".repeat(SUMMARY_MAX_CHARS + 10);
+    const result = summarizeSnapshot(long, null);
+    expect(result.endsWith("…")).toBe(true);
+    expect([...result].length).toBe(SUMMARY_MAX_CHARS + 1); // 60字 + 省略記号
+  });
+
+  it("本文が空なら(空)を返す", () => {
+    expect(summarizeSnapshot("   \n  ", null)).toBe("(空)");
+  });
+
+  it("変更が無ければ(dedupで通常起きないが)本文の最初にフォールバックする", () => {
+    expect(summarizeSnapshot("同じ\n本文", "同じ\n本文")).toBe("同じ");
   });
 });

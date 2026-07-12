@@ -69,6 +69,9 @@ export type Snapshot = {
   archived: boolean;
   /** NAS上のファイルパス(排出後のみ)。 */
   archivePath?: string;
+  /** 履歴一覧で本文を展開せずに中身を判別するための一文サマリ(変更箇所 or 本文の最初)。
+   * このフィールド追加前の既存スナップショットではundefined(一覧では非表示)。 */
+  summary?: string;
 };
 
 export type IndexEntry = {

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button, Card, Checkbox, Flex, Heading, Text } from "@radix-ui/themes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { getSnapshotsByNote, putSnapshot } from "../../../lib/storage/db";
+import { summarizeSnapshot } from "../../../lib/history/history";
 import { gzipCompress, gzipDecompress } from "../../../lib/history/gzip";
 import { getSnapshotBody } from "../../../lib/externalIO/nasArchive";
 import type { Snapshot } from "../../../types";
@@ -61,6 +62,7 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
       timestamp: clockNow(),
       content: compressedCurrent,
       archived: false,
+      summary: summarizeSnapshot(currentContent, null),
     });
     onRestore(text);
   }
@@ -92,6 +94,18 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
                 ) : null}
               </Text>
             </Flex>
+            {snapshot.summary ? (
+              // 本文を展開せずに中身を判別できるよう、変更箇所(or 本文の最初)の一文を出す。
+              <Text
+                as="p"
+                size="1"
+                color="gray"
+                className="history-summary"
+                data-testid={`history-summary-${snapshot.id}`}
+              >
+                {snapshot.summary}
+              </Text>
+            ) : null}
             <Button
               type="button"
               variant="soft"
