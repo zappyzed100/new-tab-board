@@ -110,6 +110,8 @@
 - `src/lib/display/calendarMonth.ts` — calendarMonth.ts — Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/display/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
 - `src/lib/display/clockFormat.ts` — clockFormat.ts — 時計/日付表示用のフォーマット(純関数。SPEC.md §4.8)
+- `src/lib/display/noteFont.test.ts` — noteFont.test.ts — clampNoteFontSize の単体テスト
+- `src/lib/display/noteFont.ts` — noteFont.ts — ノート本文(エディタ)の文字サイズ(px)の既定値・範囲・クランプ。
 - `src/lib/display/theme.test.ts` — theme.test.ts — theme.ts(テーマ解決)の単体テスト
 - `src/lib/display/theme.ts` — theme.ts — テーマ設定(light/dark/auto)の解決(純関数。SPEC.md §4.8)
 - `src/lib/drive/drive.test.ts` — drive.test.ts — drive.ts(Google Drive APIクライアント)の単体テスト(フェイクfetchを注入)
@@ -393,6 +395,13 @@
 
 ### `src/lib/display/clockFormat.ts`
 - function formatClock
+
+### `src/lib/display/noteFont.ts`
+- const NOTE_FONT_DEFAULT
+- const NOTE_FONT_MIN
+- const NOTE_FONT_MAX
+- const NOTE_FONT_STEP
+- function clampNoteFontSize
 
 ### `src/lib/display/theme.ts`
 - function resolveTheme

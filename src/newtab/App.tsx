@@ -26,6 +26,7 @@ import {
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts/shortcuts";
 import { resolveTheme } from "../lib/display/theme";
+import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import { flushAllToNas, writeActiveNotesToNas } from "../lib/externalIO/nasArchive";
@@ -228,6 +229,16 @@ export function App() {
     ),
   });
 
+  // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles.cssの.cm-editorが参照)。
+  // ノート以外のUI文字には影響しない(ユーザー指示)。未設定なら既定値。
+  const noteFontSize = clampNoteFontSize(sync?.settings.noteFontSize ?? NOTE_FONT_DEFAULT);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--note-font-size", `${noteFontSize}px`);
+  }, [noteFontSize]);
+  function changeNoteFontSize(delta: number) {
+    updateSettings({ noteFontSize: clampNoteFontSize(noteFontSize + delta) });
+  }
+
   // テーマ(light/dark/auto)の解決結果をdocument.documentElementへ反映する。
   useEffect(() => {
     if (!sync) return;
@@ -422,6 +433,35 @@ export function App() {
                 {/* タブバーと全文検索は、下へスクロールしても上端に貼り付いて追従する
                     (position:sticky。ユーザー指示)。2つをまとめて1つのstickyヘッダにする。 */}
                 <div className="note-sticky-head" data-testid="note-sticky-head">
+                  {/* ノート本文の文字サイズを一括調整する(A-/A+。ノート以外の文字には効かない)。 */}
+                  <Flex align="center" gap="2" className="note-font-toolbar">
+                    <Text size="1" color="gray">
+                      ノート文字サイズ
+                    </Text>
+                    <Button
+                      type="button"
+                      variant="soft"
+                      size="1"
+                      data-testid="note-font-decrease"
+                      title="ノート本文の文字を小さくする"
+                      onClick={() => changeNoteFontSize(-NOTE_FONT_STEP)}
+                    >
+                      A−
+                    </Button>
+                    <Text size="1" data-testid="note-font-size-value">
+                      {noteFontSize}px
+                    </Text>
+                    <Button
+                      type="button"
+                      variant="soft"
+                      size="1"
+                      data-testid="note-font-increase"
+                      title="ノート本文の文字を大きくする"
+                      onClick={() => changeNoteFontSize(NOTE_FONT_STEP)}
+                    >
+                      A＋
+                    </Button>
+                  </Flex>
                   <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
                     <NoteTabs
                       notes={notes}

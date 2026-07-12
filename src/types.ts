@@ -21,6 +21,9 @@ export type Settings = {
   /** 全データJSONバックアップ(jsonBackup.ts)のDrive上のファイルID。一度作成した後は
    * 同じファイルへ上書きし続けるためのキャッシュ(chrome.storage.syncに乗るため複数端末で共有される)。 */
   jsonBackupFileId?: string;
+  /** ノート本文(エディタ)の文字サイズ(px)。A-/A+で一括調整する(ユーザー指示)。
+   * 未設定なら既定13px。ノート以外のUI文字には影響しない。 */
+  noteFontSize?: number;
 };
 
 export type SyncData = {
