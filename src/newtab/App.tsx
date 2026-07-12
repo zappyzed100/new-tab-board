@@ -48,6 +48,11 @@ export function App() {
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
+  // 「ショートカット一覧」ボタンと同じflexコンテナに並ぶwidth:100%のメッセージが
+  // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
+  // ショートカットボタンより後ろに置く——ユーザー指摘)。
+  const [dataPanelMessage, setDataPanelMessage] = useState<string | null>(null);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
   // resolveTheme()の解決結果("light"/"dark"。"auto"はメディアクエリで解決済みの値)を
@@ -358,6 +363,7 @@ export function App() {
                   notes={notes}
                   onImportData={importData}
                   onOpenFileAsNote={openFileAsNote}
+                  onMessage={setDataPanelMessage}
                 />
 
                 {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
@@ -372,6 +378,15 @@ export function App() {
                 </Button>
               </nav>
             </Flex>
+
+            {/* ショートカットボタンより後ろ(ソースコード上も下)に置く——同じflex行に
+                width:100%のメッセージが並ぶと、メッセージの有無でショートカットボタンの
+                位置がガタつくため(ユーザー指摘)。 */}
+            {dataPanelMessage ? (
+              <Text as="p" size="2" data-testid="data-panel-message">
+                {dataPanelMessage}
+              </Text>
+            ) : null}
 
             {showShortcutsModal ? (
               <ShortcutsModal
