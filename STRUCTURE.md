@@ -479,6 +479,7 @@
 ### `src/lib/nextEvent/nextEventCountdown.ts`
 - type CountdownState
 - function computeCountdown
+- function formatCountdown
 
 ### `src/lib/nextEvent/preEventAlarm.ts`
 - function resolveAlarmTime

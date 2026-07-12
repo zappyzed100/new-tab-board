@@ -22,7 +22,7 @@ import {
 } from "../lib/shortcuts/shortcuts";
 import { resolveTheme } from "../lib/display/theme";
 import { now as clockNow } from "../lib/runtime/clock";
-import { computeCountdown } from "../lib/nextEvent/nextEventCountdown";
+import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import { flushAllToNas } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
@@ -295,7 +295,7 @@ export function App() {
             {countdown.kind === "upcoming" ? (
               <Card data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
                 <Text size="3" weight="medium">
-                  📆 次の予定まで {countdown.minutes}分({countdown.title})
+                  📆 次の予定まで {formatCountdown(countdown)}({countdown.title})
                 </Text>
               </Card>
             ) : null}
