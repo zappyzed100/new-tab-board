@@ -61,7 +61,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
-- `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」「フォルダへ書き出し」の回帰(2026-07-12)
+- `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/notes-race.spec.ts` — notes-race.spec.ts — NoteTabs周りの状態競合バグの回帰まとめ(§13昇格対象)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)

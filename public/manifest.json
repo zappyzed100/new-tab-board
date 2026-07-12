@@ -18,8 +18,7 @@
     "alarms",
     "notifications",
     "offscreen",
-    "nativeMessaging",
-    "downloads"
+    "nativeMessaging"
   ],
   "oauth2": {
     "client_id": "775491052559-3nj5soaef2o5uqu5r2h79eltg3r07vsb.apps.googleusercontent.com",

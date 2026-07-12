@@ -25,22 +25,26 @@
 
 ## showDirectoryPicker()はChromium拡張機能コンテキストで既知の不具合がある
 
-NAS二層アーカイブ(`nasArchive.ts`)は`FileSystemDirectoryHandle`の持続的な書き込み権限が
-必須のため`window.showDirectoryPicker()`(呼び出しは`DataPanel.tsx`の
-`handleSetNasFolder`)を使い続けている。しかしChrome拡張機能のページから呼ぶと、
-**ユーザーが実際にフォルダを選択してもAbortErrorで即座に失敗する**という
+NAS二層アーカイブ(`nasArchive.ts`)・`fileSystem.ts`の「フォルダへ書き出し」は
+`FileSystemDirectoryHandle`の(NASは持続的な・書き出しは1回選ぶだけの)書き込み権限が
+要るため、いずれも`window.showDirectoryPicker()`(呼び出しは`DataPanel.tsx`の
+`handleSetNasFolder`/`handleExportFolder`)を使う。しかしChrome拡張機能のページから
+呼ぶと、**ユーザーが実際にフォルダを選択してもAbortErrorで即座に失敗する**という
 Chromium側の既知バグがある(WICG/file-system-access#314、crbug.com/issues/40240444。
 拡張機能コンテキスト特有・Chromeバージョンによって再現したりしなかったりする)。
 
 このバグが原因のAbortErrorと、ユーザーが本当にダイアログをキャンセルした場合の
 AbortErrorは**アプリのコードからは区別不可能**(どちらも同じ`DOMException`)。
-そのため`handleSetNasFolder`はAbortError発生時に「キャンセルまたは失敗」の両方を
+そのため両方の呼び出し元はAbortError発生時に「キャンセルまたは失敗」の両方を
 まとめて案内するメッセージを表示する(片方だけを想定した文言にしない)。
 
-一方、`fileSystem.ts`の「ファイルを開く」「フォルダへ書き出し」は同じ既知バグの
-影響を受けない実装(`<input type="file">`・`chrome.downloads`)へ置き換え済み
-——NAS二層アーカイブだけが持続的なフォルダ書き込み権限を要求するため
-File System Access APIから離れられない。
+「フォルダへ書き出し」は一時`chrome.downloads`のsaveAsを1件ずつ出す方式(この既知
+バグの影響を受けない)へ置き換えたが、「フォルダを1回選んで全ノートをそこへ書き出し
+たい」という要望(ユーザー指示)により`showDirectoryPicker`を使う設計へ戻した——
+この既知バグに実際に当たった場合は「キャンセルした」という体で処理が打ち切られる
+(≒無反応ではなくエラーメッセージが出る、という最低限の対応にとどめている)。
+`fileSystem.ts`の「ファイルを開く」だけは`<input type="file">`へ置き換え済みで、
+この既知バグの影響を受けない。
 
 ## nativeMessaging.tsのテスト
 

@@ -1,19 +1,23 @@
 // fileSystem.ts — ローカルファイルの読み込み/書き出しの唯一の入出口(SPEC.md §4.10-a・手動フォルダエクスポート)
 //
 // ローカル.txtを「アプリ内で開く」(OSデフォルトハンドラにはなれない。§4.10前提)、および
-// 全ノートを個別の.mdファイルとして書き出す(NAS二層アーカイブの自動化は対象外。§4.3——
-// あちらは持続的な書き込み権限が要るため、この2機能とは別にnasArchive.tsが
-// showDirectoryPickerを使い続ける)。
+// 全ノートを選んだフォルダへ個別の.mdファイルとして書き出す(NAS二層アーカイブの
+// 自動化は対象外。§4.3——あちらは持続的な書き込み権限が要るため、この2機能とは別に
+// nasArchive.tsがshowDirectoryPickerを使い続ける)。
 //
-// この2機能は元々File System Access API(showOpenFilePicker/showDirectoryPicker)を
-// 使っていたが、Chrome拡張機能のページ(chrome_url_overridesのnewtab等)から呼ぶと
-// 「ユーザーが実際にファイル/フォルダを選択してもAbortErrorで即座に失敗する」という
-// Chromium側の既知のバグがある(WICG/file-system-access#314、
-// crbug.com/issues/40240444。extensionコンテキスト特有)。実機で「ボタンを押しても
-// 何も起きない(ダイアログが一切出ない、あるいは選んだ直後に無反応で終わる)」という
-// 形で再現した。読み込みは標準の`<input type="file">`、書き出しは`chrome.downloads`
-// (要"downloads"権限。保存先ダイアログは`saveAs: true`)へ置き換え、この既知バグの
-// 影響を受けない実装にしている。
+// 「ファイルを開く」は元々File System Access API(showOpenFilePicker)を使っていたが、
+// Chrome拡張機能のページ(chrome_url_overridesのnewtab等)から呼ぶと「ユーザーが実際に
+// ファイルを選択してもAbortErrorで即座に失敗する」というChromium側の既知バグがある
+// (WICG/file-system-access#314、crbug.com/issues/40240444。extensionコンテキスト特有)。
+// 実機で「ボタンを押しても何も起きない」という形で再現したため、標準の
+// `<input type="file">`へ置き換え、この既知バグの影響を受けない実装にしている。
+//
+// 「フォルダへ書き出し」は同じ既知バグの対象がshowDirectoryPickerのため、一時
+// chrome.downloadsのsaveAsを1件ずつ出す方式に置き換えたが、「フォルダを1回選んで
+// 全ノートをそこへ書き出したい」という要望(ユーザー指示)によりshowDirectoryPicker
+// を使う元の設計へ戻した——ユーザーが実際にこの既知バグへ当たった場合は、選択後も
+// AbortErrorとして届くため「キャンセルした」という体で処理は打ち切られる
+// (DataPanel.tsx側でエラーメッセージを表示する)。
 import { logOp } from "../runtime/log";
 import type { Note } from "../../types";
 
@@ -64,67 +68,30 @@ export async function pickAndReadTextFile(): Promise<{ name: string; content: st
 
 export type ExportResult = { exported: number; cancelled: boolean };
 
-/** 各ノートを個別の.mdファイルとして書き出す。1件ずつchrome.downloadsの
- * 保存先選択ダイアログ(Explorer/Finder相当)を出し、ユーザーが保存先を選ぶ
- * (「ファイルを開く」と同じくOSのネイティブダイアログを毎回表示する——
- * chrome.downloadsのfilenameは既定のダウンロードフォルダ配下の相対パスしか
- * 指定できず、NASフォルダ等の任意の場所を持続的に覚えておく方法が無いため、
- * 複数ファイルでも1件ずつ選んでもらう設計にしている)。
- * 保存先ダイアログでキャンセルされたら、そこまでの件数を添えて打ち切る。 */
+/** フォルダ選択ダイアログ(OSのExplorer/Finder相当)を1回だけ出し、選んだフォルダへ
+ * 全ノートを個別の.mdファイルとして書き出す。キャンセル時は書き出し0件で返す
+ * (Chromium拡張機能コンテキストの既知バグ——ヘッダー参照——で選択後もAbortErrorに
+ * なる場合も同じ扱いになる。区別できないため、失敗時はDataPanel.tsx側で
+ * 「キャンセルまたは失敗」の両方を案内するメッセージを表示する)。 */
 export async function exportNotesToFolder(notes: Note[]): Promise<ExportResult> {
-  let exported = 0;
-  for (const note of notes) {
-    const blob = new Blob([note.content], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    try {
-      const outcome = await downloadBlobUrl(url, `${sanitizeFileName(note.title)}.md`);
-      if (outcome === "cancelled") {
-        logOp("fileSystem", "export", `notes=${exported}/${notes.length}(cancelled)`);
-        return { exported, cancelled: true };
-      }
-      exported++;
-    } finally {
-      URL.revokeObjectURL(url);
+  let dirHandle: FileSystemDirectoryHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return { exported: 0, cancelled: true };
     }
+    logOp("fileSystem", "export-error", String(err));
+    throw err;
   }
-  logOp("fileSystem", "export", `notes=${exported}`);
-  return { exported, cancelled: false };
-}
-
-/** ダウンロードが完了・キャンセル・エラー中断のいずれかになるまで待ってから解決する。
- * chrome.downloads.downloadのコールバックはダウンロード「開始」時点で呼ばれるため、
- * ここでrevokeObjectURLしてしまうとブラウザがblobの中身を読み切る前にURLが失効し
- * ファイルが空/欠落する恐れがある——onChangedで実際の完了を確認してから返す。 */
-function downloadBlobUrl(url: string, filename: string): Promise<"done" | "cancelled"> {
-  return new Promise((resolve, reject) => {
-    chrome.downloads.download({ url, filename, saveAs: true }, (downloadId) => {
-      if (chrome.runtime.lastError || downloadId === undefined) {
-        const message = chrome.runtime.lastError?.message ?? "downloadId is undefined";
-        // saveAs:trueのダイアログ自体をユーザーが閉じた場合もここに来ることがある。
-        if (message.toLowerCase().includes("cancel")) {
-          resolve("cancelled");
-          return;
-        }
-        logOp("fileSystem", "export-error", message);
-        reject(new Error(message));
-        return;
-      }
-      function onChanged(delta: chrome.downloads.DownloadDelta) {
-        if (delta.id !== downloadId) return;
-        if (delta.state?.current === "complete") {
-          chrome.downloads.onChanged.removeListener(onChanged);
-          resolve("done");
-        } else if (delta.state?.current === "interrupted") {
-          chrome.downloads.onChanged.removeListener(onChanged);
-          if (delta.error?.current === "USER_CANCELED") {
-            resolve("cancelled");
-            return;
-          }
-          logOp("fileSystem", "export-error", `download interrupted: ${filename}`);
-          reject(new Error(`download interrupted: ${filename}`));
-        }
-      }
-      chrome.downloads.onChanged.addListener(onChanged);
+  for (const note of notes) {
+    const fileHandle = await dirHandle.getFileHandle(`${sanitizeFileName(note.title)}.md`, {
+      create: true,
     });
-  });
+    const writable = await fileHandle.createWritable();
+    await writable.write(note.content);
+    await writable.close();
+  }
+  logOp("fileSystem", "export", `notes=${notes.length}`);
+  return { exported: notes.length, cancelled: false };
 }
