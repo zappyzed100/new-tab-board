@@ -90,6 +90,12 @@ export function updateNote(notes: Note[], id: string, patch: Partial<Omit<Note, 
   return notes.map((n) => (n.id === id ? { ...n, ...patch } : n));
 }
 
+/** ノートへ md/txt ファイルをドロップした時の本文の取り込み方(ユーザー指示: 内容をコピー)。
+ * 空ノートは丸ごと置換、非空ノートは既存を消さないよう空行区切りで末尾へ追記する。 */
+export function mergeDroppedContent(existing: string, dropped: string): string {
+  return existing.trim() === "" ? dropped : `${existing}\n\n${dropped}`;
+}
+
 export function removeNote(notes: Note[], id: string): Note[] {
   return notes.filter((n) => n.id !== id);
 }

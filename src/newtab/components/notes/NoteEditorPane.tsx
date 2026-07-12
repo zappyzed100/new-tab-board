@@ -6,9 +6,11 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
+import type { DragEvent as ReactDragEvent } from "react";
 import {
   applyAutoTagToNote,
   isDefaultNoteTitle,
+  mergeDroppedContent,
   removeNote,
   updateNote,
 } from "../../../lib/entities/notes";
@@ -238,6 +240,31 @@ export function NoteEditorPane({
     onMessage(`TODOを${todos.length}件、TODOリストへ追加しました`);
   }
 
+  // md/txt ファイルをこのノートへドロップしたら本文を取り込む(ユーザー指示)。CodeMirrorが
+  // ドロップを飲む前に横取りするため capture フェーズで処理する。ファイルでなければ何もせず、
+  // ノート入れ替えのドラッグ(dataTransferにFile無し)はそのまま onDrop→onDropNote へ通す。
+  async function handleFileDropCapture(e: ReactDragEvent<HTMLElement>) {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file || !/\.(md|txt)$/i.test(file.name)) return;
+    e.preventDefault();
+    e.stopPropagation(); // CM6にも下のonDropNote(入れ替え)にも渡さない
+    const text = await file.text();
+    onNotesChange((prev) => {
+      const cur = prev.find((n) => n.id === note.id);
+      return updateNote(prev, note.id, {
+        content: mergeDroppedContent(cur?.content ?? "", text),
+        updatedAt: clockNow(),
+      });
+    });
+    setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
+    onMessage(`「${file.name}」の内容をノートへ取り込みました`);
+  }
+
+  // ファイルをドラッグ中はこの要素でドロップを受け付ける(CMのdragoverより先に許可する)。
+  function handleFileDragOverCapture(e: ReactDragEvent<HTMLElement>) {
+    if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+  }
+
   const { status: driveSyncStatus, syncNow: syncDriveNow } = useDriveSync(
     note,
     (driveFileId, lastSyncedAt) => {
@@ -262,6 +289,9 @@ export function NoteEditorPane({
       // ドラッグ交換の drop 先。掴んだノート(App側のrefが保持)をこのノートの位置へ移動する。
       // dropを許可するためdragOverでpreventDefaultする。本文中央はCodeMirrorがdropを飲むため、
       // 実質的にヘッダのつまみ帯へ落とす運用になる(掴んだノートidはApp側のrefで受け渡す)。
+      // capture フェーズは md/txt ファイルのドロップ取り込み用(CMより先に横取りする)。
+      onDragOverCapture={handleFileDragOverCapture}
+      onDropCapture={(e) => void handleFileDropCapture(e)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={() => onDropNote(note.id)}
     >

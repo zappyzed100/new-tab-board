@@ -564,6 +564,7 @@
 - function applyAutoTagToNote
 - function addNoteAfter
 - function updateNote
+- function mergeDroppedContent
 - function removeNote
 - function sortedNotes
 - function reorderNotes

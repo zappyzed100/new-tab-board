@@ -5,6 +5,7 @@ import {
   addNoteAfter,
   applyAutoTagToNote,
   createNote,
+  mergeDroppedContent,
   pasteResultsIntoNotes,
   ensureTrailingEmptyNotes,
   MAX_NOTES,
@@ -133,6 +134,15 @@ describe("pasteResultsIntoNotes", () => {
   it("結果が空なら元配列をそのまま返す", () => {
     const notes = [createNote("ノートA", 0)];
     expect(pasteResultsIntoNotes(notes, [], 1000)).toBe(notes);
+  });
+});
+
+describe("mergeDroppedContent(ファイルドロップの本文取り込み)", () => {
+  it("空ノートは丸ごと置換する", () => {
+    expect(mergeDroppedContent("   \n ", "ファイル本文")).toBe("ファイル本文");
+  });
+  it("非空ノートは空行区切りで末尾へ追記する(既存を消さない)", () => {
+    expect(mergeDroppedContent("既存メモ", "追加分")).toBe("既存メモ\n\n追加分");
   });
 });
 
