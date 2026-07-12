@@ -40,6 +40,14 @@ export function exceedsChangeThreshold(
   return diff >= CHANGE_THRESHOLD_CHARS;
 }
 
+/** 「全選択からの削除」等の大量削除か——消える前の内容を即座に保存すべき局面かを判定する。
+ * 非空→空(＝全選択して削除)、または閾値以上の一括削除でtrue(ユーザー指示: アイドル保存を
+ * 5分に延ばしたため、削除で直近の内容が履歴から失われないようにする安全網)。 */
+export function isLargeDeletion(prevContent: string, currentContent: string): boolean {
+  if (prevContent.length > 0 && currentContent.length === 0) return true;
+  return prevContent.length - currentContent.length >= CHANGE_THRESHOLD_CHARS;
+}
+
 /** 最長キャップを超えて久しく刻んでいないか(アクティブ編集中の安全網)。 */
 export function exceedsMaxCap(now: number, lastSnapshotAt: number | null): boolean {
   if (lastSnapshotAt === null) return false;

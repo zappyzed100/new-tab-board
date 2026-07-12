@@ -4,6 +4,7 @@ import {
   CHANGE_THRESHOLD_CHARS,
   exceedsChangeThreshold,
   exceedsMaxCap,
+  isLargeDeletion,
   MAX_CAP_MS,
   MIN_FLOOR_MS,
   shouldSnapshot,
@@ -77,6 +78,28 @@ describe("exceedsMaxCap", () => {
 
   it("キャップ以上ならtrue", () => {
     expect(exceedsMaxCap(MAX_CAP_MS, 0)).toBe(true);
+  });
+});
+
+describe("isLargeDeletion", () => {
+  it("非空→空(全選択からの削除)はtrue", () => {
+    expect(isLargeDeletion("なにか書いてある", "")).toBe(true);
+  });
+
+  it("元々空なら空のままでもfalse(削除ではない)", () => {
+    expect(isLargeDeletion("", "")).toBe(false);
+  });
+
+  it("閾値以上の一括削除はtrue", () => {
+    expect(isLargeDeletion("a".repeat(CHANGE_THRESHOLD_CHARS + 10), "a".repeat(9))).toBe(true);
+  });
+
+  it("閾値未満の削除(空にはならない)はfalse——通常のアイドル保存に任せる", () => {
+    expect(isLargeDeletion("a".repeat(50), "a".repeat(10))).toBe(false);
+  });
+
+  it("追加(長くなる)はfalse", () => {
+    expect(isLargeDeletion("短い", "短い" + "a".repeat(CHANGE_THRESHOLD_CHARS))).toBe(false);
   });
 });
 

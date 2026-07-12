@@ -7,6 +7,7 @@ import { gzipCompress } from "./gzip";
 import {
   exceedsChangeThreshold,
   exceedsMaxCap,
+  isLargeDeletion,
   shouldSnapshot,
   summarizeSnapshot,
 } from "./history";
@@ -41,9 +42,10 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
   const contentRef = useRef(content);
   contentRef.current = content;
 
-  async function snapshotIfNeeded(reason: string) {
+  async function snapshotIfNeeded(reason: string, contentToSnapshot?: string) {
     const now = clockNow();
-    const currentContent = contentRef.current;
+    // 通常は現在の本文を刻むが、大量削除時は「消える前」の内容を明示的に渡して守る。
+    const currentContent = contentToSnapshot ?? contentRef.current;
     if (
       !shouldSnapshot({
         now,
@@ -70,13 +72,32 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
     lastContentRef.current = currentContent;
   }
 
-  // アイドル(入力停止2.5秒) + 変更量閾値の即時チェック
+  // アイドル(入力停止5分) + 変更量閾値の即時チェック
   useEffect(() => {
     const timer = setTimeout(() => void snapshotIfNeeded("idle"), IDLE_MS);
     if (exceedsChangeThreshold(lastContentRef.current, content)) {
       void snapshotIfNeeded("threshold");
     }
     return () => clearTimeout(timer);
+  }, [content, noteId]);
+
+  // 全選択からの削除(非空→空)等の大量削除は、消える前の内容を即座に刻んで守る
+  // (アイドル保存を5分に延ばしたため、削除で直近の内容が履歴から失われないように——ユーザー指示)。
+  const prevContentRef = useRef(content);
+  const lastNoteIdRef = useRef(noteId);
+  useEffect(() => {
+    if (lastNoteIdRef.current !== noteId) {
+      // ノート切替(通常はkey=note.idで再マウントされ起きないが念のため):
+      // 前ノートの内容を今ノートの削除と誤検知しないようリセットする。
+      lastNoteIdRef.current = noteId;
+      prevContentRef.current = content;
+      return;
+    }
+    const prev = prevContentRef.current;
+    prevContentRef.current = content;
+    if (isLargeDeletion(prev, content)) {
+      void snapshotIfNeeded("large-deletion", prev);
+    }
   }, [content, noteId]);
 
   // フォーカス喪失・タブ非表示・離脱

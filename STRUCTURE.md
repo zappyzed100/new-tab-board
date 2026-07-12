@@ -499,6 +499,7 @@
 - type SnapshotGateInput
 - function shouldSnapshot
 - function exceedsChangeThreshold
+- function isLargeDeletion
 - function exceedsMaxCap
 - const SUMMARY_MAX_CHARS
 - function summarizeSnapshot
