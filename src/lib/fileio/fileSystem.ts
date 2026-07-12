@@ -20,15 +20,27 @@ function sanitizeFileName(title: string): string {
   return title.replace(/[\\/:*?"<>|]/g, "_").trim() || "無題のノート";
 }
 
-/** ファイル選択ダイアログで.txtを選び、中身を読み込む。キャンセル時はnullを返す。 */
+/** ファイル選択ダイアログ(OSのExplorer/Finder相当)で.txtを選び、中身を読み込む。
+ * キャンセル時はnullを返す。 */
 export async function pickAndReadTextFile(): Promise<{ name: string; content: string } | null> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".txt,text/plain";
-    // "cancel"イベント(Chrome 113+)でダイアログを閉じただけのケースを検知する。
-    input.addEventListener("cancel", () => resolve(null));
+    // 画面には出さないが、DOMに接続されていない要素へのclick()はネイティブの
+    // ファイル選択ダイアログを開かないブラウザ/コンテキストがあるため、
+    // 一時的にbodyへ挿入してから呼ぶ(処理後は必ず取り除く)。
+    input.style.display = "none";
+    document.body.appendChild(input);
+    function cleanup() {
+      input.remove();
+    }
+    input.addEventListener("cancel", () => {
+      cleanup();
+      resolve(null);
+    });
     input.addEventListener("change", () => {
+      cleanup();
       const file = input.files?.[0];
       if (!file) {
         resolve(null);
