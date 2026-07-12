@@ -267,6 +267,32 @@ body {
   word-break: break-word;
 }
 
+/* ノート類と「貼り付けた画像」一覧の間の区切り線(ユーザー指示: ノートの下に一つ線を引く)。 */
+.notes-images-divider {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: var(--space-3) 0 0;
+}
+
+/* 貼り付け画像の一覧: サムネイル(上限サイズ)+コピー/削除ボタン。 */
+.pasted-image-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--surface-2);
+}
+
+.pasted-image-thumb {
+  max-width: 160px;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
 /* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
    スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
    下の本文が透けないよう背景を敷き、他要素より前面に出す。 */

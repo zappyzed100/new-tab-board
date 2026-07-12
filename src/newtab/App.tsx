@@ -7,6 +7,7 @@ import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
 import { LibraryPanel } from "./components/discovery/LibraryPanel";
+import { PastedImagesPanel } from "./components/clipboard/PastedImagesPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
@@ -727,6 +728,9 @@ export function App() {
                     </Text>
                   </Card>
                 )}
+                {/* ノート類の下に一つ線を引いて、貼り付けた画像の一覧を置く(ユーザー指示)。 */}
+                <hr className="notes-images-divider" />
+                <PastedImagesPanel />
               </section>
             </div>
           </main>

@@ -1,9 +1,11 @@
 // db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  deletePastedImage,
   deleteSnapshot,
   geminiUsageDateKey,
   getAllIndexEntries,
+  getAllPastedImages,
   getAllSnapshots,
   getGeminiUsageCount,
   getIndexEntry,
@@ -12,6 +14,7 @@ import {
   getSnapshotsByNote,
   markSnapshotArchived,
   putIndexEntry,
+  putPastedImage,
   putSnapshot,
   recordGeminiUsage,
   setNasFolderPath,
@@ -124,5 +127,22 @@ describe("Gemini使用量カウント", () => {
     // 月はローカル成分で構築し、同じローカル成分で読むためタイムゾーンに依らず一致する。
     expect(geminiUsageDateKey(new Date(2026, 6, 13, 10, 30).getTime())).toBe("2026-07-13");
     expect(geminiUsageDateKey(new Date(2026, 0, 5, 0, 0).getTime())).toBe("2026-01-05");
+  });
+});
+
+describe("貼り付け画像(pastedImages)", () => {
+  it("保存→新しい順で全件取得→削除ができる", async () => {
+    const blob = new Blob(["x"], { type: "image/png" });
+    await putPastedImage({ id: "img-1", blob, type: "image/png", createdAt: 100 });
+    await putPastedImage({ id: "img-2", blob, type: "image/png", createdAt: 200 });
+
+    const all = await getAllPastedImages();
+    const ids = all.filter((r) => r.id.startsWith("img-")).map((r) => r.id);
+    expect(ids).toEqual(["img-2", "img-1"]); // createdAt降順(新しい順)
+
+    await deletePastedImage("img-1");
+    const after = (await getAllPastedImages()).map((r) => r.id);
+    expect(after).toContain("img-2");
+    expect(after).not.toContain("img-1");
   });
 });
