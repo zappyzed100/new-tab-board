@@ -17,6 +17,19 @@ Chromium側の既知バグ(WICG/file-system-access#314、crbug.com/issues/402404
 `<input type="file">`へ置き換え済み(この既知バグの対象は`showDirectoryPicker`の
 方だけで`showOpenFilePicker`は影響を受けない)。
 
+## NAS上はプレーンテキスト＋年/月/日フォルダ。getSnapshotBodyは圧縮base64を返す契約
+
+NASへ書くファイルは「そのままエディタで開いて読めるプレーンテキスト」(ユーザー指示)。
+IndexedDB側の`snapshot.content`はgzip+base64だが、`flushSnapshotToNas`が書く直前に
+`gzipDecompress`して生テキストにする。レイアウトは`年/月/日/<noteId>-<timestamp>-<id>.txt`
+(月・日はゼロ埋めしない)。親フォルダはネイティブホストが自動生成する。
+
+**重要な非対称**: `getSnapshotBody`は呼び出し側(SearchPanel/HistoryPanel)が
+`gzipDecompress`する契約なので、**圧縮base64**を返さねばならない。ローカル(content有り)は
+そのまま圧縮base64を返し、NAS読み戻し(新形式`.txt`=生テキスト)は`gzipCompress`し直して
+正規化する。旧形式`.snapshot`(旧コードが圧縮base64のまま書いていた)は`.txt`拡張子判定で
+そのまま返す(後方互換)。この分岐を壊すと履歴プレビュー/diffがdecompressで例外になる。
+
 ## nasArchive.test.ts / nasNativeHost.test.tsはNASブリッジをフェイクに差し替える
 
 `nasArchive.ts`の関数群(`flushAllToNas`/`readArchivedSnapshot`/`getSnapshotBody`)は

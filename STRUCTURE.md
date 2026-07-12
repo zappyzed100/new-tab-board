@@ -262,6 +262,8 @@
 - def test_write_file_then_read_file_roundtrip
 - def test_write_file_failure_for_nonexistent_directory
 - def test_read_file_failure_for_missing_file
+- def test_write_file_creates_date_subfolders
+- def test_write_file_rejects_path_traversal
 - def test_unknown_message_type_returns_error
 
 ### `scripts/check_bootstrap.py`

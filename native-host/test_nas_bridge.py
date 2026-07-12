@@ -55,6 +55,40 @@ def test_read_file_failure_for_missing_file(tmp_path) -> None:
     assert "error" in result
 
 
+def test_write_file_creates_date_subfolders(tmp_path) -> None:
+    # filenameが 年/月/日 のサブフォルダ付きでも、親フォルダを自動生成して書ける。
+    write_result = handle(
+        {
+            "type": "write-file",
+            "path": str(tmp_path),
+            "filename": "2026/7/12/n1-123-s1.txt",
+            "content": "本文",
+        }
+    )
+    assert write_result == {"type": "write-result", "ok": True}
+    assert os.path.isfile(os.path.join(str(tmp_path), "2026", "7", "12", "n1-123-s1.txt"))
+
+    read_result = handle(
+        {"type": "read-file", "path": str(tmp_path), "filename": "2026/7/12/n1-123-s1.txt"}
+    )
+    assert read_result == {"type": "read-result", "ok": True, "content": "本文"}
+
+
+def test_write_file_rejects_path_traversal(tmp_path) -> None:
+    # ".." でベースフォルダの外へ抜けようとする書き込みは拒否する。
+    result = handle(
+        {
+            "type": "write-file",
+            "path": str(tmp_path),
+            "filename": "../escape.txt",
+            "content": "x",
+        }
+    )
+    assert result["ok"] is False
+    assert "error" in result
+    assert not os.path.exists(os.path.join(os.path.dirname(str(tmp_path)), "escape.txt"))
+
+
 def test_unknown_message_type_returns_error() -> None:
     result = handle({"type": "something-else"})
     assert result["type"] == "error"

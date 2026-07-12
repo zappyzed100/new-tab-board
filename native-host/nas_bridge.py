@@ -47,23 +47,41 @@ def handle_probe(message: dict) -> dict:
         return {"type": "probe-result", "ok": False, "error": str(exc)}
 
 
+def _safe_target(base: str, filename: str) -> str:
+    """base配下の絶対パスへ解決する。filenameは "2026/7/12/foo.txt" のような
+    サブフォルダ付き相対パスを許すが、".." 等でbaseの外へ出ることは拒否する
+    (拡張機能側が渡すパスとはいえ、フォルダ外への書き込みを構造的に塞ぐ)。"""
+    rel = os.path.normpath(filename.replace("\\", "/"))
+    base_abs = os.path.abspath(base)
+    target_abs = os.path.abspath(os.path.join(base_abs, rel))
+    if os.path.commonpath([base_abs, target_abs]) != base_abs:
+        raise ValueError(f"path escapes base folder: {filename!r}")
+    return target_abs
+
+
 def handle_write_file(message: dict) -> dict:
     try:
-        target = os.path.join(message["path"], message["filename"])
+        base = message["path"]
+        # NASベースフォルダ自体が無い(NAS未接続・パス誤り)場合は、幻のローカルフォルダを
+        # でっち上げず失敗させる——年/月/日 のサブフォルダだけを既存ベースの下に自動生成する。
+        if not os.path.isdir(base):
+            raise FileNotFoundError(f"base folder not found: {base!r}")
+        target = _safe_target(base, message["filename"])
+        os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, "w", encoding="utf-8") as f:
             f.write(message["content"])
         return {"type": "write-result", "ok": True}
-    except (OSError, KeyError) as exc:
+    except (OSError, KeyError, ValueError) as exc:
         return {"type": "write-result", "ok": False, "error": str(exc)}
 
 
 def handle_read_file(message: dict) -> dict:
     try:
-        target = os.path.join(message["path"], message["filename"])
+        target = _safe_target(message["path"], message["filename"])
         with open(target, "r", encoding="utf-8") as f:
             content = f.read()
         return {"type": "read-result", "ok": True, "content": content}
-    except (OSError, KeyError) as exc:
+    except (OSError, KeyError, ValueError) as exc:
         return {"type": "read-result", "ok": False, "error": str(exc)}
 
 
