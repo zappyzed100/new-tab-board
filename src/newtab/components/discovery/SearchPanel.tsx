@@ -1,15 +1,11 @@
-// SearchPanel.tsx — 全ノート横断の全文検索UI(ヒット箇所プレビュー+日時一覧。SPEC.md §4.3)
-// 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fは「開く/閉じる」ではなく
-// この検索欄へフォーカスを移す操作として再割り当てされている(App.tsxのuseGlobalShortcuts参照)。
-import { forwardRef, useState } from "react";
-import { Button, Card, Flex, Heading, TextField } from "@radix-ui/themes";
-import { getSnapshot } from "../../../lib/storage/db";
-import { gzipDecompress } from "../../../lib/history/gzip";
-import { getSnapshotBody } from "../../../lib/externalIO/nasArchive";
-import { searchSnapshotIds } from "../../../lib/search/search";
-import type { Note, Snapshot } from "../../../types";
-
-type ResultItem = { snapshot: Snapshot; preview: string; noteTitle: string };
+// SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
+// スナップショット索引(search.ts)ではなく生の本文をその場で検索する——日本語の部分文字列でも
+// 引け、まだ履歴に刻まれていない書きかけの本文も対象になる(ユーザー指摘「全文検索が空」への対応)。
+// 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fはこの検索欄へフォーカスを移す。
+import { forwardRef, useMemo, useState } from "react";
+import { Button, Card, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { searchNotesByText } from "../../../lib/search/noteSearch";
+import type { Note } from "../../../types";
 
 type Props = {
   notes: Note[];
@@ -21,58 +17,43 @@ export const SearchPanel = forwardRef<HTMLInputElement, Props>(function SearchPa
   ref,
 ) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ResultItem[]>([]);
-
-  async function runSearch(q: string) {
-    setQuery(q);
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
-    const ids = await searchSnapshotIds(q);
-    const items: ResultItem[] = [];
-    for (const id of ids) {
-      const snapshot = await getSnapshot(id);
-      if (!snapshot) continue;
-      const body = await getSnapshotBody(snapshot);
-      if (body === null) continue; // NAS排出済みでオフライン等(degrade——検索結果からは除く)
-      const text = await gzipDecompress(body);
-      const note = notes.find((n) => n.id === snapshot.noteId);
-      items.push({
-        snapshot,
-        preview: text.slice(0, 80),
-        noteTitle: note?.title ?? "(不明なノート)",
-      });
-    }
-    items.sort((a, b) => b.snapshot.timestamp - a.snapshot.timestamp);
-    setResults(items);
-  }
+  // notesもqueryも変わるたびに引き直す(常に最新の本文が対象・書いた直後でも見つかる)。
+  const results = useMemo(() => searchNotesByText(notes, query), [notes, query]);
 
   return (
     <Card data-testid="search-panel">
       <Heading as="h2" size="3" mb="3">
-        🔍 全文検索(全ノートの本文を横断)
+        🔍 全文検索(全ノートの本文を横断・部分一致)
       </Heading>
       <TextField.Root
         ref={ref}
         aria-label="全文検索"
         data-testid="search-input"
-        placeholder="検索したい単語を入力(完全一致)"
+        placeholder="検索したい語を入力(本文の一部でも可)"
         value={query}
-        onChange={(e) => void runSearch(e.target.value)}
+        onChange={(e) => setQuery(e.target.value)}
       />
+      {query.trim() !== "" ? (
+        <Text as="p" size="1" color="gray" data-testid="search-result-count" mt="2">
+          {results.length}件ヒット
+        </Text>
+      ) : null}
       <ul>
         {results.map((item) => (
-          <li key={item.snapshot.id} data-testid={`search-result-${item.snapshot.id}`}>
+          <li key={item.note.id} data-testid={`search-result-${item.note.id}`}>
             <Button
               type="button"
               variant="soft"
-              data-testid={`search-result-open-${item.snapshot.id}`}
-              onClick={() => onSelectNote(item.snapshot.noteId)}
+              data-testid={`search-result-open-${item.note.id}`}
+              onClick={() => onSelectNote(item.note.id)}
             >
-              <Flex as="span" direction="column" align="start">
-                {item.noteTitle} — {new Date(item.snapshot.timestamp).toLocaleString()}:{" "}
-                {item.preview}
+              <Flex as="span" direction="column" align="start" gap="1">
+                <Text as="span" size="2" weight="medium">
+                  {item.note.title}
+                </Text>
+                <Text as="span" size="1" color="gray">
+                  {item.snippet}
+                </Text>
               </Flex>
             </Button>
           </li>

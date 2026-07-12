@@ -45,3 +45,21 @@ test("検索・バックリンクが連動して動く", async ({ context, newTa
     "会議メモ",
   );
 });
+
+test("全文検索は現在の本文の部分文字列(日本語)でヒットする", async ({ context, newTabUrl }) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  // 先頭の空ノートへ日本語の1文を書く(履歴に刻む前=書いた直後でも引けることを確かめる)。
+  const firstPane = page.locator('[data-testid^="note-editor-area-"]').first();
+  await firstPane.locator(".cm-content").click();
+  await page.keyboard.type("明日は高尾山へ登山に行く予定");
+
+  // 連続日本語の「一部」で検索してヒットする(旧転置索引は完全一致のみで引けなかった)。
+  await page.getByTestId("search-input").fill("高尾山");
+  await expect(page.getByTestId("search-result-count")).toContainText("1件");
+  await expect(page.locator('[data-testid^="search-result-open-"]').first()).toContainText(
+    "高尾山",
+  );
+});

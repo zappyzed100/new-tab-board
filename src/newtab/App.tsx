@@ -43,6 +43,7 @@ import {
 } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
+import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
 
@@ -374,6 +375,28 @@ export function App() {
     );
   }
 
+  // 「☁️ Driveへ退避」: 自動同期を待たず、現在の全データを今すぐDriveへ書き出す(退避の即時版)。
+  async function handleBackupToDrive() {
+    if (!backupJson) return;
+    setDataPanelMessage("Google Driveへ退避中…");
+    const result = await syncJsonBackupToDrive(
+      backupJson,
+      clockNow(),
+      true,
+      sync?.settings.jsonBackupFileId,
+    );
+    if (result.status === "synced") {
+      updateSettings({ jsonBackupFileId: result.fileId });
+      setDataPanelMessage("Google Driveへ退避しました(以後の変更は自動でも同期されます)");
+    } else if (result.status === "unauthenticated") {
+      setDataPanelMessage(
+        "Googleアカウントにログインできませんでした(⚙️ GDrive設定から接続してください)",
+      );
+    } else {
+      setDataPanelMessage("Driveへの退避に失敗しました");
+    }
+  }
+
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
@@ -494,6 +517,7 @@ export function App() {
                   onImportData={importData}
                   onOpenFileAsNote={openFileAsNote}
                   onMessage={setDataPanelMessage}
+                  onBackupToDrive={() => void handleBackupToDrive()}
                 />
 
                 {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}

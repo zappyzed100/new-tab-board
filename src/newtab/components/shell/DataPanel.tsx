@@ -30,9 +30,17 @@ type Props = {
   onImportData: (data: { sync: SyncState; notes: Note[] }) => void;
   onOpenFileAsNote: (title: string, content: string) => void;
   onMessage: (message: string) => void;
+  /** 現在の全データを今すぐGoogle Driveへ退避(バックアップ)する(自動同期の即時版)。 */
+  onBackupToDrive: () => void;
 };
 
-export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: Props) {
+export function DataPanel({
+  sync,
+  onImportData,
+  onOpenFileAsNote,
+  onMessage,
+  onBackupToDrive,
+}: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
   // 押した時だけその右に出す(ブックマーク/ノートの編集フォームと同じ「押したら
@@ -167,6 +175,15 @@ export function DataPanel({ sync, onImportData, onOpenFileAsNote, onMessage }: P
           onClick={() => void handleFlushNow()}
         >
           📤 今すぐNASへ書き出し
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-backup-to-drive"
+          title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへ退避する"
+          onClick={onBackupToDrive}
+        >
+          ☁️ Driveへ退避
         </Button>
         <Button
           type="button"

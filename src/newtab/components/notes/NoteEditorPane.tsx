@@ -220,9 +220,10 @@ export function NoteEditorPane({
     >
       <Flex direction="column" gap="3">
         <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
-        {/* タイトル帯: つまみ・対応済みチェック・編集可能なノート名・削除(ユーザー指示:
-            ノート名を書く側の先頭に置き、そこで編集/削除/対応済みにできる)。 */}
-        <Flex align="center" gap="2">
+        {/* ヘッダ(1行にまとめて折り返す): 位置調整(つまみ/対応済み/ピン/上へ)を左に、
+            ノート名を記述部の上・Markdownプレビューの左に大きめで置き、その右に各操作ボタン、
+            末尾に初期化/削除を並べる(ユーザー指示)。 */}
+        <Flex align="center" gap="2" wrap="wrap">
           <span
             className="note-drag-handle"
             data-testid={`note-drag-handle-${note.id}`}
@@ -248,29 +249,6 @@ export function NoteEditorPane({
               onNotesChange((prev) => updateNote(prev, note.id, { done: checked === true }))
             }
           />
-          <TextField.Root
-            className="note-pane-title"
-            data-testid={`note-title-${note.id}`}
-            aria-label="ノート名"
-            title="ここでノート名を編集できます"
-            value={note.title}
-            onChange={(e) =>
-              onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
-            }
-            style={{ flex: 1 }}
-          />
-          <IconButton
-            type="button"
-            variant="soft"
-            color="red"
-            data-testid={`delete-note-${note.id}`}
-            title="このノートを削除する"
-            onClick={() => onNotesChange((prev) => removeNote(prev, note.id))}
-          >
-            🗑
-          </IconButton>
-        </Flex>
-        <Flex align="center" gap="3" wrap="wrap">
           <Button
             type="button"
             variant={note.pinned ? "solid" : "soft"}
@@ -290,6 +268,18 @@ export function NoteEditorPane({
           >
             ⬆️ 上へ
           </Button>
+          {/* ノート名: 記述部の上・Markdownプレビューの左に、少し大きめの文字で編集可能に(ユーザー指示)。 */}
+          <TextField.Root
+            className="note-pane-title"
+            data-testid={`note-title-${note.id}`}
+            aria-label="ノート名"
+            title="ここでノート名を編集できます"
+            value={note.title}
+            onChange={(e) =>
+              onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
+            }
+            style={{ flex: "0 1 14em", minWidth: "7em" }}
+          />
           <Button
             type="button"
             variant={showPreview ? "solid" : "soft"}
@@ -357,6 +347,41 @@ export function NoteEditorPane({
               {DRIVE_SYNC_LABEL[driveSyncStatus]}
             </Text>
           ) : null}
+          {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物
+              (ユーザー指示)。消える前の本文は大量削除の安全網で履歴に刻まれるため復元可能。 */}
+          <IconButton
+            type="button"
+            variant="soft"
+            data-testid={`reset-note-${note.id}`}
+            title="このノートの内容を初期化する(空に戻す。ノート自体は残る)"
+            onClick={() => {
+              onNotesChange((prev) =>
+                updateNote(prev, note.id, {
+                  content: "",
+                  tags: [],
+                  done: false,
+                  taggedHash: undefined,
+                  junk: undefined,
+                  updatedAt: clockNow(),
+                }),
+              );
+              // Notepad(CM6)はcontentをマウント時しか読まないため、復元と同様に
+              // restoreCounterを進めて再マウントし、空になった本文を画面へ反映する。
+              setRestoreCounter((c) => c + 1);
+            }}
+          >
+            🧹
+          </IconButton>
+          <IconButton
+            type="button"
+            variant="soft"
+            color="red"
+            data-testid={`delete-note-${note.id}`}
+            title="このノートを削除する"
+            onClick={() => onNotesChange((prev) => removeNote(prev, note.id))}
+          >
+            🗑
+          </IconButton>
         </Flex>
         {showHistory ? (
           <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
