@@ -201,15 +201,6 @@ body {
   background: var(--gray-a3);
 }
 
-/* 「対応済み」のノートは淡色表示にし、名前に取り消し線を引く(削除はしない——見返せるよう残す)。 */
-[data-testid^="note-editor-area-"][data-done] {
-  opacity: 0.55;
-}
-
-[data-testid^="note-editor-area-"][data-done] .note-pane-title-input {
-  text-decoration: line-through;
-}
-
 /* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。 */
 .scroll-jump {
   position: fixed;

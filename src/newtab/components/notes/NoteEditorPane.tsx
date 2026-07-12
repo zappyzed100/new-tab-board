@@ -3,7 +3,7 @@
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
+import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import { removeNote, updateNote } from "../../../lib/entities/notes";
@@ -211,7 +211,6 @@ export function NoteEditorPane({
     <Card
       data-testid={`note-editor-area-${note.id}`}
       data-active={isActive || undefined}
-      data-done={note.done || undefined}
       // ドラッグ交換の drop 先。掴んだノート(App側のrefが保持)をこのノートの位置へ移動する。
       // dropを許可するためdragOverでpreventDefaultする。本文中央はCodeMirrorがdropを飲むため、
       // 実質的にヘッダのつまみ帯へ落とす運用になる(掴んだノートidはApp側のrefで受け渡す)。
@@ -221,7 +220,7 @@ export function NoteEditorPane({
       <Flex direction="column" gap="3">
         <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
         {/* 1行目: ノート名を一番左上に、枠なし・太字・大きめで置く(クリックでそのまま編集)。
-            右端に控えめなドラッグつまみ(ノートの位置入れ替え用)。 */}
+            その右に自由チェック(何とも連動しない)・ドラッグつまみ・同期状態、右端にピンアイコン。 */}
         <Flex align="center" gap="2">
           <input
             className="note-pane-title-input"
@@ -231,6 +230,15 @@ export function NoteEditorPane({
             value={note.title}
             onChange={(e) =>
               onNotesChange((prev) => updateNote(prev, note.id, { title: e.target.value }))
+            }
+          />
+          {/* 自由に使えるチェック。ノートの見た目・並び・保存の何にも連動しない(ユーザー指示)。 */}
+          <Checkbox
+            data-testid={`check-note-${note.id}`}
+            checked={note.done ?? false}
+            title="自由に使えるチェック(ノートの見た目や動作には連動しません)"
+            onCheckedChange={(checked) =>
+              onNotesChange((prev) => updateNote(prev, note.id, { done: checked === true }))
             }
           />
           <span
@@ -244,25 +252,42 @@ export function NoteEditorPane({
             onDragStart={(e) => {
               onDragStartNote(note.id);
               // FirefoxはsetDataしないとドラッグが開始しない。値自体はApp側refで受け渡すためダミー。
-              e.dataTransfer.setData("text/plain", note.id);
-              e.dataTransfer.effectAllowed = "move";
+              // (合成dispatchEvent等でdataTransferが無い場合もあるため存在を確認する)
+              if (e.dataTransfer) {
+                e.dataTransfer.setData("text/plain", note.id);
+                e.dataTransfer.effectAllowed = "move";
+              }
             }}
           >
             ⠿
           </span>
-        </Flex>
-        {/* 2行目: 操作は全て「アイコン＋説明」で統一。順序も統一(状態→表示→AI→編集操作)。
-            同期状態はボタンではないので最後に置く(ユーザー指示)。 */}
-        <Flex align="center" gap="2" wrap="wrap">
-          <Button
+          {/* 同期状態はボタンではないので、ノート名の最右端(ピンの左)に控えめに置く(ユーザー指示)。 */}
+          {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
+            <Text
+              size="1"
+              color="gray"
+              data-testid={`drive-sync-status-${note.id}`}
+              title="このノートのGoogle Drive自動同期の状態"
+            >
+              {DRIVE_SYNC_LABEL[driveSyncStatus]}
+            </Text>
+          ) : null}
+          {/* ピンは説明なしのアイコンだけ・右端に(ユーザー指示)。ピン中は塗りつぶしで示す。 */}
+          <IconButton
             type="button"
             variant={note.pinned ? "solid" : "soft"}
             data-testid={`pin-note-${note.id}`}
-            title={note.pinned ? "ピンを外す" : "ピン留めして最優先で左上に置く"}
+            title={
+              note.pinned ? "ピンを外す(最優先の左上固定を解除)" : "ピン留めして最優先で左上に置く"
+            }
             onClick={() => onTogglePin(note.id)}
           >
-            📌 ピン
-          </Button>
+            📌
+          </IconButton>
+        </Flex>
+        {/* 2行目: 操作ボタンを全て「アイコン＋説明」で統一・順序も統一(移動→表示→AI→編集操作)。
+            ピン/自由チェック/同期状態はノート名の行(1行目)へ移動済み。 */}
+        <Flex align="center" gap="2" wrap="wrap">
           <Button
             type="button"
             variant="soft"
@@ -272,16 +297,6 @@ export function NoteEditorPane({
             onClick={() => onMoveUp(note.id)}
           >
             ⬆️ 優先度
-          </Button>
-          <Button
-            type="button"
-            variant={note.done ? "solid" : "soft"}
-            color={note.done ? "green" : undefined}
-            data-testid={`done-note-${note.id}`}
-            title={note.done ? "対応済みを解除する" : "対応済みにする"}
-            onClick={() => onNotesChange((prev) => updateNote(prev, note.id, { done: !note.done }))}
-          >
-            ☑️ 済み
           </Button>
           <Button
             type="button"
@@ -375,17 +390,6 @@ export function NoteEditorPane({
           >
             🗑️ 削除
           </Button>
-          {/* 同期状態はボタンではないので、全ボタンの最後に控えめに置く(ユーザー指示)。 */}
-          {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
-            <Text
-              size="1"
-              color="gray"
-              data-testid={`drive-sync-status-${note.id}`}
-              title="このノートのGoogle Drive自動同期の状態"
-            >
-              {DRIVE_SYNC_LABEL[driveSyncStatus]}
-            </Text>
-          ) : null}
         </Flex>
         {showHistory ? (
           <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>
