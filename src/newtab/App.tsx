@@ -6,7 +6,6 @@ import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
-import { NoteTabs } from "./components/notes/NoteTabs";
 import { LibraryPanel } from "./components/discovery/LibraryPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
@@ -17,8 +16,10 @@ import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
 import {
   addNote,
+  addNoteAfter,
   createNote,
   ensureTrailingEmptyNotes,
+  isDefaultNoteTitle,
   moveNoteUp,
   reorderNotesById,
   sortedNotes,
@@ -398,10 +399,19 @@ export function App() {
     let done = 0;
     let junkCount = 0;
     for (const note of targets) {
-      const { tags, junk } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
-      if (tags.length > 0 || junk) {
+      const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
+      if (tags.length > 0 || junk || title) {
         const hash = contentHash(note.content);
-        updateNotes((prev) => updateNote(prev, note.id, { tags, junk, taggedHash: hash }));
+        // 一括では既定タイトル(ノートX)のときだけ生成タイトルを入れる(手動命名は尊重)。
+        const setTitle = title !== "" && isDefaultNoteTitle(note.title);
+        updateNotes((prev) =>
+          updateNote(prev, note.id, {
+            tags,
+            junk,
+            taggedHash: hash,
+            ...(setTitle ? { title } : {}),
+          }),
+        );
         done += 1;
         if (junk) junkCount += 1;
       }
@@ -469,7 +479,12 @@ export function App() {
     meta?: { sourceNoteId?: string; generatedBy?: string },
   ) {
     const note = createNote(title, sortedNotes(notes ?? []).length, clockNow());
-    updateNotes((prev) => addNote(prev, { ...note, content, ...meta }));
+    const full = { ...note, content, ...meta };
+    // 要約(sourceNoteId付き)は元ノートの直後へ挿入する=列固定masonryで「一つ右(右端なら
+    // 一段下の一番左)」に現れる(ユーザー指示)。それ以外(ファイル取り込み等)は末尾へ。
+    updateNotes((prev) =>
+      meta?.sourceNoteId ? addNoteAfter(prev, full, meta.sourceNoteId) : addNote(prev, full),
+    );
     selectNote(note.id);
   }
 
@@ -659,14 +674,6 @@ export function App() {
                     >
                       📁 ライブラリ
                     </Button>
-                  </Flex>
-                  <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
-                    <NoteTabs
-                      notes={notes}
-                      activeNoteId={activeNoteId}
-                      onNotesChange={updateNotes}
-                      onSelect={selectNote}
-                    />
                   </Flex>
                   <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
                     <SearchPanel

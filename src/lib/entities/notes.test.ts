@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addNote,
+  addNoteAfter,
   createNote,
   ensureTrailingEmptyNotes,
   MAX_NOTES,
@@ -58,6 +59,35 @@ describe("reorderNotes", () => {
     const after = reorderNotes([a, b, c], 0, 2);
     expect(after.map((n) => n.title)).toEqual(["B", "C", "A"]);
     expect(after.map((n) => n.order)).toEqual([0, 1, 2]);
+  });
+});
+
+describe("addNoteAfter", () => {
+  it("指定ノートの直後(表示順)へ挿入しorderを振り直す", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const c = createNote("C", 2);
+    const s = createNote("Aの要約", 99);
+    const after = addNoteAfter([a, b, c], s, a.id);
+    expect(sortedNotes(after).map((n) => n.title)).toEqual(["A", "Aの要約", "B", "C"]);
+    expect(sortedNotes(after).map((n) => n.order)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("末尾ノートの直後なら末尾へ入る", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const s = createNote("Bの要約", 99);
+    expect(sortedNotes(addNoteAfter([a, b], s, b.id)).map((n) => n.title)).toEqual([
+      "A",
+      "B",
+      "Bの要約",
+    ]);
+  });
+
+  it("afterIdが無ければ末尾へ追加する", () => {
+    const a = createNote("A", 0);
+    const s = createNote("S", 1);
+    expect(addNoteAfter([a], s, "gone")).toEqual([a, s]);
   });
 });
 

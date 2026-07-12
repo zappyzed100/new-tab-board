@@ -65,7 +65,17 @@ export async function tagNote(
   return text ? parseTags(text) : [];
 }
 
-export type NoteAnalysis = { tags: string[]; junk: boolean };
+export type NoteAnalysis = { tags: string[]; junk: boolean; title: string };
+
+/** ノートのタイトルとして使える1行に整える(改行・記号・引用符を除去し短く切る)。空なら""。 */
+export function parseTitle(text: string): string {
+  const line = text.split("\n")[0] ?? "";
+  const cleaned = line
+    .replace(/^[#＃"'「『\s]+/, "")
+    .replace(/["'」』\s]+$/, "")
+    .trim();
+  return cleaned.length > 40 ? cleaned.slice(0, 40) : cleaned;
+}
 
 /** Geminiの応答から `JUDGE:` 行を探し、JUNKと明示されていればゴミと判定する。
  * 判定行が無い・曖昧な場合はfalse(=NASに残す。データを誤って捨てないための安全側)。 */
@@ -82,17 +92,23 @@ export async function analyzeNote(
   deps: GeminiDeps = {},
   tagCandidates: string[] = [],
 ): Promise<NoteAnalysis> {
-  if (content.trim() === "") return { tags: [], junk: false };
+  if (content.trim() === "") return { tags: [], junk: false, title: "" };
   const prompt =
-    "次のノートについて2つ出力してください。出力形式を厳守すること。\n" +
+    "次のノートについて3つ出力してください。出力形式を厳守すること。\n" +
     `TAGS: 内容を表すタグを${MAX_TAGS}個以内、日本語の短い単語でカンマ区切り(#や説明は不要)\n` +
     candidatesClause(tagCandidates) +
+    "TITLE: 内容を表す短いタイトル(日本語・20文字程度・記号や引用符なし)\n" +
     "JUDGE: メモとして意味のある内容なら OK、テストの落書き・無意味・ゴミなら JUNK\n\n" +
-    "例:\nTAGS: 買い物, 牛乳\nJUDGE: OK\n\n---\n" +
+    "例:\nTAGS: 買い物, 牛乳\nTITLE: 買い物リスト\nJUDGE: OK\n\n---\n" +
     content;
   const text = await callGemini(prompt, apiKey, deps);
-  if (!text) return { tags: [], junk: false };
+  if (!text) return { tags: [], junk: false, title: "" };
   // TAGS行があればそこから、無ければ全文からタグを拾う(フォーマット逸脱への保険)。
   const tagsLine = /TAGS:\s*(.*)/i.exec(text)?.[1];
-  return { tags: parseTags(tagsLine ?? text), junk: parseJunkFlag(text) };
+  const titleLine = /TITLE:\s*(.*)/i.exec(text)?.[1] ?? "";
+  return {
+    tags: parseTags(tagsLine ?? text),
+    junk: parseJunkFlag(text),
+    title: parseTitle(titleLine),
+  };
 }

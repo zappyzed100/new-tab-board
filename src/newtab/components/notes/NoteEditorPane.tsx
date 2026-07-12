@@ -6,7 +6,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
-import { removeNote, updateNote } from "../../../lib/entities/notes";
+import { isDefaultNoteTitle, removeNote, updateNote } from "../../../lib/entities/notes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
@@ -121,18 +121,25 @@ export function NoteEditorPane({
       return;
     }
     setAiBusy("tag");
-    onMessage(`「${note.title}」にGeminiでタグ付け中…`);
-    const { tags, junk } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
+    onMessage(`「${note.title}」にGeminiでタグ・タイトルを付与中…`);
+    const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
     setAiBusy(null);
-    if (tags.length === 0 && !junk) {
-      onMessage("タグを付けられませんでした(Gemini呼び出しに失敗した可能性)");
+    if (tags.length === 0 && !junk && !title) {
+      onMessage("タグ・タイトルを付けられませんでした(Gemini呼び出しに失敗した可能性)");
       return;
     }
+    // 手動ボタン(タグ・タイトル)は明示操作なので、生成タイトルがあれば上書きする。
     onNotesChange((prev) =>
-      updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(note.content) }),
+      updateNote(prev, note.id, {
+        tags,
+        junk,
+        taggedHash: contentHash(note.content),
+        ...(title ? { title } : {}),
+      }),
     );
     onMessage(
-      `「${note.title}」に${tags.length}件のタグを付けました${junk ? "(ゴミ判定: NAS保管対象外)" : ""}`,
+      `「${title || note.title}」に${tags.length}件のタグ${title ? "とタイトル" : ""}を付けました` +
+        `${junk ? "(ゴミ判定: NAS保管対象外)" : ""}`,
     );
   }
 
@@ -146,11 +153,19 @@ export function NoteEditorPane({
     if (!apiKey) return;
     autoTagInFlight = true;
     try {
-      const { tags, junk } = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
-      if (tags.length === 0 && !junk) return;
-      onNotesChange((prev) =>
-        updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(savedContent) }),
-      );
+      const { tags, junk, title } = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
+      if (tags.length === 0 && !junk && !title) return;
+      onNotesChange((prev) => {
+        // 自動付与では、既定タイトル(ノートX)のときだけ生成タイトルを入れる(手動命名は尊重)。
+        const cur = prev.find((n) => n.id === note.id);
+        const setTitle = title !== "" && cur !== undefined && isDefaultNoteTitle(cur.title);
+        return updateNote(prev, note.id, {
+          tags,
+          junk,
+          taggedHash: contentHash(savedContent),
+          ...(setTitle ? { title } : {}),
+        });
+      });
     } finally {
       autoTagInFlight = false;
     }
@@ -343,11 +358,11 @@ export function NoteEditorPane({
             type="button"
             variant="soft"
             data-testid={`tag-note-${note.id}`}
-            title="Geminiでこのノートにタグを付ける"
+            title="Geminiでこのノートにタグとタイトルを付ける"
             disabled={aiBusy !== null}
             onClick={() => void handleTagThisNote()}
           >
-            {aiBusy === "tag" ? "🏷️ タグ付け中…" : "🏷️ タグ"}
+            {aiBusy === "tag" ? "🏷️ 付与中…" : "🏷️ タグ・タイトル"}
           </Button>
           <Button
             type="button"

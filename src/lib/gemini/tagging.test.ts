@@ -7,6 +7,7 @@ import {
   needsRetag,
   parseJunkFlag,
   parseTags,
+  parseTitle,
   tagNote,
 } from "./tagging";
 
@@ -99,31 +100,48 @@ describe("parseJunkFlag", () => {
 });
 
 describe("analyzeNote", () => {
-  it("TAGS/JUDGE形式からタグとゴミ判定を取り出す", async () => {
-    const fetch = geminiReply("TAGS: 買い物, 牛乳\nJUDGE: OK");
+  it("TAGS/TITLE/JUDGE形式からタグ・タイトル・ゴミ判定を取り出す", async () => {
+    const fetch = geminiReply("TAGS: 買い物, 牛乳\nTITLE: 買い物リスト\nJUDGE: OK");
     expect(await analyzeNote("牛乳を買う", "key", { fetch })).toEqual({
       tags: ["買い物", "牛乳"],
       junk: false,
+      title: "買い物リスト",
     });
   });
 
   it("JUNK判定を拾う", async () => {
-    const fetch = geminiReply("TAGS: テスト\nJUDGE: JUNK");
+    const fetch = geminiReply("TAGS: テスト\nTITLE: 落書き\nJUDGE: JUNK");
     const result = await analyzeNote("あああ", "key", { fetch });
     expect(result.junk).toBe(true);
   });
 
-  it("形式を外れても全文からタグを拾い、junkは安全側のfalse", async () => {
+  it("TITLE行が無ければtitleは空(タグは拾える)", async () => {
     const fetch = geminiReply("旅行, 京都");
     expect(await analyzeNote("京都旅行", "key", { fetch })).toEqual({
       tags: ["旅行", "京都"],
       junk: false,
+      title: "",
     });
   });
 
-  it("本文が空ならAPIを呼ばず {tags:[], junk:false}", async () => {
+  it("本文が空ならAPIを呼ばず {tags:[], junk:false, title:''}", async () => {
     const fetch = vi.fn();
-    expect(await analyzeNote("   ", "key", { fetch })).toEqual({ tags: [], junk: false });
+    expect(await analyzeNote("   ", "key", { fetch })).toEqual({
+      tags: [],
+      junk: false,
+      title: "",
+    });
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseTitle", () => {
+  it("先頭行の引用符・記号・#を除去して整える", () => {
+    expect(parseTitle("「買い物リスト」")).toBe("買い物リスト");
+    expect(parseTitle("# 会議メモ\n2行目")).toBe("会議メモ");
+  });
+
+  it("長すぎる場合は40字で切る", () => {
+    expect(parseTitle("あ".repeat(50))).toHaveLength(40);
   });
 });

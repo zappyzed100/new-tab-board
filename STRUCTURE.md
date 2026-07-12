@@ -66,7 +66,7 @@
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/library.spec.ts` — library.spec.ts — 「📁 ライブラリ」(NASの階層md保管庫)のトグル開閉の回帰(2026-07-12)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(列固定masonry)の回帰(2026-07-12)
-- `e2e/specs/notes.spec.ts` — notes.spec.ts — ノートタブの追加/リネーム/削除E2E(SPEC.md §4.2)
+- `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
@@ -208,7 +208,6 @@
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/notes/NoteEditorPane.tsx` — NoteEditorPane.tsx — ノート編集エリア1件分(SPEC.md §4.2)
-- `src/newtab/components/notes/NoteTabs.tsx` — NoteTabs.tsx — ノートのタブ切替UI(追加/リネーム/削除/D&D並べ替え。SPEC.md §4.2)
 - `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
@@ -512,6 +511,8 @@
 - function nextNoteLetterTitle
 - function createNote
 - function addNote
+- function isDefaultNoteTitle
+- function addNoteAfter
 - function updateNote
 - function removeNote
 - function sortedNotes
@@ -588,6 +589,7 @@
 - function parseTags
 - function tagNote
 - type NoteAnalysis
+- function parseTitle
 - function parseJunkFlag
 - function analyzeNote
 
@@ -730,9 +732,6 @@
 
 ### `src/newtab/components/notes/NoteEditorPane.tsx`
 - function NoteEditorPane
-
-### `src/newtab/components/notes/NoteTabs.tsx`
-- function NoteTabs
 
 ### `src/newtab/components/notes/Notepad.tsx`
 - function Notepad

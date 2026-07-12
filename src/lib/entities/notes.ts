@@ -46,6 +46,23 @@ export function addNote(notes: Note[], note: Note): Note[] {
   return [...notes, note];
 }
 
+/** 自動採番の既定タイトル(「ノートA」「ノートAA」等)か。自動タイトル付けで上書きしてよいかの
+ * 判定に使う——人が手で付けたタイトルは自動処理で勝手に書き換えない(ユーザー配慮)。 */
+export function isDefaultNoteTitle(title: string): boolean {
+  return /^ノート[A-Z]+$/.test(title);
+}
+
+/** newNote を afterId のノートの直後(表示順=sortedNotes基準)へ挿入し、order を振り直す。
+ * 列固定masonryでは「afterId の一つ右(右端なら一段下の一番左)」に現れる(要約の配置——ユーザー指示)。
+ * afterId が見つからなければ末尾へ追加する。 */
+export function addNoteAfter(notes: Note[], newNote: Note, afterId: string): Note[] {
+  const sorted = sortedNotes(notes);
+  const idx = sorted.findIndex((n) => n.id === afterId);
+  if (idx === -1) return [...notes, newNote];
+  sorted.splice(idx + 1, 0, newNote);
+  return sorted.map((n, i) => ({ ...n, order: i }));
+}
+
 export function updateNote(notes: Note[], id: string, patch: Partial<Omit<Note, "id">>): Note[] {
   return notes.map((n) => (n.id === id ? { ...n, ...patch } : n));
 }

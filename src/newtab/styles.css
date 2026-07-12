@@ -118,19 +118,6 @@ body {
   min-width: 0;
 }
 
-/* ノート追加(管理)バー: 検索トグル撤去で右側に生まれた空きも埋め、常に横幅いっぱいに
-   広がるようにする(ユーザー指示)。NoteTabs.tsxの中身は生radix-uiの<Tabs.Root>で
-   1段ラップされており(クラス無しのdiv)、直接の子はそのラッパーになる——
-   [data-testid="note-tabs"]へ直接flex:1を書いても、フレックスアイテムではない
-   (フレックスコンテナの直接の子ではない)ため何も効かない。直接の子を対象にする。 */
-.note-manage-bar {
-  width: 100%;
-}
-
-.note-manage-bar > * {
-  flex: 1;
-}
-
 /* ノートボード = 列固定masonry(ユーザー指示「列固定・安定」)。App.tsxが order順の全ノートを
    i%列数 で各列へ振り分け、`.note-column` ごとに縦積みする。flex-wrapの等高(align-items:stretch)を
    やめ、各列を独立した縦スタックにすることで「短いノートの真下に次が詰まり、長いノートで隣の列が
@@ -372,103 +359,9 @@ body {
   line-height: 1;
 }
 
-button[data-testid="note-tab-add"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
-}
-
 [data-testid="bookmark-add"]:hover {
   border-color: var(--accent);
   color: var(--accent-strong);
-}
-
-button[data-testid="note-tab-add"]:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-/* --- ノートタブ(生radix-uiの<Tabs>へ全面移行。曲線シェイプ(旧: chrome-tabs OSS移植)は
-   撤去し、フラットなタブ見た目を自前CSSで組んでいる。D&D並べ替え用のセレクタとして
-   .note-tabクラス名を使い、閉じるボタン(span)のhover表示のみ最小限に調整している。
-   asChild経由のためRadix ThemesのようなrtクラスUIは付かず、レイアウトは全て自前CSS。 */
-[data-testid="note-tabs"] {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  flex-wrap: wrap;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--radius) var(--radius) 0 0;
-  padding: var(--space-2) var(--space-1) 0;
-}
-
-.note-tab-list {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.note-tab {
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-bottom: none;
-  color: var(--text-muted);
-}
-
-.note-tab[data-active] {
-  background: var(--surface);
-  color: var(--accent-strong);
-  font-weight: 600;
-}
-
-.note-tab-close {
-  margin-left: var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  font-size: 18px;
-  line-height: 1;
-  color: var(--text-muted);
-  opacity: 0;
-  transition:
-    opacity 0.1s ease,
-    background-color 0.1s ease,
-    color 0.1s ease;
-}
-
-.note-tab:hover .note-tab-close,
-.note-tab[data-state="active"] .note-tab-close {
-  opacity: 0.7;
-}
-
-.note-tab-close:hover {
-  opacity: 1;
-  background: var(--danger);
-  color: #fff;
-}
-
-button.note-tab-add {
-  align-self: center;
-  width: 26px;
-  height: 26px;
-  margin: 0 4px 6px;
-  padding: 0;
-  line-height: 1;
-  font-size: 15px;
-  border-radius: 999px;
 }
 
 /* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク。1ペイン=1ノート。
