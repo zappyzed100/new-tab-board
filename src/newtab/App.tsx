@@ -18,7 +18,10 @@ import {
   MAX_VISIBLE_NOTES,
   resolveVisibleNoteIds,
   sortedNotes,
+  updateNote,
 } from "../lib/entities/notes";
+import { getGeminiApiKey } from "../lib/storage/db";
+import { contentHash, needsRetag, tagNote } from "../lib/gemini/tagging";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
@@ -69,6 +72,8 @@ export function App() {
   // Cmd/Ctrl+Sで「見えている全ペイン」に即時スナップショット+Drive同期をキックする
   // ための共有シグナル(各NoteEditorPaneがこの値の変化をuseEffectで監視する)。
   const [manualSyncSignal, setManualSyncSignal] = useState(0);
+  // 「🏷️ タグをふる」実行中フラグ(二重起動防止・ラベル切替)。
+  const [tagging, setTagging] = useState(false);
   // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
   // 「ユーザーが自分でノートを選んだ」時だけノート本文へオートフォーカスする
   // (それ以外=起動直後の自動選択ではフォーカスを奪わない)。
@@ -289,6 +294,49 @@ export function App() {
     void saveLocalData({ notes: notes ?? [], todos: nextTodos, nextEventCache, alarmActive });
   }
 
+  // 「🏷️ タグをふる」で全ノートにGeminiタグを付ける。前回タグ付け以降変更のないノートは
+  // スキップする(needsRetag。ユーザー指示「変化なしのファイルは再タグ付け不要」)。
+  async function handleTagAll() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の🔑ボタン)");
+      return;
+    }
+    const all = notes ?? [];
+    const targets = all.filter(needsRetag);
+    if (targets.length === 0) {
+      setDataPanelMessage("タグ付けが必要なノートはありません(変更なしのためスキップ)");
+      return;
+    }
+    setTagging(true);
+    setDataPanelMessage(`${targets.length}件のノートにGeminiでタグ付け中…`);
+    let done = 0;
+    for (const note of targets) {
+      const tags = await tagNote(note.content, apiKey);
+      if (tags.length > 0) {
+        const hash = contentHash(note.content);
+        updateNotes((prev) => updateNote(prev, note.id, { tags, taggedHash: hash }));
+        done += 1;
+      }
+    }
+    setTagging(false);
+    setDataPanelMessage(
+      `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targets.length}件)`,
+    );
+  }
+
+  // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
+  function addTodos(texts: string[]) {
+    const startOrder = todos.length;
+    const appended: Todo[] = texts.map((text, i) => ({
+      id: crypto.randomUUID(),
+      text,
+      done: false,
+      order: startOrder + i,
+    }));
+    updateTodos([...todos, ...appended]);
+  }
+
   function updateSettings(patch: Partial<Settings>) {
     if (!sync) return;
     const next = { ...sync, settings: { ...sync.settings, ...patch } };
@@ -461,6 +509,17 @@ export function App() {
                     >
                       A＋
                     </Button>
+                    <Button
+                      type="button"
+                      variant="soft"
+                      size="1"
+                      data-testid="tag-all-notes"
+                      title="全ノートにGeminiでタグを付ける(前回タグ付け以降に変更のないノートはスキップ)"
+                      disabled={tagging}
+                      onClick={() => void handleTagAll()}
+                    >
+                      {tagging ? "タグ付け中…" : "🏷️ タグをふる"}
+                    </Button>
                   </Flex>
                   <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
                     <NoteTabs
@@ -493,6 +552,9 @@ export function App() {
                         onNotesChange={updateNotes}
                         onSelectNote={selectNote}
                         onSelectNoteByTitle={selectNoteByTitle}
+                        onCreateNote={openFileAsNote}
+                        onAddTodos={addTodos}
+                        onMessage={setDataPanelMessage}
                       />
                     ))}
                   </div>

@@ -40,6 +40,11 @@ export type Note = {
   order: number;
   driveFileId?: string;
   lastSyncedAt?: number;
+  /** Geminiが付けたタグ(自動タグ付け機能)。 */
+  tags?: string[];
+  /** 最後にタグを付けた時点の本文のハッシュ。現在の本文のハッシュと一致すれば
+   * 「タグ付け以降に変更なし」なので再タグ付けをスキップする(ユーザー指示)。 */
+  taggedHash?: string;
 };
 
 /** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス

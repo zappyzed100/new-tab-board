@@ -3,13 +3,17 @@
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Button, Card, Flex, Text } from "@radix-ui/themes";
+import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import { updateNote } from "../../../lib/entities/notes";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
+import { getGeminiApiKey } from "../../../lib/storage/db";
+import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import type { Note } from "../../../types";
+
+const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
 
 const DRIVE_SYNC_LABEL: Record<string, string> = {
   idle: "",
@@ -41,6 +45,12 @@ type Props = {
   onNotesChange: (update: Note[] | ((prev: Note[]) => Note[])) => void;
   onSelectNote: (noteId: string) => void;
   onSelectNoteByTitle: (title: string) => void;
+  /** 要約結果を新規ノートとして作成する(App.tsx: createNote+addNote+選択)。 */
+  onCreateNote: (title: string, content: string) => void;
+  /** 抽出したTODOをTODOリストへ追加する。 */
+  onAddTodos: (texts: string[]) => void;
+  /** データ管理パネルの結果メッセージ欄へ通知する。 */
+  onMessage: (message: string) => void;
 };
 
 export function NoteEditorPane({
@@ -52,10 +62,51 @@ export function NoteEditorPane({
   onNotesChange,
   onSelectNote,
   onSelectNoteByTitle,
+  onCreateNote,
+  onAddTodos,
+  onMessage,
 }: Props) {
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [restoreCounter, setRestoreCounter] = useState(0);
+  // Gemini処理中の状態("summary"|"todo"|null)。二重押しを防ぎラベルを切り替える。
+  const [aiBusy, setAiBusy] = useState<"summary" | "todo" | null>(null);
+
+  async function handleSummarize() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      onMessage(GEMINI_KEY_HINT);
+      return;
+    }
+    setAiBusy("summary");
+    onMessage(`「${note.title}」をGeminiで要約中…`);
+    const summary = await summarizeNote(note.content, apiKey);
+    setAiBusy(null);
+    if (!summary) {
+      onMessage("要約に失敗しました(本文が空か、Gemini呼び出しに失敗しました)");
+      return;
+    }
+    onCreateNote(`${note.title}の要約`, summary);
+    onMessage(`「${note.title}の要約」を作成しました`);
+  }
+
+  async function handleExtractTodos() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      onMessage(GEMINI_KEY_HINT);
+      return;
+    }
+    setAiBusy("todo");
+    onMessage(`「${note.title}」からGeminiでTODOを抽出中…`);
+    const todos = await extractTodos(note.content, apiKey);
+    setAiBusy(null);
+    if (todos.length === 0) {
+      onMessage("TODOは見つかりませんでした(本文が空か、抽出できませんでした)");
+      return;
+    }
+    onAddTodos(todos);
+    onMessage(`TODOを${todos.length}件、TODOリストへ追加しました`);
+  }
 
   const { status: driveSyncStatus, syncNow: syncDriveNow } = useDriveSync(
     note,
@@ -95,6 +146,26 @@ export function NoteEditorPane({
           >
             🕑 {showHistory ? "履歴を閉じる" : "履歴"}
           </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`summarize-${note.id}`}
+            title="Geminiでこのノートを要約し、「〇〇の要約」ノートを新規作成する"
+            disabled={aiBusy !== null}
+            onClick={() => void handleSummarize()}
+          >
+            {aiBusy === "summary" ? "要約中…" : "✨ 要約"}
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`extract-todos-${note.id}`}
+            title="Geminiでこのノートからやるべきこと(TODO)を抽出し、TODOリストへ追加する"
+            disabled={aiBusy !== null}
+            onClick={() => void handleExtractTodos()}
+          >
+            {aiBusy === "todo" ? "抽出中…" : "✅ TODO抽出"}
+          </Button>
           {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
             <Text
               size="1"
@@ -133,6 +204,15 @@ export function NoteEditorPane({
             />
           )}
         </Suspense>
+        {note.tags && note.tags.length > 0 ? (
+          <Flex gap="1" wrap="wrap" data-testid={`note-tags-${note.id}`}>
+            {note.tags.map((tag) => (
+              <Badge key={tag} color="indigo" variant="soft">
+                #{tag}
+              </Badge>
+            ))}
+          </Flex>
+        ) : null}
         <BacklinksPanel notes={notes} activeNote={note} onSelectNote={onSelectNote} />
       </Flex>
     </Card>

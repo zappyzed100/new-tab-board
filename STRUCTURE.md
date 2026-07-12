@@ -147,6 +147,10 @@
 - `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込みの唯一の入出口(SPEC.md §4.10-a)
 - `src/lib/gemini/gemini.test.ts` — gemini.test.ts — gemini.ts(Gemini API呼び出し)の単体テスト。実APIは叩かずfetchをフェイクにする。
 - `src/lib/gemini/gemini.ts` — gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
+- `src/lib/gemini/noteAi.test.ts` — noteAi.test.ts — 要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
+- `src/lib/gemini/noteAi.ts` — noteAi.ts — Geminiを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
+- `src/lib/gemini/tagging.test.ts` — tagging.test.ts — 自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
+- `src/lib/gemini/tagging.ts` — tagging.ts — Geminiによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -505,6 +509,18 @@
 - const DEFAULT_GEMINI_MODEL
 - type GeminiDeps
 - function callGemini
+
+### `src/lib/gemini/noteAi.ts`
+- function summarizeNote
+- function parseTodoLines
+- function extractTodos
+
+### `src/lib/gemini/tagging.ts`
+- const MAX_TAGS
+- function contentHash
+- function needsRetag
+- function parseTags
+- function tagNote
 
 ### `src/lib/history/gzip.ts`
 - function gzipCompress
