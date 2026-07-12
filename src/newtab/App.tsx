@@ -43,8 +43,8 @@ import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import {
   flushAllToNas,
-  writeActiveNotesToNas,
-  writeNoteMarkdownToNas,
+  reconcileActiveNotesOnNas,
+  writeNoteToNasStructure,
 } from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
@@ -141,18 +141,14 @@ export function App() {
     }
   }, [notes]);
 
-  // 「出先で確認」用に、ボード上の全ノートを単一ファイル(active/New Tab Board.txt)へ
-  // debounce付きで自動ミラーする(ファイル名固定・各ノートはtitle見出し付き——ユーザー指示)。
-  // notesが変わるたび(=編集のたび)に再計算されるpayloadを依存にし、3秒静止してから書く。
-  const activeNotesPayload = useMemo(
-    () => (notes ? sortedNotes(notes).map((n) => ({ title: n.title, body: n.content })) : []),
-    [notes],
-  );
+  // NASの active/ を「編集中のノート一覧」に突き合わせ、ブラウザで消された/空になった/ゴミ判定の
+  // ノートの active/<id>.md を削除する(統一構造——ユーザー指示)。書き込みは下のsig差分effectが担う。
+  // NAS未設定なら静かに何もしない。debounceして編集の嵐で叩きすぎない。
   useEffect(() => {
-    if (activeNotesPayload.length === 0) return;
-    const timer = setTimeout(() => void writeActiveNotesToNas(activeNotesPayload), 3000);
+    if (!notes) return;
+    const timer = setTimeout(() => void reconcileActiveNotesOnNas(notes), 5000);
     return () => clearTimeout(timer);
-  }, [activeNotesPayload]);
+  }, [notes]);
 
   // Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に突き合わせる(ユーザー指示)。
   // 空でないノートの本文アップロードは各ペインのuseDriveSyncが行い、ここでは①消された/空になった
@@ -174,8 +170,8 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notes]);
 
-  // タグ検索の正本として、各ノートを notes/<id>.md (YAML front matter付き) へ書き出す(ユーザー設計)。
-  // 空・ゴミ(junk)判定ノートは書かない。変更のあったノートだけ書く(全501件を毎回書かない)。
+  // 統一構造の正本として、各ノートを active/<id>.md と <YYYY/M/D>/<id>.md (front matter付き) へ
+  // 書き出す。空・ゴミ(junk)判定ノートは書かない。変更のあったノートだけ書く(全件を毎回書かない)。
   const noteMdSigRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     if (!notes) return;
@@ -185,7 +181,7 @@ export function App() {
           if (n.content.trim() === "" || n.junk) continue;
           const sig = `${n.title} ${n.content} ${(n.tags ?? []).join(",")} ${n.updatedAt ?? ""}`;
           if (noteMdSigRef.current.get(n.id) === sig) continue;
-          if (await writeNoteMarkdownToNas(n)) noteMdSigRef.current.set(n.id, sig);
+          if (await writeNoteToNasStructure(n, clockNow())) noteMdSigRef.current.set(n.id, sig);
         }
       })();
     }, 3000);

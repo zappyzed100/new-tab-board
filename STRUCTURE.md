@@ -36,6 +36,16 @@
 - `.claude/hooks/stop_incomplete_guard.py` — stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: GUARDRAILS.md §2b）
 - `.claude/settings.json`
 
+## `.codex/`
+
+- `.codex/hooks.json`
+- `.codex/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: GUARDRAILS.md §2）
+- `.codex/hooks/guard_human_wip.py` — guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: GUARDRAILS.md §2c）
+- `.codex/hooks/post_edit_format.py` — post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: GUARDRAILS.md §1）
+- `.codex/hooks/post_edit_lint.py` — post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: GUARDRAILS.md §1）
+- `.codex/hooks/session_baseline.py` — session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: GUARDRAILS.md §2c）
+- `.codex/hooks/stop_incomplete_guard.py` — stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: GUARDRAILS.md §2b）
+
 ## `.github/`
 
 - `.github/workflows/guardrails-ci.yml`
@@ -266,6 +276,34 @@
 - def resolve_root
 - def main
 
+### `.codex/hooks/guard_git_bypass.py`
+- class Block
+- def block
+- def block_loss
+- def worktree_dirty_or_unknown
+- def check
+- def main
+
+### `.codex/hooks/guard_human_wip.py`
+- def warn_and_pass
+- def resolve_root
+- def main
+
+### `.codex/hooks/post_edit_format.py`
+- def main
+
+### `.codex/hooks/post_edit_lint.py`
+- def main
+
+### `.codex/hooks/session_baseline.py`
+- def warn_and_pass
+- def resolve_root
+- def main
+
+### `.codex/hooks/stop_incomplete_guard.py`
+- def resolve_root
+- def main
+
 ### `e2e/fixtures.ts`
 - const test
 - const expect
@@ -286,6 +324,7 @@
 - def handle_probe
 - def handle_write_file
 - def handle_read_file
+- def handle_delete_file
 - def handle_rebuild_index
 - def handle_search
 - def handle_list_tree
@@ -310,6 +349,8 @@
 - def test_write_file_then_read_file_roundtrip
 - def test_write_file_failure_for_nonexistent_directory
 - def test_read_file_failure_for_missing_file
+- def test_delete_file_removes_and_missing_is_ok
+- def test_delete_file_rejects_path_traversal
 - def test_write_file_creates_date_subfolders
 - def test_write_file_rejects_path_traversal
 - def test_rebuild_index_then_search_by_tag_and_text
@@ -548,6 +589,8 @@
 ### `src/lib/externalIO/nasArchive.ts`
 - function noteToMarkdown
 - function writeNoteMarkdownToNas
+- function writeNoteToNasStructure
+- function reconcileActiveNotesOnNas
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot
@@ -563,6 +606,7 @@
 - function probeNasPath
 - function writeFileToNas
 - function readFileFromNas
+- function deleteFileFromNas
 - function rebuildNasIndex
 - function listNasTree
 - function searchNasHistory

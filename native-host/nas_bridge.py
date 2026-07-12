@@ -88,6 +88,18 @@ def handle_read_file(message: dict) -> dict:
         return {"type": "read-result", "ok": False, "error": str(exc)}
 
 
+def handle_delete_file(message: dict) -> dict:
+    """base配下のファイルを削除する(ブラウザで消えた/空になったノートを active/ から消す用)。
+    既に無い場合も成功扱い(消したい結果は達成)。base の外へ出るパスは拒否。"""
+    try:
+        target = _safe_target(message["path"], message["filename"])
+        if os.path.isfile(target):
+            os.remove(target)
+        return {"type": "delete-result", "ok": True}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "delete-result", "ok": False, "error": str(exc)}
+
+
 def handle_rebuild_index(message: dict) -> dict:
     """notes/*.md と履歴 年/月/日/*.txt から data/index.db を作り直す(タグ検索の索引更新)。"""
     try:
@@ -278,6 +290,7 @@ HANDLERS = {
     "probe": handle_probe,
     "write-file": handle_write_file,
     "read-file": handle_read_file,
+    "delete-file": handle_delete_file,
     "rebuild-index": handle_rebuild_index,
     "search": handle_search,
     "search-notes": handle_search_notes,

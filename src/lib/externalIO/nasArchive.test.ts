@@ -10,8 +10,10 @@ import {
   getSnapshotBody,
   noteToMarkdown,
   readArchivedSnapshot,
+  reconcileActiveNotesOnNas,
   writeActiveNotesToNas,
   writeNoteMarkdownToNas,
+  writeNoteToNasStructure,
 } from "./nasArchive";
 import type { Note } from "../../types";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
@@ -309,5 +311,74 @@ describe("getSnapshotBody", () => {
       archived: true,
     };
     expect(await getSnapshotBody(noPath)).toBeNull();
+  });
+});
+
+describe("writeNoteToNasStructure(統一構造)", () => {
+  const note = (over: Partial<Note> = {}): Note => ({
+    id: "n1",
+    title: "会議",
+    content: "本文",
+    pinned: false,
+    order: 0,
+    createdAt: TS_2026_07_12,
+    updatedAt: TS_2026_07_12,
+    ...over,
+  });
+
+  it("非空ノートを active/<id>.md と <YYYY/M/D>/<id>.md へ書く", async () => {
+    const files = new Map<string, string>();
+    const ok = await writeNoteToNasStructure(note(), TS_2026_07_12, {
+      getNasFolderPath: async () => NAS_PATH,
+      writeFileToNas: async (_p, f, c) => {
+        files.set(f, c);
+        return true;
+      },
+    });
+    expect(ok).toBe(true);
+    expect(files.has("active/n1.md")).toBe(true);
+    expect(files.has("2026/7/12/n1.md")).toBe(true);
+    expect(files.get("active/n1.md")).toContain("title: 会議");
+  });
+
+  it("空ノートは書かない(false)", async () => {
+    let wrote = false;
+    const ok = await writeNoteToNasStructure(note({ content: "  \n" }), TS_2026_07_12, {
+      getNasFolderPath: async () => NAS_PATH,
+      writeFileToNas: async () => {
+        wrote = true;
+        return true;
+      },
+    });
+    expect(ok).toBe(false);
+    expect(wrote).toBe(false);
+  });
+});
+
+describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
+  it("現在の非空ノートに無い/空/ゴミの active ファイルを削除する", async () => {
+    const deleted: string[] = [];
+    const notes: Note[] = [
+      { id: "keep", title: "a", content: "本文", pinned: false, order: 0 },
+      { id: "empty", title: "b", content: "", pinned: false, order: 1 },
+      { id: "junky", title: "c", content: "x", pinned: false, order: 2, junk: true },
+    ];
+    const n = await reconcileActiveNotesOnNas(notes, {
+      getNasFolderPath: async () => NAS_PATH,
+      listNasTree: async () => ["keep.md", "gone.md", "empty.md", "junky.md"],
+      deleteFileFromNas: async (_p, f) => {
+        deleted.push(f);
+        return true;
+      },
+    });
+    // keep(非空) は残す。gone(存在しない)/empty(空)/junky(ゴミ) は削除。
+    expect(deleted.sort()).toEqual(["active/empty.md", "active/gone.md", "active/junky.md"]);
+    expect(n).toBe(3);
+  });
+
+  it("NAS未設定なら0(削除しない)", async () => {
+    expect(
+      await reconcileActiveNotesOnNas([], { getNasFolderPath: async () => undefined }),
+    ).toBe(0);
   });
 });

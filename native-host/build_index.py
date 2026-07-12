@@ -118,9 +118,9 @@ def parse_snapshot_filename(name: str):
 
 
 def build_index(nas_folder: str) -> dict:
-    """notes/*.md と 年/月/日/*.txt(履歴) を読み、data/index.db を作り直す。
-    取り込んだ件数 {"notes": n, "snapshots": m} を返す。"""
-    notes_dir = os.path.join(nas_folder, "notes")
+    """active/*.md(現在ブラウザにある非空ノートの正本。統一構造)と 年/月/日/*.txt(旧履歴)を読み、
+    data/index.db を作り直す。取り込んだ件数 {"notes": n, "snapshots": m} を返す。
+    旧構造 notes/*.md も残っていれば取り込む(移行期の後方互換。同id は active/ が上書き)。"""
     data_dir = os.path.join(nas_folder, "data")
     os.makedirs(data_dir, exist_ok=True)
     db_path = os.path.join(data_dir, "index.db")
@@ -130,7 +130,12 @@ def build_index(nas_folder: str) -> dict:
         create_schema(conn)
         tag_ids: dict[str, int] = {}
         count = 0
-        for path in sorted(glob.glob(os.path.join(notes_dir, "*.md"))):
+        # 旧 notes/ を先に、新 active/ を後に読む(同id は active/ が上書き=最新の正本)。
+        md_paths = sorted(glob.glob(os.path.join(nas_folder, "notes", "*.md"))) + sorted(
+            glob.glob(os.path.join(nas_folder, "active", "*.md"))
+        )
+        seen_ids: set[str] = set()
+        for path in md_paths:
             with open(path, "r", encoding="utf-8") as f:
                 meta, body = parse_front_matter(f.read())
             note_id = meta.get("id") or os.path.splitext(os.path.basename(path))[0]
@@ -149,6 +154,9 @@ def build_index(nas_folder: str) -> dict:
                     meta.get("generated_by"),
                 ),
             )
+            # 同idを再読込(active/がnotes/を上書き)する場合、古いタグ紐付けを一旦消してから
+            # 現在のファイルのタグだけを張り直す(タグ更新が index に正しく反映される)。
+            conn.execute("DELETE FROM note_tags WHERE note_id = ?", (note_id,))
             for tag in meta.get("tags", []):
                 if tag not in tag_ids:
                     cur = conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
@@ -162,7 +170,8 @@ def build_index(nas_folder: str) -> dict:
                     "INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)",
                     (note_id, tag_ids[tag]),
                 )
-            count += 1
+            seen_ids.add(note_id)
+        count = len(seen_ids)
 
         # 履歴スナップショット(年/月/日/*.txt)を取り込む。4階層グロブなので active/(2階層)とは衝突しない。
         snap_count = 0

@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\guard_git_bypass.py'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\guard_human_wip.py'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'in=$(cat); printf %s \"$in\" | uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\post_edit_format.py' || exit $?; printf %s \"$in\" | uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\post_edit_lint.py''"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\session_baseline.py'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project \"$CLAUDE_PROJECT_DIR\" python 'C:\\code\\lifestyle\\new-tab-board\\.codex\\hooks\\stop_incomplete_guard.py'"
+          }
+        ]
+      }
+    ]
+  }
+}

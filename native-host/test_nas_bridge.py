@@ -55,6 +55,24 @@ def test_read_file_failure_for_missing_file(tmp_path) -> None:
     assert "error" in result
 
 
+def test_delete_file_removes_and_missing_is_ok(tmp_path) -> None:
+    nas = str(tmp_path)
+    handle({"type": "write-file", "path": nas, "filename": "active/x.md", "content": "本文"})
+    assert os.path.isfile(os.path.join(nas, "active", "x.md"))
+    # 削除できる。
+    res = handle({"type": "delete-file", "path": nas, "filename": "active/x.md"})
+    assert res == {"type": "delete-result", "ok": True}
+    assert not os.path.exists(os.path.join(nas, "active", "x.md"))
+    # 既に無いファイルの削除も成功扱い。
+    assert handle({"type": "delete-file", "path": nas, "filename": "active/x.md"})["ok"] is True
+
+
+def test_delete_file_rejects_path_traversal(tmp_path) -> None:
+    res = handle({"type": "delete-file", "path": str(tmp_path), "filename": "../escape.md"})
+    assert res["ok"] is False
+    assert "error" in res
+
+
 def test_write_file_creates_date_subfolders(tmp_path) -> None:
     # filenameが 年/月/日 のサブフォルダ付きでも、親フォルダを自動生成して書ける。
     write_result = handle(

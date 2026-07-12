@@ -16,6 +16,7 @@ export type ConnectNativeFn = (application: string) => chrome.runtime.Port;
 type ProbeResult = { type: "probe-result"; ok: boolean; error?: string };
 type WriteResult = { type: "write-result"; ok: boolean; error?: string };
 type ReadResult = { type: "read-result"; ok: boolean; content?: string; error?: string };
+type DeleteResult = { type: "delete-result"; ok: boolean; error?: string };
 export type HistoryHit = {
   note_id: string;
   title: string | null;
@@ -51,6 +52,7 @@ type HostResponse =
   | ProbeResult
   | WriteResult
   | ReadResult
+  | DeleteResult
   | SearchResult
   | SearchNotesResult
   | TopTagsResult
@@ -127,6 +129,17 @@ export async function readFileFromNas(
     return result.content;
   }
   return null;
+}
+
+/** 指定フォルダのファイルを削除する(ブラウザで消えた/空になったノートを active/ から消す用)。
+ * 既に無い場合も成功(true)。host未導入/失敗はfalse。 */
+export async function deleteFileFromNas(
+  path: string,
+  filename: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<boolean> {
+  const result = await callHost({ type: "delete-file", path, filename }, connectNative);
+  return result?.type === "delete-result" && result.ok;
 }
 
 /** NAS上の検索索引(data/index.db)を .md と履歴 .txt から作り直す。件数を返す(失敗はnull)。 */

@@ -21,7 +21,13 @@ import { logOp } from "../runtime/log";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { getAllSnapshots, getNasFolderPath, markSnapshotArchived } from "../storage/db";
 import { loadLocalData } from "../storage/storage";
-import { probeNasPath, readFileFromNas, writeFileToNas } from "./nasNativeHost";
+import {
+  deleteFileFromNas,
+  listNasTree,
+  probeNasPath,
+  readFileFromNas,
+  writeFileToNas,
+} from "./nasNativeHost";
 import type { Note, Snapshot } from "../../types";
 
 // 「出先で確認」用に現在のノート群をまとめる単一ファイル(ファイル名固定・ユーザー指示)。
@@ -87,9 +93,62 @@ type NasDeps = {
   probeNasPath?: typeof probeNasPath;
   writeFileToNas?: typeof writeFileToNas;
   readFileFromNas?: typeof readFileFromNas;
+  deleteFileFromNas?: typeof deleteFileFromNas;
+  listNasTree?: typeof listNasTree;
   /** ゴミ(junk)と判定されたノートIDの集合。これらのノートのスナップショットはNASへ書かない。 */
   getJunkNoteIds?: () => Promise<Set<string>>;
 };
+
+/** 現在時刻のローカル日付フォルダ "YYYY/M/D"(月・日はゼロ埋めしない——統一構造の書式)。 */
+function dateFolder(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+/** ノート1件を統一構造でNASへ書く: active/<id>.md と <YYYY/M/D>/<id>.md(md + front matter)。
+ * 非空ノートのみ(空はactiveへ入れない——ユーザー指示)。NAS未設定/到達不可は静かにfalse。 */
+export async function writeNoteToNasStructure(
+  note: Note,
+  now: number,
+  deps: NasDeps = {},
+): Promise<boolean> {
+  if (note.content.trim() === "") return false;
+  const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
+  const _writeFileToNas = deps.writeFileToNas ?? writeFileToNas;
+  const path = await _getNasFolderPath();
+  if (!path) return false;
+  const md = noteToMarkdown(note);
+  const okActive = await _writeFileToNas(path, `active/${note.id}.md`, md);
+  const okDate = await _writeFileToNas(path, `${dateFolder(now)}/${note.id}.md`, md);
+  return okActive && okDate;
+}
+
+/** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になった/ゴミ判定のノートの
+ * active/<id>.md を削除する(ブラウザで消えたらNASからも消す——ユーザー指示)。削除件数を返す。 */
+export async function reconcileActiveNotesOnNas(
+  notes: Note[],
+  deps: NasDeps = {},
+): Promise<number> {
+  const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
+  const _listNasTree = deps.listNasTree ?? listNasTree;
+  const _deleteFileFromNas = deps.deleteFileFromNas ?? deleteFileFromNas;
+  const path = await _getNasFolderPath();
+  if (!path) return 0;
+  const keep = new Set(
+    notes.filter((n) => n.content.trim() !== "" && !n.junk).map((n) => `${n.id}.md`),
+  );
+  const files = await _listNasTree(path, "active");
+  if (files === null) return 0;
+  let deleted = 0;
+  for (const f of files) {
+    // active/ 直下のファイルのみ対象(サブフォルダは想定しない)。現在の非空ノートに無ければ削除。
+    if (!f.includes("/") && !keep.has(f)) {
+      if (await _deleteFileFromNas(path, `active/${f}`)) deleted += 1;
+    }
+  }
+  logOp("nasArchive", "reconcile-active", `deleted=${deleted}`);
+  return deleted;
+}
 
 /** Geminiのタグ付けで junk 判定されたノートIDの集合(NASアーカイブから除外する——ユーザー指示)。 */
 async function defaultGetJunkNoteIds(): Promise<Set<string>> {
