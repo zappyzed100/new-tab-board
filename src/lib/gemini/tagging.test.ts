@@ -1,6 +1,14 @@
 // tagging.test.ts — 自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
 import { describe, expect, it, vi } from "vitest";
-import { contentHash, MAX_TAGS, needsRetag, parseTags, tagNote } from "./tagging";
+import {
+  analyzeNote,
+  contentHash,
+  MAX_TAGS,
+  needsRetag,
+  parseJunkFlag,
+  parseTags,
+  tagNote,
+} from "./tagging";
 
 function geminiReply(text: string) {
   return vi.fn().mockResolvedValue({
@@ -56,6 +64,50 @@ describe("tagNote", () => {
   it("本文が空ならAPIを呼ばず空配列", async () => {
     const fetch = vi.fn();
     expect(await tagNote("", "key", { fetch })).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseJunkFlag", () => {
+  it("JUDGE行がJUNKならtrue", () => {
+    expect(parseJunkFlag("TAGS: あ\nJUDGE: JUNK")).toBe(true);
+  });
+
+  it("JUDGE行がOKならfalse", () => {
+    expect(parseJunkFlag("TAGS: 会議\nJUDGE: OK")).toBe(false);
+  });
+
+  it("JUDGE行が無い・曖昧ならfalse(安全側=NASに残す)", () => {
+    expect(parseJunkFlag("タグ: 会議")).toBe(false);
+  });
+});
+
+describe("analyzeNote", () => {
+  it("TAGS/JUDGE形式からタグとゴミ判定を取り出す", async () => {
+    const fetch = geminiReply("TAGS: 買い物, 牛乳\nJUDGE: OK");
+    expect(await analyzeNote("牛乳を買う", "key", { fetch })).toEqual({
+      tags: ["買い物", "牛乳"],
+      junk: false,
+    });
+  });
+
+  it("JUNK判定を拾う", async () => {
+    const fetch = geminiReply("TAGS: テスト\nJUDGE: JUNK");
+    const result = await analyzeNote("あああ", "key", { fetch });
+    expect(result.junk).toBe(true);
+  });
+
+  it("形式を外れても全文からタグを拾い、junkは安全側のfalse", async () => {
+    const fetch = geminiReply("旅行, 京都");
+    expect(await analyzeNote("京都旅行", "key", { fetch })).toEqual({
+      tags: ["旅行", "京都"],
+      junk: false,
+    });
+  });
+
+  it("本文が空ならAPIを呼ばず {tags:[], junk:false}", async () => {
+    const fetch = vi.fn();
+    expect(await analyzeNote("   ", "key", { fetch })).toEqual({ tags: [], junk: false });
     expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -37,11 +37,18 @@ export async function forceSnapshot(noteId: string, content: string): Promise<vo
   logOp("history", "snapshot", `note=${noteId} reason=manual`);
 }
 
-export function useSnapshotScheduler(noteId: string, content: string): void {
+export function useSnapshotScheduler(
+  noteId: string,
+  content: string,
+  onSnapshot?: (content: string) => void,
+): void {
   const lastSnapshotAtRef = useRef<number | null>(null);
   const lastContentRef = useRef<string | null>(null);
   const contentRef = useRef(content);
   contentRef.current = content;
+  // 最新のonSnapshotをrefで持つ(スナップショット保存直後に最新のクロージャで呼ぶため)。
+  const onSnapshotRef = useRef(onSnapshot);
+  onSnapshotRef.current = onSnapshot;
 
   async function snapshotIfNeeded(reason: string, contentToSnapshot?: string) {
     const now = clockNow();
@@ -71,6 +78,8 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
     logOp("history", "snapshot", `note=${noteId} reason=${reason}`);
     lastSnapshotAtRef.current = now;
     lastContentRef.current = currentContent;
+    // 保存が実際に成立した本文で通知する(保存時の自動タグ付け——ユーザー指示)。
+    onSnapshotRef.current?.(currentContent);
   }
 
   // アイドル(入力停止5分) + 変更量閾値の即時チェック

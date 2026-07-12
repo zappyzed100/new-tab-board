@@ -50,3 +50,33 @@ export async function tagNote(
   const text = await callGemini(prompt, apiKey, deps);
   return text ? parseTags(text) : [];
 }
+
+export type NoteAnalysis = { tags: string[]; junk: boolean };
+
+/** Geminiの応答から `JUDGE:` 行を探し、JUNKと明示されていればゴミと判定する。
+ * 判定行が無い・曖昧な場合はfalse(=NASに残す。データを誤って捨てないための安全側)。 */
+export function parseJunkFlag(text: string): boolean {
+  const judge = /JUDGE:\s*(.*)/i.exec(text)?.[1] ?? "";
+  return /\bJUNK\b/i.test(judge);
+}
+
+/** タグ付けと同時に「ゴミ(無意味・落書き)」かどうかも判定する(保存時の自動タグ付け＋NAS除外用)。
+ * 空・失敗は {tags:[], junk:false}(安全側)。 */
+export async function analyzeNote(
+  content: string,
+  apiKey: string,
+  deps: GeminiDeps = {},
+): Promise<NoteAnalysis> {
+  if (content.trim() === "") return { tags: [], junk: false };
+  const prompt =
+    "次のノートについて2つ出力してください。出力形式を厳守すること。\n" +
+    `TAGS: 内容を表すタグを${MAX_TAGS}個以内、日本語の短い単語でカンマ区切り(#や説明は不要)\n` +
+    "JUDGE: メモとして意味のある内容なら OK、テストの落書き・無意味・ゴミなら JUNK\n\n" +
+    "例:\nTAGS: 買い物, 牛乳\nJUDGE: OK\n\n---\n" +
+    content;
+  const text = await callGemini(prompt, apiKey, deps);
+  if (!text) return { tags: [], junk: false };
+  // TAGS行があればそこから、無ければ全文からタグを拾う(フォーマット逸脱への保険)。
+  const tagsLine = /TAGS:\s*(.*)/i.exec(text)?.[1];
+  return { tags: parseTags(tagsLine ?? text), junk: parseJunkFlag(text) };
+}

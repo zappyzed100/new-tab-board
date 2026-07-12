@@ -477,6 +477,8 @@
 - function sortedTodos
 
 ### `src/lib/externalIO/nasArchive.ts`
+- function noteToMarkdown
+- function writeNoteMarkdownToNas
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot
@@ -521,6 +523,9 @@
 - function needsRetag
 - function parseTags
 - function tagNote
+- type NoteAnalysis
+- function parseJunkFlag
+- function analyzeNote
 
 ### `src/lib/history/gzip.ts`
 - function gzipCompress

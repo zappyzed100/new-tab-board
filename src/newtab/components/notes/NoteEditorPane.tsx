@@ -7,11 +7,12 @@ import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import { updateNote } from "../../../lib/entities/notes";
+import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
-import { contentHash, tagNote } from "../../../lib/gemini/tagging";
+import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
@@ -47,7 +48,11 @@ type Props = {
   onSelectNote: (noteId: string) => void;
   onSelectNoteByTitle: (title: string) => void;
   /** 要約結果を新規ノートとして作成する(App.tsx: createNote+addNote+選択)。 */
-  onCreateNote: (title: string, content: string) => void;
+  onCreateNote: (
+    title: string,
+    content: string,
+    meta?: { sourceNoteId?: string; generatedBy?: string },
+  ) => void;
   /** 抽出したTODOをTODOリストへ追加する。 */
   onAddTodos: (texts: string[]) => void;
   /** データ管理パネルの結果メッセージ欄へ通知する。 */
@@ -94,16 +99,32 @@ export function NoteEditorPane({
     }
     setAiBusy("tag");
     onMessage(`「${note.title}」にGeminiでタグ付け中…`);
-    const tags = await tagNote(note.content, apiKey);
+    const { tags, junk } = await analyzeNote(note.content, apiKey);
     setAiBusy(null);
-    if (tags.length === 0) {
+    if (tags.length === 0 && !junk) {
       onMessage("タグを付けられませんでした(Gemini呼び出しに失敗した可能性)");
       return;
     }
     onNotesChange((prev) =>
-      updateNote(prev, note.id, { tags, taggedHash: contentHash(note.content) }),
+      updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(note.content) }),
     );
-    onMessage(`「${note.title}」に${tags.length}件のタグを付けました`);
+    onMessage(
+      `「${note.title}」に${tags.length}件のタグを付けました${junk ? "(ゴミ判定: NAS保管対象外)" : ""}`,
+    );
+  }
+
+  // 保存(スナップショット)時の自動タグ付け(ユーザー指示)。キー未設定・空・前回から変更なしは
+  // 静かに何もしない(自動なのでエラーは出さない)。junk判定はNASアーカイブ除外に使われる。
+  async function autoTagOnSnapshot(savedContent: string) {
+    if (savedContent.trim() === "") return;
+    if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return;
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) return;
+    const { tags, junk } = await analyzeNote(savedContent, apiKey);
+    if (tags.length === 0 && !junk) return;
+    onNotesChange((prev) =>
+      updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(savedContent) }),
+    );
   }
 
   async function handleSummarize() {
@@ -120,7 +141,10 @@ export function NoteEditorPane({
       onMessage("要約に失敗しました(本文が空か、Gemini呼び出しに失敗しました)");
       return;
     }
-    onCreateNote(`${note.title}の要約`, summary);
+    onCreateNote(`${note.title}の要約`, summary, {
+      sourceNoteId: note.id,
+      generatedBy: "gemini",
+    });
     onMessage(`「${note.title}の要約」を作成しました`);
   }
 
@@ -160,7 +184,7 @@ export function NoteEditorPane({
   return (
     <Card data-testid={`note-editor-area-${note.id}`} data-active={isActive || undefined}>
       <Flex direction="column" gap="3">
-        <SnapshotScheduler noteId={note.id} content={note.content} />
+        <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={autoTagOnSnapshot} />
         <Flex align="center" gap="3" wrap="wrap">
           <Button
             type="button"
@@ -252,7 +276,9 @@ export function NoteEditorPane({
               content={note.content}
               autoFocus={autoFocus}
               onContentChange={(content) =>
-                onNotesChange((prev) => updateNote(prev, note.id, { content }))
+                onNotesChange((prev) =>
+                  updateNote(prev, note.id, { content, updatedAt: clockNow() }),
+                )
               }
             />
           )}

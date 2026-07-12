@@ -20,8 +20,9 @@
 import { logOp } from "../runtime/log";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { getAllSnapshots, getNasFolderPath, markSnapshotArchived } from "../storage/db";
+import { loadLocalData } from "../storage/storage";
 import { probeNasPath, readFileFromNas, writeFileToNas } from "./nasNativeHost";
-import type { Snapshot } from "../../types";
+import type { Note, Snapshot } from "../../types";
 
 // 「出先で確認」用に現在のノート群をまとめる単一ファイル(ファイル名固定・ユーザー指示)。
 const ACTIVE_NOTES_FILE = "active/New Tab Board.txt";
@@ -30,6 +31,46 @@ const ACTIVE_NOTES_FILE = "active/New Tab Board.txt";
  * タイトルはファイル内で本文と混ざらないよう改行をスペースへ畳む(見出しは常に1行)。 */
 function noteSectionText(note: { title: string; body: string }): string {
   return `title: ${note.title.replace(/\r?\n/g, " ")}\n\n${note.body}`;
+}
+
+/** YAMLスカラーとして安全な表現にする(front matter用)。特殊文字・空・数値見えは二重引用符で囲む。
+ * 書き込み側(ここ)と読み込み側(native-host/build_index.py)で同じ規則を守る。 */
+function yamlScalar(value: string): string {
+  const oneLine = value.replace(/\r?\n/g, " ");
+  const needsQuote =
+    oneLine === "" ||
+    /^[\s]|[\s]$/.test(oneLine) ||
+    /[:#\-?[\]{}&*!|>'"%@`,]/.test(oneLine) ||
+    /^[\d.]+$/.test(oneLine);
+  if (!needsQuote) return oneLine;
+  return `"${oneLine.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/** ノートを「YAML front matter + Markdown本文」の.md文字列にする(タグ検索の正本形式・ユーザー設計)。 */
+export function noteToMarkdown(note: Note): string {
+  const fm: string[] = ["---", `id: ${note.id}`, `title: ${yamlScalar(note.title)}`];
+  if (note.tags && note.tags.length > 0) {
+    fm.push("tags:");
+    for (const tag of note.tags) fm.push(`  - ${yamlScalar(tag)}`);
+  } else {
+    fm.push("tags: []");
+  }
+  if (note.createdAt) fm.push(`created_at: ${new Date(note.createdAt).toISOString()}`);
+  if (note.updatedAt) fm.push(`updated_at: ${new Date(note.updatedAt).toISOString()}`);
+  if (note.sourceNoteId) fm.push(`source_note_id: ${note.sourceNoteId}`);
+  if (note.generatedBy) fm.push(`generated_by: ${yamlScalar(note.generatedBy)}`);
+  fm.push("---");
+  // front matterの閉じ --- のあとは空行を1つ入れて本文(慣例)。
+  return `${fm.join("\n")}\n\n${note.content}`;
+}
+
+/** ノート1件を正本 notes/<id>.md としてNASへ書き出す。NAS未設定/到達不可は静かにfalse。 */
+export async function writeNoteMarkdownToNas(note: Note, deps: NasDeps = {}): Promise<boolean> {
+  const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
+  const _writeFileToNas = deps.writeFileToNas ?? writeFileToNas;
+  const path = await _getNasFolderPath();
+  if (!path) return false;
+  return _writeFileToNas(path, `notes/${note.id}.md`, noteToMarkdown(note));
 }
 
 /** NAS上の相対パス。スナップショットのtimestampのローカル日付でフォルダ分けする。 */
@@ -46,7 +87,15 @@ type NasDeps = {
   probeNasPath?: typeof probeNasPath;
   writeFileToNas?: typeof writeFileToNas;
   readFileFromNas?: typeof readFileFromNas;
+  /** ゴミ(junk)と判定されたノートIDの集合。これらのノートのスナップショットはNASへ書かない。 */
+  getJunkNoteIds?: () => Promise<Set<string>>;
 };
+
+/** Geminiのタグ付けで junk 判定されたノートIDの集合(NASアーカイブから除外する——ユーザー指示)。 */
+async function defaultGetJunkNoteIds(): Promise<Set<string>> {
+  const local = await loadLocalData();
+  return new Set(local.notes.filter((n) => n.junk).map((n) => n.id));
+}
 
 /** 1件をNASへ「プレーンテキスト」で書き込み、再読込して内容が一致することを検証する
  * (サイズだけでなく全文比較)。IndexedDB側のcontentはgzip+base64なので書く直前に展開する。 */
@@ -86,7 +135,11 @@ export async function flushAllToNas(
     return { flushed: 0, failed: 0 };
   }
 
-  const pending = (await getAllSnapshots()).filter((s) => !s.archived && s.content !== undefined);
+  // ゴミ判定されたノートのスナップショットはNASへ書かない(ユーザー指示)。
+  const junkNoteIds = await (deps.getJunkNoteIds ?? defaultGetJunkNoteIds)();
+  const pending = (await getAllSnapshots()).filter(
+    (s) => !s.archived && s.content !== undefined && !junkNoteIds.has(s.noteId),
+  );
   let flushed = 0;
   let failed = 0;
   for (const snapshot of pending) {

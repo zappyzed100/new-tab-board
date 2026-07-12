@@ -8,9 +8,12 @@ import {
   flushAllToNas,
   flushSnapshotToNas,
   getSnapshotBody,
+  noteToMarkdown,
   readArchivedSnapshot,
   writeActiveNotesToNas,
+  writeNoteMarkdownToNas,
 } from "./nasArchive";
+import type { Note } from "../../types";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { putSnapshot, getSnapshot } from "../storage/db";
 import type { Snapshot } from "../../types";
@@ -21,7 +24,12 @@ const NAS_PATH = "Z:\\NAS\\backup";
 const TS_2026_07_12 = Date.UTC(2026, 6, 12, 12, 0, 0);
 
 function makeFakeNas(
-  options: { probeOk?: boolean; writeShouldFail?: boolean; corruptOnWrite?: boolean } = {},
+  options: {
+    probeOk?: boolean;
+    writeShouldFail?: boolean;
+    corruptOnWrite?: boolean;
+    junkNoteIds?: string[];
+  } = {},
 ) {
   const files = new Map<string, string>();
   return {
@@ -33,6 +41,8 @@ function makeFakeNas(
       return true;
     },
     readFileFromNas: async (_path: string, filename: string) => files.get(filename) ?? null,
+    // 既定は空(ゴミ無し)。テストでloadLocalData(chrome.storage)を叩かせないため必ず注入する。
+    getJunkNoteIds: async () => new Set(options.junkNoteIds ?? []),
   };
 }
 
@@ -102,6 +112,18 @@ describe("flushSnapshotToNas", () => {
 });
 
 describe("flushAllToNas(パス・NASクライアントを依存注入)", () => {
+  it("ゴミ(junk)判定されたノートのスナップショットはNASへ書かず、ローカルに残す", async () => {
+    await putSnapshot(
+      await snapshotWithBody({ id: "s-junk", noteId: "junk-note", plain: "ゴミ本文" }),
+    );
+    const nas = makeFakeNas({ junkNoteIds: ["junk-note"] });
+    await flushAllToNas({ getNasFolderPath: async () => NAS_PATH, ...nas });
+    const snap = await getSnapshot("s-junk");
+    expect(snap?.archived).toBe(false); // アーカイブされていない
+    expect(snap?.content).toBeDefined(); // 本体はローカルに残ったまま(NASへ移していない)
+    expect(nas.files.size).toBe(0); // NASには何も書かれていない
+  });
+
   it("到達確認(probe)に失敗すれば0/0(フラッシュしない)", async () => {
     await putSnapshot(await snapshotWithBody({ id: "s-perm", plain: "body" }));
     const nas = makeFakeNas({ probeOk: false });
@@ -191,6 +213,60 @@ describe("writeActiveNotesToNas", () => {
   it("NAS未設定ならhostに触れずfalse", async () => {
     // getNasFolderPathを注入しない=実getNasFolderPathが未設定(undefined)を返す
     expect(await writeActiveNotesToNas([{ title: "x", body: "y" }])).toBe(false);
+  });
+});
+
+describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
+  const baseNote: Note = {
+    id: "note-1",
+    title: "タグ検索の設計",
+    content: "本文です。\n2行目。",
+    pinned: false,
+    order: 0,
+    tags: ["開発", "検索"],
+    createdAt: Date.UTC(2026, 6, 12, 7, 0, 0),
+    updatedAt: Date.UTC(2026, 6, 12, 7, 20, 0),
+  };
+
+  it("YAML front matter + 本文 の.md文字列にする", () => {
+    const md = noteToMarkdown(baseNote);
+    expect(md).toContain("---\nid: note-1\n");
+    expect(md).toContain("title: タグ検索の設計");
+    expect(md).toContain("tags:\n  - 開発\n  - 検索");
+    expect(md).toContain("created_at: 2026-07-12T07:00:00.000Z");
+    expect(md).toContain("updated_at: 2026-07-12T07:20:00.000Z");
+    expect(md.endsWith("---\n\n本文です。\n2行目。")).toBe(true);
+  });
+
+  it("特殊文字を含むタイトル/タグは二重引用符で囲む", () => {
+    const md = noteToMarkdown({ ...baseNote, title: "A: B #タグ", tags: ["a,b"] });
+    expect(md).toContain('title: "A: B #タグ"');
+    expect(md).toContain('  - "a,b"');
+  });
+
+  it("タグが無ければ tags: [] を出す", () => {
+    const md = noteToMarkdown({ ...baseNote, tags: [] });
+    expect(md).toContain("tags: []");
+  });
+
+  it("要約ノートは source_note_id / generated_by を出す", () => {
+    const md = noteToMarkdown({ ...baseNote, sourceNoteId: "orig-1", generatedBy: "gemini" });
+    expect(md).toContain("source_note_id: orig-1");
+    expect(md).toContain("generated_by: gemini");
+  });
+
+  it("notes/<id>.md へ書き出す", async () => {
+    const nas = makeFakeNas();
+    const ok = await writeNoteMarkdownToNas(baseNote, {
+      getNasFolderPath: async () => NAS_PATH,
+      ...nas,
+    });
+    expect(ok).toBe(true);
+    expect(nas.files.get("notes/note-1.md")).toBe(noteToMarkdown(baseNote));
+  });
+
+  it("NAS未設定なら書かずfalse", async () => {
+    expect(await writeNoteMarkdownToNas(baseNote)).toBe(false);
   });
 });
 

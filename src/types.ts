@@ -45,6 +45,17 @@ export type Note = {
   /** 最後にタグを付けた時点の本文のハッシュ。現在の本文のハッシュと一致すれば
    * 「タグ付け以降に変更なし」なので再タグ付けをスキップする(ユーザー指示)。 */
   taggedHash?: string;
+  /** Geminiがタグ付け時に「ゴミ(無意味・落書き)」と判定したノート。NASアーカイブから除外する
+   * (ユーザー指示)。判定が曖昧な場合はfalse(=NASに残す。データを誤って捨てない)。 */
+  junk?: boolean;
+  /** 作成時刻(epoch ms)。NASの.md front matterのcreated_atに出す。既存ノートはundefined。 */
+  createdAt?: number;
+  /** 最終更新時刻(epoch ms)。本文編集時に更新。front matterのupdated_atに出す。 */
+  updatedAt?: number;
+  /** AI要約ノートの場合の元ノートID(front matterのsource_note_id)。 */
+  sourceNoteId?: string;
+  /** AI生成ノートの生成元(front matterのgenerated_by。例: "gemini")。 */
+  generatedBy?: string;
 };
 
 /** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス

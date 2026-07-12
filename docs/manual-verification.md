@@ -53,6 +53,9 @@ crbug.com/issues/40240444——選択後もAbortErrorになり、実機でエラ
 - [ ] ノートを編集して数秒待つと、NASフォルダ直下に `active/New Tab Board.txt` が作られ、
       ボード上の全ノートが `title: <ノート名>` の見出し付きで1ファイルに連結されているか
       (出先で1ファイル開けば全ノートを確認できる用途——ユーザー指示。3秒debounceで自動ミラー)
+- [ ] ノートを編集して数秒待つと、`notes/<noteId>.md` が作られ、YAML front matter
+      (id/title/tags/created_at/updated_at、AI要約なら source_note_id/generated_by)＋本文に
+      なっているか(タグ検索の正本形式——ユーザー設計)。空・ゴミ(junk)ノートは書かれないか
 - [ ] NASを一時的に切断した状態でも履歴一覧の表示自体は壊れないか(degrade確認)
 
 ## M13-b — ローカルファイルの読み込み(2026-07-12修正)

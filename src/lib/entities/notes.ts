@@ -29,13 +29,16 @@ export function nextNoteLetterTitle(existingTitles: string[]): string | null {
   return null;
 }
 
-export function createNote(title: string, order: number): Note {
+/** ノートを作る。createdAt(epoch ms)は呼び出し側がclock経由で渡す(この関数を純粋に保つため
+ * Date.nowを内部で呼ばない)。省略時はタイムスタンプ無し(既存互換)。 */
+export function createNote(title: string, order: number, createdAt?: number): Note {
   return {
     id: crypto.randomUUID(),
     title,
     content: "",
     pinned: false,
     order,
+    ...(createdAt !== undefined ? { createdAt, updatedAt: createdAt } : {}),
   };
 }
 

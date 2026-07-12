@@ -16,6 +16,7 @@
 import { useState } from "react";
 import { Checkbox, IconButton, TextField } from "@radix-ui/themes";
 import { Tabs } from "radix-ui";
+import { now as clockNow } from "../../../lib/runtime/clock";
 import {
   addNote,
   createNote,
@@ -58,7 +59,7 @@ export function NoteTabs({
       window.alert(`ノートを開きすぎです!(${MAX_NOTES}件が上限です)`);
       return;
     }
-    const note = createNote(title, sorted.length);
+    const note = createNote(title, sorted.length, clockNow());
     onNotesChange((prev) => addNote(prev, note));
     onSelect(note.id);
   }

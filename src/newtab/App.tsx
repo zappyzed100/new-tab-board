@@ -21,7 +21,7 @@ import {
   updateNote,
 } from "../lib/entities/notes";
 import { getGeminiApiKey } from "../lib/storage/db";
-import { contentHash, needsRetag, tagNote } from "../lib/gemini/tagging";
+import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
 import {
   buildBookmarkJumpShortcuts,
@@ -32,7 +32,11 @@ import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
-import { flushAllToNas, writeActiveNotesToNas } from "../lib/externalIO/nasArchive";
+import {
+  flushAllToNas,
+  writeActiveNotesToNas,
+  writeNoteMarkdownToNas,
+} from "../lib/externalIO/nasArchive";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
@@ -147,6 +151,24 @@ export function App() {
     const timer = setTimeout(() => void writeActiveNotesToNas(activeNotesPayload), 3000);
     return () => clearTimeout(timer);
   }, [activeNotesPayload]);
+
+  // タグ検索の正本として、各ノートを notes/<id>.md (YAML front matter付き) へ書き出す(ユーザー設計)。
+  // 空・ゴミ(junk)判定ノートは書かない。変更のあったノートだけ書く(全501件を毎回書かない)。
+  const noteMdSigRef = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!notes) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (const n of notes) {
+          if (n.content.trim() === "" || n.junk) continue;
+          const sig = `${n.title} ${n.content} ${(n.tags ?? []).join(",")} ${n.updatedAt ?? ""}`;
+          if (noteMdSigRef.current.get(n.id) === sig) continue;
+          if (await writeNoteMarkdownToNas(n)) noteMdSigRef.current.set(n.id, sig);
+        }
+      })();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [notes]);
 
   // 新規タブページが開くたびにFlow Launcher(native messaging host)へ接続し、
   // 保留中のファイルがあれば新規ノートとして取り込む(SPEC.md §4.10-d「pull型」)。
@@ -311,17 +333,20 @@ export function App() {
     setTagging(true);
     setDataPanelMessage(`${targets.length}件のノートにGeminiでタグ付け中…`);
     let done = 0;
+    let junkCount = 0;
     for (const note of targets) {
-      const tags = await tagNote(note.content, apiKey);
-      if (tags.length > 0) {
+      const { tags, junk } = await analyzeNote(note.content, apiKey);
+      if (tags.length > 0 || junk) {
         const hash = contentHash(note.content);
-        updateNotes((prev) => updateNote(prev, note.id, { tags, taggedHash: hash }));
+        updateNotes((prev) => updateNote(prev, note.id, { tags, junk, taggedHash: hash }));
         done += 1;
+        if (junk) junkCount += 1;
       }
     }
     setTagging(false);
     setDataPanelMessage(
-      `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targets.length}件)`,
+      `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targets.length}件` +
+        `${junkCount > 0 ? `・ゴミ判定${junkCount}件はNAS保管対象外` : ""})`,
     );
   }
 
@@ -352,9 +377,13 @@ export function App() {
     void saveLocalData({ notes: data.notes, todos, nextEventCache, alarmActive });
   }
 
-  function openFileAsNote(title: string, content: string) {
-    const note = createNote(title, sortedNotes(notes ?? []).length);
-    updateNotes((prev) => addNote(prev, { ...note, content }));
+  function openFileAsNote(
+    title: string,
+    content: string,
+    meta?: { sourceNoteId?: string; generatedBy?: string },
+  ) {
+    const note = createNote(title, sortedNotes(notes ?? []).length, clockNow());
+    updateNotes((prev) => addNote(prev, { ...note, content, ...meta }));
     selectNote(note.id);
   }
 
