@@ -11,6 +11,7 @@ import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
+import { contentHash, tagNote } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
@@ -69,8 +70,32 @@ export function NoteEditorPane({
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [restoreCounter, setRestoreCounter] = useState(0);
-  // Gemini処理中の状態("summary"|"todo"|null)。二重押しを防ぎラベルを切り替える。
-  const [aiBusy, setAiBusy] = useState<"summary" | "todo" | null>(null);
+  // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
+  const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
+
+  async function handleTagThisNote() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      onMessage(GEMINI_KEY_HINT);
+      return;
+    }
+    if (note.content.trim() === "") {
+      onMessage("本文が空のためタグを付けられません");
+      return;
+    }
+    setAiBusy("tag");
+    onMessage(`「${note.title}」にGeminiでタグ付け中…`);
+    const tags = await tagNote(note.content, apiKey);
+    setAiBusy(null);
+    if (tags.length === 0) {
+      onMessage("タグを付けられませんでした(Gemini呼び出しに失敗した可能性)");
+      return;
+    }
+    onNotesChange((prev) =>
+      updateNote(prev, note.id, { tags, taggedHash: contentHash(note.content) }),
+    );
+    onMessage(`「${note.title}」に${tags.length}件のタグを付けました`);
+  }
 
   async function handleSummarize() {
     const apiKey = await getGeminiApiKey();
@@ -165,6 +190,16 @@ export function NoteEditorPane({
             onClick={() => void handleExtractTodos()}
           >
             {aiBusy === "todo" ? "抽出中…" : "✅ TODO抽出"}
+          </Button>
+          <Button
+            type="button"
+            variant="soft"
+            data-testid={`tag-note-${note.id}`}
+            title="Geminiでこのノートにタグを付ける"
+            disabled={aiBusy !== null}
+            onClick={() => void handleTagThisNote()}
+          >
+            {aiBusy === "tag" ? "タグ付け中…" : "🏷️ タグ"}
           </Button>
           {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
             <Text

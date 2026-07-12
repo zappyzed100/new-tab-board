@@ -514,11 +514,11 @@ export function App() {
                       variant="soft"
                       size="1"
                       data-testid="tag-all-notes"
-                      title="全ノートにGeminiでタグを付ける(前回タグ付け以降に変更のないノートはスキップ)"
+                      title="全ノートにまとめてGeminiでタグを付ける(前回タグ付け以降に変更のないノートはスキップ)"
                       disabled={tagging}
                       onClick={() => void handleTagAll()}
                     >
-                      {tagging ? "タグ付け中…" : "🏷️ タグをふる"}
+                      {tagging ? "タグ付け中…" : "🏷️ まとめてタグをふる"}
                     </Button>
                   </Flex>
                   <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
