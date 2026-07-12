@@ -1,6 +1,6 @@
 // gemini.test.ts — gemini.ts(Gemini API呼び出し)の単体テスト。実APIは叩かずfetchをフェイクにする。
-import { describe, expect, it, vi } from "vitest";
-import { callGemini, DEFAULT_GEMINI_MODEL } from "./gemini";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { callGemini, DEFAULT_GEMINI_MODEL, resetGeminiRateLimitForTests } from "./gemini";
 
 function okResponse(text: string) {
   return {
@@ -9,6 +9,9 @@ function okResponse(text: string) {
     json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
   } as Response;
 }
+
+// 429クールダウンはモジュール状態なのでテスト間でリセットする(前のテストの429が次に漏れないように)。
+beforeEach(() => resetGeminiRateLimitForTests());
 
 describe("callGemini", () => {
   it("応答テキストを取り出して返す", async () => {
@@ -55,5 +58,16 @@ describe("callGemini", () => {
     const fetchFake = vi.fn().mockResolvedValue(okResponse("ok"));
     await callGemini("x", "AIza-test", { fetch: fetchFake, model: "gemini-1.5-flash" });
     expect(fetchFake.mock.calls[0][0]).toContain("/models/gemini-1.5-flash:generateContent");
+  });
+
+  it("429を食らったら、次の呼び出しはfetchせずnull(クールダウン)", async () => {
+    const fetch429 = vi.fn().mockResolvedValue({ ok: false, status: 429 } as Response);
+    // 1回目: 429 → null(fetchは呼ばれる)
+    expect(await callGemini("x", "AIza-test", { fetch: fetch429 })).toBeNull();
+    expect(fetch429).toHaveBeenCalledTimes(1);
+    // 2回目: クールダウン中なのでfetchせずnull(429エラーを連発しない)
+    const fetch2 = vi.fn().mockResolvedValue(okResponse("本来は成功"));
+    expect(await callGemini("x", "AIza-test", { fetch: fetch2 })).toBeNull();
+    expect(fetch2).not.toHaveBeenCalled();
   });
 });

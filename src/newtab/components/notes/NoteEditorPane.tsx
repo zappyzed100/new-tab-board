@@ -17,6 +17,11 @@ import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
 
+// 保存時の自動タグ付けを全ペイン横断で1件ずつに直列化するガード。blurでは複数ペインの
+// スナップショットが同時に発火し、Geminiが429を返す前に複数fetchが飛んでクールダウンが
+// 間に合わない問題を防ぐ(1件が終わるまで他の自動タグはスキップ——手動タグ/要約は対象外)。
+let autoTagInFlight = false;
+
 const DRIVE_SYNC_LABEL: Record<string, string> = {
   idle: "",
   syncing: "同期中…",
@@ -118,13 +123,19 @@ export function NoteEditorPane({
   async function autoTagOnSnapshot(savedContent: string) {
     if (savedContent.trim() === "") return;
     if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return;
+    if (autoTagInFlight) return; // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
     const apiKey = await getGeminiApiKey();
     if (!apiKey) return;
-    const { tags, junk } = await analyzeNote(savedContent, apiKey);
-    if (tags.length === 0 && !junk) return;
-    onNotesChange((prev) =>
-      updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(savedContent) }),
-    );
+    autoTagInFlight = true;
+    try {
+      const { tags, junk } = await analyzeNote(savedContent, apiKey);
+      if (tags.length === 0 && !junk) return;
+      onNotesChange((prev) =>
+        updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(savedContent) }),
+      );
+    } finally {
+      autoTagInFlight = false;
+    }
   }
 
   async function handleSummarize() {

@@ -538,6 +538,7 @@
 
 ### `src/lib/gemini/gemini.ts`
 - const DEFAULT_GEMINI_MODEL
+- function resetGeminiRateLimitForTests
 - type GeminiDeps
 - function callGemini
 

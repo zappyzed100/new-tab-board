@@ -11,9 +11,20 @@ export const DEFAULT_GEMINI_MODEL = "gemini-flash-latest";
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
+/** 429(レート制限)を食らった後、次の呼び出しまで待つクールダウン。
+ * 保存のたびに自動タグ付けがGeminiを叩くため、枠を超えたら一定時間fetch自体を止めて
+ * 429エラーの連発と無駄な消費を防ぐ(Geminiの分単位RPM制限はこの程度で回復する)。 */
+const RATE_LIMIT_COOLDOWN_MS = 60_000;
+let rateLimitedUntil = 0;
+
+/** テスト用: レート制限クールダウンをリセットする(モジュール状態のテスト間隔離)。 */
+export function resetGeminiRateLimitForTests(): void {
+  rateLimitedUntil = 0;
+}
+
 export type GeminiDeps = { fetch?: typeof fetch; model?: string };
 
-/** プロンプトを投げてテキスト応答を返す。失敗(キー未設定・HTTPエラー・例外)はnull。
+/** プロンプトを投げてテキスト応答を返す。失敗(キー未設定・HTTPエラー・例外・クールダウン中)はnull。
  * APIキーはURLのkeyクエリで渡す(Gemini APIの標準)。キー文字列自体はログに出さない(§7)。 */
 export async function callGemini(
   prompt: string,
@@ -21,6 +32,11 @@ export async function callGemini(
   deps: GeminiDeps = {},
 ): Promise<string | null> {
   if (!apiKey) return null;
+  // 直近で429を食らっていれば、クールダウン中はfetchせず静かに諦める(エラー連発を防ぐ)。
+  if (Date.now() < rateLimitedUntil) {
+    logOp("gemini", "skip-rate-limited", "cooldown中のためスキップ");
+    return null;
+  }
   const _fetch = deps.fetch ?? fetch;
   const model = deps.model ?? DEFAULT_GEMINI_MODEL;
   try {
@@ -33,7 +49,16 @@ export async function callGemini(
       },
     );
     if (!res.ok) {
-      logOp("gemini", "call-error", `model=${model} status=${res.status}`);
+      if (res.status === 429) {
+        rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+        logOp(
+          "gemini",
+          "rate-limited",
+          `model=${model} 429; ${RATE_LIMIT_COOLDOWN_MS}msクールダウン`,
+        );
+      } else {
+        logOp("gemini", "call-error", `model=${model} status=${res.status}`);
+      }
       return null;
     }
     const data = (await res.json()) as {
