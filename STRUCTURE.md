@@ -273,6 +273,8 @@
 - def handle_probe
 - def handle_write_file
 - def handle_read_file
+- def handle_rebuild_index
+- def handle_search
 - def handle
 - def main
 
@@ -294,6 +296,8 @@
 - def test_read_file_failure_for_missing_file
 - def test_write_file_creates_date_subfolders
 - def test_write_file_rejects_path_traversal
+- def test_rebuild_index_then_search_by_tag_and_text
+- def test_search_without_index_returns_error
 - def test_unknown_message_type_returns_error
 
 ### `scripts/check_bootstrap.py`
@@ -510,9 +514,12 @@
 ### `src/lib/externalIO/nasNativeHost.ts`
 - const NAS_HOST_NAME
 - type ConnectNativeFn
+- type HistoryHit
 - function probeNasPath
 - function writeFileToNas
 - function readFileFromNas
+- function rebuildNasIndex
+- function searchNasHistory
 
 ### `src/lib/externalIO/nativeMessaging.ts`
 - const NATIVE_HOST_NAME

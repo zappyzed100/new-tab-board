@@ -1,6 +1,13 @@
 // nasNativeHost.test.ts — nasNativeHost.ts(NASブリッジnative messagingクライアント)の単体テスト
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NAS_HOST_NAME, probeNasPath, readFileFromNas, writeFileToNas } from "./nasNativeHost";
+import {
+  NAS_HOST_NAME,
+  probeNasPath,
+  readFileFromNas,
+  rebuildNasIndex,
+  searchNasHistory,
+  writeFileToNas,
+} from "./nasNativeHost";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -111,5 +118,58 @@ describe("readFileFromNas", () => {
       throw new Error("not installed");
     });
     expect(result).toBeNull();
+  });
+});
+
+describe("rebuildNasIndex", () => {
+  it("rebuild-resultのok:trueなら件数を返し、rebuild-indexメッセージを送る", async () => {
+    const fake = makeFakePort();
+    const promise = rebuildNasIndex("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "rebuild-result", ok: true, notes: 3, snapshots: 12 });
+    expect(await promise).toEqual({ notes: 3, snapshots: 12 });
+    expect(fake.sentMessages).toEqual([{ type: "rebuild-index", path: "Z:\\NAS" }]);
+  });
+
+  it("ok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = rebuildNasIndex("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "rebuild-result", ok: false, error: "boom" });
+    expect(await promise).toBeNull();
+  });
+});
+
+describe("searchNasHistory", () => {
+  it("search-resultのok:trueならrowsを返し、tags/text/modeを送る", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasHistory(
+      "Z:\\NAS",
+      { tags: ["登山"], text: "高尾山", mode: "and" },
+      () => fake.port,
+    );
+    const rows = [
+      { note_id: "n1", title: "登山ノート", timestamp: 1783830340293, snippet: "…高尾山…" },
+    ];
+    fake.emitMessage({ type: "search-result", ok: true, rows });
+    expect(await promise).toEqual(rows);
+    expect(fake.sentMessages).toEqual([
+      { type: "search", path: "Z:\\NAS", tags: ["登山"], text: "高尾山", mode: "and" },
+    ]);
+  });
+
+  it("引数省略時は tags:[] text:'' mode:'and' を送る", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasHistory("Z:\\NAS", {}, () => fake.port);
+    fake.emitMessage({ type: "search-result", ok: true, rows: [] });
+    expect(await promise).toEqual([]);
+    expect(fake.sentMessages).toEqual([
+      { type: "search", path: "Z:\\NAS", tags: [], text: "", mode: "and" },
+    ]);
+  });
+
+  it("ok:false(index.db無し等)ならnull", async () => {
+    const fake = makeFakePort();
+    const promise = searchNasHistory("Z:\\NAS", { text: "x" }, () => fake.port);
+    fake.emitMessage({ type: "search-result", ok: false, error: "index.db が無い" });
+    expect(await promise).toBeNull();
   });
 });

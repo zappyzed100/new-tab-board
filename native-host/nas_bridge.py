@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import struct
 import sys
+
+from build_index import build_index
 
 
 def read_message() -> dict | None:
@@ -85,10 +88,81 @@ def handle_read_file(message: dict) -> dict:
         return {"type": "read-result", "ok": False, "error": str(exc)}
 
 
+def handle_rebuild_index(message: dict) -> dict:
+    """notes/*.md と履歴 年/月/日/*.txt から data/index.db を作り直す(タグ検索の索引更新)。"""
+    try:
+        counts = build_index(message["path"])
+        return {
+            "type": "rebuild-result",
+            "ok": True,
+            "notes": counts["notes"],
+            "snapshots": counts["snapshots"],
+        }
+    except (OSError, sqlite3.Error, KeyError) as exc:
+        return {"type": "rebuild-result", "ok": False, "error": str(exc)}
+
+
+def handle_search(message: dict) -> dict:
+    """タグで絞り込み→本文の部分一致(LIKE)で“履歴”を検索する(ブラウザからSQLは叩けないので
+    Python側で実行し結果だけ返す)。tags(AND/OR)・text は任意。マッチした履歴スナップショットを
+    新しい順で返す。index.dbが無ければ先にrebuild-indexが必要。"""
+    try:
+        base = message["path"]
+        db_path = os.path.join(base, "data", "index.db")
+        if not os.path.isfile(db_path):
+            return {
+                "type": "search-result",
+                "ok": False,
+                "error": "index.db が無い(先に rebuild-index を実行)",
+            }
+        tags = message.get("tags", [])
+        text = message.get("text", "")
+        mode = message.get("mode", "and")
+        where: list[str] = []
+        params: list = []
+        if tags:
+            placeholders = ",".join("?" * len(tags))
+            if mode == "or":
+                where.append(
+                    "s.note_id IN (SELECT nt.note_id FROM note_tags nt"
+                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders}))"
+                )
+                params += tags
+            else:
+                where.append(
+                    "s.note_id IN (SELECT nt.note_id FROM note_tags nt"
+                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders})"
+                    " GROUP BY nt.note_id HAVING COUNT(DISTINCT t.name)=?)"
+                )
+                params += [*tags, len(tags)]
+        if text:
+            where.append("s.content LIKE ?")
+            params.append(f"%{text}%")
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute(
+                "SELECT s.note_id, n.title, s.timestamp, substr(s.content, 1, 160)"
+                f" FROM snapshots s LEFT JOIN notes n ON n.id = s.note_id{clause}"
+                " ORDER BY s.timestamp DESC LIMIT 200",
+                params,
+            ).fetchall()
+        finally:
+            conn.close()
+        result = [
+            {"note_id": r[0], "title": r[1], "timestamp": r[2], "snippet": r[3]} for r in rows
+        ]
+        return {"type": "search-result", "ok": True, "rows": result}
+    except (OSError, sqlite3.Error, KeyError) as exc:
+        return {"type": "search-result", "ok": False, "error": str(exc)}
+
+
 HANDLERS = {
     "probe": handle_probe,
     "write-file": handle_write_file,
     "read-file": handle_read_file,
+    "rebuild-index": handle_rebuild_index,
+    "search": handle_search,
 }
 
 

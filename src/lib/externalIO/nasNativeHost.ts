@@ -16,7 +16,27 @@ export type ConnectNativeFn = (application: string) => chrome.runtime.Port;
 type ProbeResult = { type: "probe-result"; ok: boolean; error?: string };
 type WriteResult = { type: "write-result"; ok: boolean; error?: string };
 type ReadResult = { type: "read-result"; ok: boolean; content?: string; error?: string };
-type HostResponse = ProbeResult | WriteResult | ReadResult | { type: "error"; error: string };
+export type HistoryHit = {
+  note_id: string;
+  title: string | null;
+  timestamp: number;
+  snippet: string;
+};
+type SearchResult = { type: "search-result"; ok: boolean; rows?: HistoryHit[]; error?: string };
+type RebuildResult = {
+  type: "rebuild-result";
+  ok: boolean;
+  notes?: number;
+  snapshots?: number;
+  error?: string;
+};
+type HostResponse =
+  | ProbeResult
+  | WriteResult
+  | ReadResult
+  | SearchResult
+  | RebuildResult
+  | { type: "error"; error: string };
 
 function callHost(
   request: Record<string, unknown>,
@@ -85,6 +105,40 @@ export async function readFileFromNas(
   const result = await callHost({ type: "read-file", path, filename }, connectNative);
   if (result?.type === "read-result" && result.ok && result.content !== undefined) {
     return result.content;
+  }
+  return null;
+}
+
+/** NAS上の検索索引(data/index.db)を .md と履歴 .txt から作り直す。件数を返す(失敗はnull)。 */
+export async function rebuildNasIndex(
+  path: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<{ notes: number; snapshots: number } | null> {
+  const result = await callHost({ type: "rebuild-index", path }, connectNative);
+  if (result?.type === "rebuild-result" && result.ok) {
+    return { notes: result.notes ?? 0, snapshots: result.snapshots ?? 0 };
+  }
+  return null;
+}
+
+/** タグ絞り込み＋本文の部分一致で“履歴”をSQL検索する(Python側で実行)。失敗はnull。 */
+export async function searchNasHistory(
+  path: string,
+  query: { tags?: string[]; text?: string; mode?: "and" | "or" },
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<HistoryHit[] | null> {
+  const result = await callHost(
+    {
+      type: "search",
+      path,
+      tags: query.tags ?? [],
+      text: query.text ?? "",
+      mode: query.mode ?? "and",
+    },
+    connectNative,
+  );
+  if (result?.type === "search-result" && result.ok) {
+    return result.rows ?? [];
   }
   return null;
 }

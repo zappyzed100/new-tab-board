@@ -89,6 +89,43 @@ def test_write_file_rejects_path_traversal(tmp_path) -> None:
     assert not os.path.exists(os.path.join(os.path.dirname(str(tmp_path)), "escape.txt"))
 
 
+def _seed_notes_and_history(nas: str) -> None:
+    notes = os.path.join(nas, "notes")
+    os.makedirs(notes, exist_ok=True)
+    note_id = "n1" + "0" * 34
+    with open(os.path.join(notes, f"{note_id}.md"), "w", encoding="utf-8") as f:
+        f.write("---\nid: %s\ntitle: 登山ノート\ntags:\n  - 登山\n---\n\n現在の本文" % note_id)
+    hist = os.path.join(nas, "2026", "7", "12")
+    os.makedirs(hist, exist_ok=True)
+    snap = "s1" + "0" * 34
+    with open(os.path.join(hist, f"{note_id}-1783830340293-{snap}.txt"), "w", encoding="utf-8") as f:
+        f.write("過去の登山メモ。高尾山へ行った。")
+    with open(os.path.join(hist, f"{note_id}-1783830999999-{snap[:-1]}9.txt"), "w", encoding="utf-8") as f:
+        f.write("別の日の買い物メモ。牛乳を買う。")
+
+
+def test_rebuild_index_then_search_by_tag_and_text(tmp_path) -> None:
+    nas = str(tmp_path)
+    _seed_notes_and_history(nas)
+
+    rebuilt = handle({"type": "rebuild-index", "path": nas})
+    assert rebuilt["ok"] is True
+    assert rebuilt["snapshots"] == 2
+
+    # 「登山」タグ かつ 本文に「高尾山」を含む履歴だけがヒットする
+    res = handle({"type": "search", "path": nas, "tags": ["登山"], "text": "高尾山", "mode": "and"})
+    assert res["ok"] is True
+    assert len(res["rows"]) == 1
+    assert res["rows"][0]["title"] == "登山ノート"
+    assert "高尾山" in res["rows"][0]["snippet"]
+
+
+def test_search_without_index_returns_error(tmp_path) -> None:
+    res = handle({"type": "search", "path": str(tmp_path), "text": "x"})
+    assert res["ok"] is False
+    assert "index.db" in res["error"]
+
+
 def test_unknown_message_type_returns_error() -> None:
     result = handle({"type": "something-else"})
     assert result["type"] == "error"
