@@ -116,8 +116,8 @@
 - `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 - `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
 - `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
-- `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(chrome.identityラッパー)の単体テスト
-- `src/lib/drive/googleAuth.ts` — googleAuth.ts — chrome.identityによるOAuthトークン取得の唯一の入出口(SPEC.md §2・§8)
+- `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(launchWebAuthFlowラッパー)の単体テスト
+- `src/lib/drive/googleAuth.ts` — googleAuth.ts — launchWebAuthFlowによるOAuthアクセストークン取得の唯一の入出口(SPEC.md §2・§8)
 - `src/lib/drive/jsonBackup.test.ts` — jsonBackup.test.ts — jsonBackup.ts(全データJSONバックアップのDrive APIクライアント)の
 - `src/lib/drive/jsonBackup.ts` — jsonBackup.ts — 全データJSONバックアップのGoogle Drive API v3クライアント(SPEC.md §4.7)
 - `src/lib/drive/jsonBackupSync.test.ts` — jsonBackupSync.test.ts — jsonBackupSync.ts(全データJSONバックアップのDrive同期
