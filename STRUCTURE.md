@@ -75,7 +75,7 @@
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/library.spec.ts` — library.spec.ts — 「📁 ライブラリ」(NASの階層md保管庫)のトグル開閉の回帰(2026-07-12)
-- `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(列固定masonry)の回帰(2026-07-12)
+- `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
 - `e2e/specs/pasted-images.spec.ts` — pasted-images.spec.ts — Ctrl+Vで貼り付けた画像の一次保存/一覧/削除のE2E(2026-07-13)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)

@@ -118,11 +118,10 @@ body {
   min-width: 0;
 }
 
-/* ノートボード = 列固定masonry(ユーザー指示「列固定・安定」)。App.tsxが order順の全ノートを
-   i%列数 で各列へ振り分け、`.note-column` ごとに縦積みする。flex-wrapの等高(align-items:stretch)を
-   やめ、各列を独立した縦スタックにすることで「短いノートの真下に次が詰まり、長いノートで隣の列が
-   引き伸ばされない」を実現する(flexの行折り返しでは原理上できなかった詰め上げ)。列同士は
-   align-items:flex-startで上端揃え(縦の高さは列ごとにバラバラでよい)。 */
+/* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
+   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて `.note-column` ごとに
+   縦積みする。各列は独立した縦スタック(align-items:flex-startで上端揃え・縦の高さは列でバラバラ)。
+   実測で最短列へ詰めるため列高さがほぼ揃い、長いノートがあっても凸凹が最小化される。 */
 .note-board {
   display: flex;
   gap: var(--space-3);
@@ -135,6 +134,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列内で横幅いっぱい・高さは中身なり。 */
+.note-cell {
+  min-width: 0;
 }
 
 /* ノート位置入れ替え用のドラッグつまみ(ヘッダ左端)。エディタ本文ではなくここを掴む

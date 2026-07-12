@@ -1,5 +1,6 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
@@ -58,7 +59,40 @@ const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
 
-// ノートボードの列数(1列あたり概ね280px、最大3列)。列固定masonryの振り分けに使う。
+// 実測masonry用: 子(ノートペイン)の描画後の実高さを ResizeObserver で測り、onHeight で親へ返す
+// ラッパ。親はこの高さで「一番低い列」への振り分けを決める。列を移っても列幅は同じなので測定値は
+// 変わらず、内容変更のときだけ高さが変わる(＝再配置は入力時のみ)。
+function MeasuredNote({
+  noteId,
+  linearIndex,
+  onHeight,
+  children,
+}: {
+  noteId: string;
+  /** order(優先度)列でのこのノートの位置。実測masonryは列配置を高さで決めるため、論理的な
+   * 並び順は列レイアウトから復元できない——data属性で明示し、E2E/デバッグが順序を読めるようにする。 */
+  linearIndex: number;
+  onHeight: (id: string, h: number) => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) onHeight(noteId, e.contentRect.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [noteId, onHeight]);
+  return (
+    <div ref={ref} className="note-cell" data-linear-index={linearIndex}>
+      {children}
+    </div>
+  );
+}
+
+// ノートボードの列数(1列あたり概ね280px、最大3列)。実測masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
   return Math.max(1, Math.min(3, Math.floor(width / 280)));
 }
@@ -243,21 +277,40 @@ export function App() {
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
   // タグ候補(TODOリスト下で管理・LLMのタグ推定へ渡す優先候補)。設定にsync/バックアップされる。
   const tagCandidates = sync?.settings.tagCandidates ?? [];
-  // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。列固定masonryでは
-  // ノートを order 順に i%列数 で各列へ振り分けるため、列数はJSで知っている必要がある。
+  // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。実測masonryでは各列の
+  // 高さを比べて振り分けるため、列数はJSで知っている必要がある。
   const [columnCount, setColumnCount] = useState(() => noteColumnCountFor(window.innerWidth));
   useEffect(() => {
     const onResize = () => setColumnCount(noteColumnCountFor(window.innerWidth));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  // order 順の全ノートを i%列数 で各列へ振り分ける(左上めがけて詰める。短いノートの真下に
-  // 次のノートが詰まり、削除で全員がひとつ左上へ寄る——ユーザー指示の「列固定・安定」)。
+  // 実測masonry(ユーザー選択「最密」): 各ノートペインの描画後の実高さを ResizeObserver で測り、
+  // order(優先度)順に「その時点で一番低い列」へ入れていく(最密詰め)。列幅は一定なので列を
+  // 移っても高さは変わらず、内容変更でのみ高さが変わる=再配置は入力時のみ起きる(ユーザー了承済み)。
+  const [noteHeights, setNoteHeights] = useState<Map<string, number>>(new Map());
+  const reportNoteHeight = useCallback((id: string, h: number) => {
+    setNoteHeights((prev) => {
+      // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
+      if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
+      const next = new Map(prev);
+      next.set(id, h);
+      return next;
+    });
+  }, []);
   const noteColumns = useMemo(() => {
     const cols: Note[][] = Array.from({ length: columnCount }, () => []);
-    orderedNotes.forEach((note, i) => cols[i % columnCount].push(note));
+    const heights = new Array(columnCount).fill(0);
+    const GAP = 12; // --space-3 相当。列高さ見積りの隙間ぶん(厳密でなくてよい)。
+    const ESTIMATE = 220; // 未測定ノートの暫定高さ(初回描画→測定で確定する)。
+    for (const note of orderedNotes) {
+      let min = 0;
+      for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
+      cols[min].push(note);
+      heights[min] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
+    }
     return cols;
-  }, [orderedNotes, columnCount]);
+  }, [orderedNotes, columnCount, noteHeights]);
 
   // 全データ(ブックマーク/ノート/設定/TODO)のJSONバックアップをdebounce付きで自動的に
   // Driveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
@@ -709,26 +762,32 @@ export function App() {
                         data-testid={`note-column-${colIndex}`}
                       >
                         {column.map((note) => (
-                          <NoteEditorPane
+                          <MeasuredNote
                             key={note.id}
-                            note={note}
-                            notes={notes}
-                            tagCandidates={tagCandidates}
-                            isActive={note.id === activeNoteId}
-                            isFirst={orderedNotes[0]?.id === note.id}
-                            autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
-                            manualSyncSignal={manualSyncSignal}
-                            onNotesChange={updateNotes}
-                            onSelectNote={selectNote}
-                            onSelectNoteByTitle={selectNoteByTitle}
-                            onCreateNote={openFileAsNote}
-                            onAddTodos={addTodos}
-                            onMessage={setDataPanelMessage}
-                            onTogglePin={togglePinNote}
-                            onMoveUp={moveNoteUpOne}
-                            onDragStartNote={handleNoteDragStart}
-                            onDropNote={handleNoteDrop}
-                          />
+                            noteId={note.id}
+                            linearIndex={orderedNotes.indexOf(note)}
+                            onHeight={reportNoteHeight}
+                          >
+                            <NoteEditorPane
+                              note={note}
+                              notes={notes}
+                              tagCandidates={tagCandidates}
+                              isActive={note.id === activeNoteId}
+                              isFirst={orderedNotes[0]?.id === note.id}
+                              autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                              manualSyncSignal={manualSyncSignal}
+                              onNotesChange={updateNotes}
+                              onSelectNote={selectNote}
+                              onSelectNoteByTitle={selectNoteByTitle}
+                              onCreateNote={openFileAsNote}
+                              onAddTodos={addTodos}
+                              onMessage={setDataPanelMessage}
+                              onTogglePin={togglePinNote}
+                              onMoveUp={moveNoteUpOne}
+                              onDragStartNote={handleNoteDragStart}
+                              onDropNote={handleNoteDrop}
+                            />
+                          </MeasuredNote>
                         ))}
                       </div>
                     ))}
