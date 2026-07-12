@@ -7,6 +7,7 @@ import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
 import { NoteTabs } from "./components/notes/NoteTabs";
+import { LibraryPanel } from "./components/discovery/LibraryPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
@@ -63,6 +64,8 @@ export function App() {
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  // 「📁 ライブラリ」(NASの階層md保管庫)の開閉。作業ノートとは別レーンのため既定は閉じる。
+  const [showLibrary, setShowLibrary] = useState(false);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
   // 「ショートカット一覧」ボタンと同じflexコンテナに並ぶwidth:100%のメッセージが
   // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
@@ -550,6 +553,16 @@ export function App() {
                     >
                       {tagging ? "タグ付け中…" : "🏷️ まとめてタグをふる"}
                     </Button>
+                    <Button
+                      type="button"
+                      variant={showLibrary ? "solid" : "soft"}
+                      size="1"
+                      data-testid="toggle-library"
+                      title="NASの階層md保管庫(ライブラリ)を開閉する(作業ノートとは別レーン)"
+                      onClick={() => setShowLibrary((v) => !v)}
+                    >
+                      📁 ライブラリ
+                    </Button>
                   </Flex>
                   <Flex align="center" gap="3" wrap="wrap" className="note-manage-bar">
                     <NoteTabs
@@ -570,6 +583,7 @@ export function App() {
                   </Suspense>
                 </div>
                 <TagSearchPanel notes={notes} onSelectNote={selectNote} />
+                {showLibrary ? <LibraryPanel /> : null}
                 {visibleNotes.length > 0 ? (
                   <div className="note-editor-panes">
                     {visibleNotes.map((note) => (
