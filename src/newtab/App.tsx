@@ -12,6 +12,7 @@ import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
+import { TagCandidatesPanel } from "./components/shell/TagCandidatesPanel";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
 import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
 import {
@@ -215,6 +216,8 @@ export function App() {
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
+  // タグ候補(TODOリスト下で管理・LLMのタグ推定へ渡す優先候補)。設定にsync/バックアップされる。
+  const tagCandidates = sync?.settings.tagCandidates ?? [];
   // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。列固定masonryでは
   // ノートを order 順に i%列数 で各列へ振り分けるため、列数はJSで知っている必要がある。
   const [columnCount, setColumnCount] = useState(() => noteColumnCountFor(window.innerWidth));
@@ -373,7 +376,7 @@ export function App() {
     let done = 0;
     let junkCount = 0;
     for (const note of targets) {
-      const { tags, junk } = await analyzeNote(note.content, apiKey);
+      const { tags, junk } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
       if (tags.length > 0 || junk) {
         const hash = contentHash(note.content);
         updateNotes((prev) => updateNote(prev, note.id, { tags, junk, taggedHash: hash }));
@@ -576,6 +579,10 @@ export function App() {
               <div className="app-sidebar">
                 <MiniCalendar />
                 <TodoList todos={todos} onTodosChange={updateTodos} />
+                <TagCandidatesPanel
+                  candidates={tagCandidates}
+                  onCandidatesChange={(next) => updateSettings({ tagCandidates: next })}
+                />
               </div>
               <section className="app-notes">
                 {/* タブバーと全文検索は、下へスクロールしても上端に貼り付いて追従する
@@ -664,6 +671,7 @@ export function App() {
                             key={note.id}
                             note={note}
                             notes={notes}
+                            tagCandidates={tagCandidates}
                             isActive={note.id === activeNoteId}
                             isFirst={orderedNotes[0]?.id === note.id}
                             autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}

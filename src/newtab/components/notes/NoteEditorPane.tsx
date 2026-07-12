@@ -44,6 +44,8 @@ const HistoryPanel = lazy(() =>
 type Props = {
   note: Note;
   notes: Note[];
+  /** タグ候補(ユーザーが並べた語彙)。Geminiのタグ推定へ「優先候補」として渡す。 */
+  tagCandidates: string[];
   isActive: boolean;
   /** 順序列の先頭ノートか(「ひとつ上へ」を無効化するため)。 */
   isFirst: boolean;
@@ -77,6 +79,7 @@ type Props = {
 export function NoteEditorPane({
   note,
   notes,
+  tagCandidates,
   isActive,
   isFirst,
   autoFocus,
@@ -119,7 +122,7 @@ export function NoteEditorPane({
     }
     setAiBusy("tag");
     onMessage(`「${note.title}」にGeminiでタグ付け中…`);
-    const { tags, junk } = await analyzeNote(note.content, apiKey);
+    const { tags, junk } = await analyzeNote(note.content, apiKey, {}, tagCandidates);
     setAiBusy(null);
     if (tags.length === 0 && !junk) {
       onMessage("タグを付けられませんでした(Gemini呼び出しに失敗した可能性)");
@@ -143,7 +146,7 @@ export function NoteEditorPane({
     if (!apiKey) return;
     autoTagInFlight = true;
     try {
-      const { tags, junk } = await analyzeNote(savedContent, apiKey);
+      const { tags, junk } = await analyzeNote(savedContent, apiKey, {}, tagCandidates);
       if (tags.length === 0 && !junk) return;
       onNotesChange((prev) =>
         updateNote(prev, note.id, { tags, junk, taggedHash: contentHash(savedContent) }),

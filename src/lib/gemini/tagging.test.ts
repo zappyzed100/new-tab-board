@@ -66,6 +66,22 @@ describe("tagNote", () => {
     expect(await tagNote("", "key", { fetch })).toEqual([]);
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("タグ候補を渡すとプロンプトへ「優先的に選ぶ候補」として差し込まれる", async () => {
+    const fetch = geminiReply("コーディング");
+    await tagNote("実装した", "key", { fetch }, ["LLMへの指示", "コーディング"]);
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    const prompt = body.contents[0].parts[0].text;
+    expect(prompt).toContain("候補から選んで");
+    expect(prompt).toContain("LLMへの指示, コーディング");
+  });
+
+  it("タグ候補が空ならプロンプトに候補の一節は入らない(従来どおり)", async () => {
+    const fetch = geminiReply("旅行");
+    await tagNote("京都旅行", "key", { fetch }, []);
+    const prompt = JSON.parse(fetch.mock.calls[0][1].body).contents[0].parts[0].text;
+    expect(prompt).not.toContain("候補から選んで");
+  });
 });
 
 describe("parseJunkFlag", () => {

@@ -133,6 +133,8 @@
 - `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
+- `src/lib/entities/tagCandidates.test.ts` — tagCandidates.test.ts — タグ候補の純粋関数の単体テスト
+- `src/lib/entities/tagCandidates.ts` — tagCandidates.ts — タグ候補(ユーザーが手で並べる語彙)の純粋な追加/削除。I/Oは持たない。
 - `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出)の単体テスト
 - `src/lib/entities/tags.ts` — tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
 - `src/lib/entities/todos.test.ts` — todos.test.ts — todos.ts の純粋関数の単体テスト
@@ -210,6 +212,7 @@
 - `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
 - `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(react-day-picker + GCal URL連携。SPEC.md §4.9)
+- `src/newtab/components/shell/TagCandidatesPanel.tsx` — TagCandidatesPanel.tsx — タグ候補(ユーザーが手で並べる語彙)の管理UI。TODOリストの下に置く。
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
@@ -502,6 +505,10 @@
 - function moveNoteUp
 - function ensureTrailingEmptyNotes
 
+### `src/lib/entities/tagCandidates.ts`
+- function addTagCandidate
+- function removeTagCandidate
+
 ### `src/lib/entities/tags.ts`
 - function extractTags
 
@@ -729,6 +736,9 @@
 
 ### `src/newtab/components/shell/MiniCalendar.tsx`
 - function MiniCalendar
+
+### `src/newtab/components/shell/TagCandidatesPanel.tsx`
+- function TagCandidatesPanel
 
 ### `src/newtab/components/shell/ThemeToggle.tsx`
 - function ThemeToggle

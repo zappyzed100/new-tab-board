@@ -36,16 +36,30 @@ export function parseTags(text: string): string[] {
   return tags;
 }
 
-/** ノート本文の内容を表すタグを付ける。空・失敗は空配列。 */
+/** タグ候補(ユーザーが並べた語彙)があれば「優先的に選ぶ候補」としてプロンプトへ差し込む一節を作る。
+ * 候補が無ければ空文字(従来どおり自由にタグ付け)。合致が無ければ新しいタグでもよい旨も伝える。 */
+function candidatesClause(tagCandidates: string[]): string {
+  const list = tagCandidates.map((t) => t.trim()).filter((t) => t !== "");
+  if (list.length === 0) return "";
+  return (
+    `できるだけ次の候補から選んでください(合致するものが無ければ新しいタグでも構いません): ` +
+    `${list.join(", ")}\n`
+  );
+}
+
+/** ノート本文の内容を表すタグを付ける。空・失敗は空配列。tagCandidatesがあれば優先候補として渡す。 */
 export async function tagNote(
   content: string,
   apiKey: string,
   deps: GeminiDeps = {},
+  tagCandidates: string[] = [],
 ): Promise<string[]> {
   if (content.trim() === "") return [];
   const prompt =
     `次のノートの内容を表すタグを${MAX_TAGS}個以内で、日本語の短い単語でカンマ区切りで出力してください。` +
-    "タグだけを出力し、説明・前置き・#記号は付けないでください。\n\n---\n" +
+    "タグだけを出力し、説明・前置き・#記号は付けないでください。\n" +
+    candidatesClause(tagCandidates) +
+    "\n---\n" +
     content;
   const text = await callGemini(prompt, apiKey, deps);
   return text ? parseTags(text) : [];
@@ -66,11 +80,13 @@ export async function analyzeNote(
   content: string,
   apiKey: string,
   deps: GeminiDeps = {},
+  tagCandidates: string[] = [],
 ): Promise<NoteAnalysis> {
   if (content.trim() === "") return { tags: [], junk: false };
   const prompt =
     "次のノートについて2つ出力してください。出力形式を厳守すること。\n" +
     `TAGS: 内容を表すタグを${MAX_TAGS}個以内、日本語の短い単語でカンマ区切り(#や説明は不要)\n` +
+    candidatesClause(tagCandidates) +
     "JUDGE: メモとして意味のある内容なら OK、テストの落書き・無意味・ゴミなら JUNK\n\n" +
     "例:\nTAGS: 買い物, 牛乳\nJUDGE: OK\n\n---\n" +
     content;

@@ -24,6 +24,9 @@ export type Settings = {
   /** ノート本文(エディタ)の文字サイズ(px)。A-/A+で一括調整する(ユーザー指示)。
    * 未設定なら既定13px。ノート以外のUI文字には影響しない。 */
   noteFontSize?: number;
+  /** タグ候補(ユーザーが手で並べる語彙)。LLMのタグ推定時に「優先的に選ぶ候補」として渡す
+   * (ユーザー指示)。TODOリストの下で管理する。syncに乗り・Driveバックアップにも含まれる。 */
+  tagCandidates?: string[];
 };
 
 export type SyncData = {
