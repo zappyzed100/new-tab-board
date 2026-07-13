@@ -62,6 +62,26 @@ export type Note = {
   /** 「対応済み」チェック(ユーザー指示。名称なしのcheckボタンでノートを済み扱いにする)。
    * 済みのノートはボード上で淡色表示になる(削除はしない——見返せるよう残す)。 */
   done?: boolean;
+  /** ⭐スター(スペシャルへ保管)。ノートがボードにある間、スペシャル一覧に追従表示される
+   * (ユーザー指示)。ノートを削除すると凍結され SpecialItem として残る。 */
+  special?: boolean;
+  /** スペシャル内のフォルダパス(例: "仕事/2026")。未設定はルート。NAS/Driveの special/<folder>/ に対応。 */
+  specialFolder?: string;
+};
+
+/** スペシャル(⭐)の凍結項目。元ノートが削除された時点の内容のスナップショット(ユーザー指示:
+ * 「ノートがある間は追従・削除で凍結」)。ノートがまだある間はNote(special=true)側で表示し、
+ * 削除された分だけこの配列に凍結して残す。id は元ノートのidを引き継ぐ。 */
+export type SpecialItem = {
+  id: string;
+  title: string;
+  content: string;
+  tags?: string[];
+  folder?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  /** ノート削除で凍結された時刻(epoch ms)。 */
+  frozenAt: number;
 };
 
 /** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス
@@ -88,6 +108,10 @@ export type LocalData = {
   /** タブ↔NAS active の世代同期で、このタブが最後に同期した世代番号(ユーザー指示)。
    * NASの現在世代がこれより大きければ他セッションが新しい→pull。永続化して再読込後も比較できる。 */
   nasGeneration?: number;
+  /** スペシャル(⭐)の凍結項目(削除されたスター済みノートのスナップショット)。 */
+  specialItems?: SpecialItem[];
+  /** スペシャルのフォルダ一覧(パス文字列。例: ["仕事", "仕事/2026"])。 */
+  specialFolders?: string[];
 };
 
 export type Snapshot = {

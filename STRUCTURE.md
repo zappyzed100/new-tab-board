@@ -147,6 +147,8 @@
 - `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
 - `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
+- `src/lib/entities/special.test.ts` — special.test.ts — special.ts(⭐スター/スペシャルの純粋ロジック)の単体テスト
+- `src/lib/entities/special.ts` — special.ts — ⭐スター/スペシャル(保管棚)の純粋ロジック(I/Oなし)。
 - `src/lib/entities/tagCandidates.test.ts` — tagCandidates.test.ts — タグ候補の純粋関数の単体テスト
 - `src/lib/entities/tagCandidates.ts` — tagCandidates.ts — タグ候補(ユーザーが手で並べる語彙)の純粋な追加/削除。I/Oは持たない。
 - `src/lib/entities/tags.test.ts` — tags.test.ts — tags.ts(#タグ抽出 / タグ語彙構築)の単体テスト
@@ -581,6 +583,17 @@
 - function ensureTrailingEmptyNotes
 - function pasteResultsIntoNotes
 
+### `src/lib/entities/special.ts`
+- type SpecialEntry
+- function normalizeFolder
+- function toggleNoteSpecial
+- function freezeNoteToSpecial
+- function upsertSpecialItem
+- function removeSpecialItem
+- function setSpecialItemFolder
+- function addSpecialFolder
+- function specialEntries
+
 ### `src/lib/entities/tagCandidates.ts`
 - function addTagCandidate
 - function removeTagCandidate
@@ -850,6 +863,7 @@
 - type Settings
 - type SyncData
 - type Note
+- type SpecialItem
 - type Todo
 - type LocalData
 - type Snapshot
