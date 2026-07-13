@@ -597,6 +597,7 @@
 
 ### `src/lib/externalIO/nasArchive.ts`
 - function noteToMarkdown
+- function markdownToNote
 - function writeNoteMarkdownToNas
 - function writeNoteToNasStructure
 - function reconcileActiveNotesOnNas
@@ -611,11 +612,15 @@
 - type HistoryHit
 - type NoteHit
 - type TagCount
+- type ActiveFile
 - function probeNasPath
 - function writeFileToNas
 - function readFileFromNas
 - function deleteFileFromNas
 - function rebuildNasIndex
+- function readNasGeneration
+- function bumpNasGeneration
+- function readNasActive
 - function listNasTree
 - function searchNasHistory
 - function topNasTags

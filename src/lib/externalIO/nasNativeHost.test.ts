@@ -1,10 +1,13 @@
 // nasNativeHost.test.ts — nasNativeHost.ts(NASブリッジnative messagingクライアント)の単体テスト
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  bumpNasGeneration,
   listNasTree,
   NAS_HOST_NAME,
   probeNasPath,
   readFileFromNas,
+  readNasActive,
+  readNasGeneration,
   rebuildNasIndex,
   searchNasHistory,
   searchNasNotes,
@@ -267,6 +270,47 @@ describe("searchNasNotes", () => {
     const fake = makeFakePort();
     const promise = searchNasNotes("Z:\\NAS", { text: "x" }, () => fake.port);
     fake.emitMessage({ type: "search-notes-result", ok: false, error: "index.db が無い" });
+    expect(await promise).toBeNull();
+  });
+});
+
+describe("世代同期(read/bump-generation, read-active)", () => {
+  it("readNasGeneration は世代番号を返し、read-generationを送る", async () => {
+    const fake = makeFakePort();
+    const promise = readNasGeneration("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "generation-result", ok: true, generation: 3 });
+    expect(await promise).toBe(3);
+    expect(fake.sentMessages).toEqual([{ type: "read-generation", path: "Z:\\NAS" }]);
+  });
+
+  it("bumpNasGeneration は加算後の新値を返し、bump-generationを送る", async () => {
+    const fake = makeFakePort();
+    const promise = bumpNasGeneration("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "generation-result", ok: true, generation: 4 });
+    expect(await promise).toBe(4);
+    expect(fake.sentMessages).toEqual([{ type: "bump-generation", path: "Z:\\NAS" }]);
+  });
+
+  it("generation-resultのok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = readNasGeneration("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "generation-result", ok: false, error: "base欠如" });
+    expect(await promise).toBeNull();
+  });
+
+  it("readNasActive はactive/の.md一覧(名前+内容)を返す", async () => {
+    const fake = makeFakePort();
+    const promise = readNasActive("Z:\\NAS", () => fake.port);
+    const files = [{ filename: "n1.md", content: "---\nid: n1\n---\n\n本文" }];
+    fake.emitMessage({ type: "read-active-result", ok: true, files });
+    expect(await promise).toEqual(files);
+    expect(fake.sentMessages).toEqual([{ type: "read-active", path: "Z:\\NAS" }]);
+  });
+
+  it("read-active-resultのok:falseならnull", async () => {
+    const fake = makeFakePort();
+    const promise = readNasActive("Z:\\NAS", () => fake.port);
+    fake.emitMessage({ type: "read-active-result", ok: false });
     expect(await promise).toBeNull();
   });
 });

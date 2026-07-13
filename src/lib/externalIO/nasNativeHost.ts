@@ -48,6 +48,20 @@ type RebuildResult = {
   error?: string;
 };
 type ListTreeResult = { type: "list-tree-result"; ok: boolean; files?: string[]; error?: string };
+type GenerationResult = {
+  type: "generation-result";
+  ok: boolean;
+  generation?: number;
+  error?: string;
+};
+/** read-active の1件(active/<id>.md のファイル名とmd内容)。pull(タブ上書き)で使う。 */
+export type ActiveFile = { filename: string; content: string };
+type ReadActiveResult = {
+  type: "read-active-result";
+  ok: boolean;
+  files?: ActiveFile[];
+  error?: string;
+};
 type HostResponse =
   | ProbeResult
   | WriteResult
@@ -58,6 +72,8 @@ type HostResponse =
   | TopTagsResult
   | RebuildResult
   | ListTreeResult
+  | GenerationResult
+  | ReadActiveResult
   | { type: "error"; error: string };
 
 function callHost(
@@ -151,6 +167,36 @@ export async function rebuildNasIndex(
   if (result?.type === "rebuild-result" && result.ok) {
     return { notes: result.notes ?? 0, snapshots: result.snapshots ?? 0 };
   }
+  return null;
+}
+
+/** NASの現在の世代番号を読む(タブ↔active同期。未接続/失敗はnull)。 */
+export async function readNasGeneration(
+  path: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<number | null> {
+  const result = await callHost({ type: "read-generation", path }, connectNative);
+  if (result?.type === "generation-result" && result.ok) return result.generation ?? 0;
+  return null;
+}
+
+/** 世代番号を+1して新値をもらう(操作開始時に所有権を得る)。未接続/失敗はnull。 */
+export async function bumpNasGeneration(
+  path: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<number | null> {
+  const result = await callHost({ type: "bump-generation", path }, connectNative);
+  if (result?.type === "generation-result" && result.ok) return result.generation ?? 0;
+  return null;
+}
+
+/** active/ 直下の .md を全部(ファイル名+内容)読む(pull=タブをNAS activeで上書き)。失敗はnull。 */
+export async function readNasActive(
+  path: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<ActiveFile[] | null> {
+  const result = await callHost({ type: "read-active", path }, connectNative);
+  if (result?.type === "read-active-result" && result.ok) return result.files ?? [];
   return null;
 }
 

@@ -54,11 +54,76 @@ export function noteToMarkdown(note: Note): string {
   }
   if (note.createdAt) fm.push(`created_at: ${new Date(note.createdAt).toISOString()}`);
   if (note.updatedAt) fm.push(`updated_at: ${new Date(note.updatedAt).toISOString()}`);
+  // 世代pull(タブをNAS activeで上書き)で並び順/ピン/済みを復元するため front matter に出す
+  // (数値・真偽はyamlScalarを通さず素で書く——build_index.pyは未知キーを無視するので安全)。
+  fm.push(`order: ${note.order}`);
+  if (note.pinned) fm.push("pinned: true");
+  if (note.done) fm.push("done: true");
   if (note.sourceNoteId) fm.push(`source_note_id: ${note.sourceNoteId}`);
   if (note.generatedBy) fm.push(`generated_by: ${yamlScalar(note.generatedBy)}`);
   fm.push("---");
   // front matterの閉じ --- のあとは空行を1つ入れて本文(慣例)。
   return `${fm.join("\n")}\n\n${note.content}`;
+}
+
+/** yamlScalar の逆(front matter値の復元)。両端が二重引用符なら外して \\" と \\\\ を戻す。 */
+function yamlUnscalar(value: string): string {
+  const s = value.trim();
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+  return s;
+}
+
+/** noteToMarkdown が出した .md を Note へ戻す(世代pull=タブをNAS activeで上書きする用)。
+ * front matter を最小自前パーサで読む(書き側 yamlScalar/形式と対)。id が無ければ乱数、
+ * order/pinned/done 等が無い旧ファイルは既定で補う。tags は "tags: []" か "  - x" の並び。 */
+export function markdownToNote(md: string, fallbackOrder = 0): Note {
+  const note: Note = {
+    id: crypto.randomUUID(),
+    title: "",
+    content: md,
+    pinned: false,
+    order: fallbackOrder,
+  };
+  if (!md.startsWith("---")) return note;
+  const end = md.indexOf("\n---", 3);
+  if (end === -1) return note;
+  const block = md.slice(3, end).replace(/^\n+/, "");
+  note.content = md.slice(end + 4).replace(/^\n\n/, ""); // 閉じ --- の後の区切り空行を落とす
+  const lines = block.split("\n");
+  const tags: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith("tags:")) {
+      // 続く "  - x" 行を集める(tags: [] / 空なら無し)。
+      while (i + 1 < lines.length && lines[i + 1].trimStart().startsWith("- ")) {
+        tags.push(yamlUnscalar(lines[++i].trimStart().slice(2)));
+      }
+      continue;
+    }
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    if (key === "id") note.id = value || note.id;
+    else if (key === "title") note.title = yamlUnscalar(value);
+    else if (key === "created_at") {
+      const t = Date.parse(value);
+      if (!Number.isNaN(t)) note.createdAt = t;
+    } else if (key === "updated_at") {
+      const t = Date.parse(value);
+      if (!Number.isNaN(t)) note.updatedAt = t;
+    } else if (key === "order") {
+      const n = Number(value);
+      if (!Number.isNaN(n)) note.order = n;
+    } else if (key === "pinned") note.pinned = value === "true";
+    else if (key === "done") note.done = value === "true";
+    else if (key === "source_note_id") note.sourceNoteId = value;
+    else if (key === "generated_by") note.generatedBy = yamlUnscalar(value);
+  }
+  if (tags.length > 0) note.tags = tags;
+  return note;
 }
 
 /** ノート1件を正本 notes/<id>.md としてNASへ書き出す。NAS未設定/到達不可は静かにfalse。 */

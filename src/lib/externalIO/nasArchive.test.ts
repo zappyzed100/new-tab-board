@@ -8,6 +8,7 @@ import {
   flushAllToNas,
   flushSnapshotToNas,
   getSnapshotBody,
+  markdownToNote,
   noteToMarkdown,
   readArchivedSnapshot,
   reconcileActiveNotesOnNas,
@@ -237,6 +238,55 @@ describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
 
   it("NAS未設定なら書かずfalse", async () => {
     expect(await writeNoteMarkdownToNas(baseNote)).toBe(false);
+  });
+});
+
+describe("markdownToNote(世代pull: mdをNoteへ戻す)", () => {
+  it("noteToMarkdown → markdownToNote で主要フィールドが往復する", () => {
+    const note: Note = {
+      id: "n1",
+      title: "会議: メモ #x", // ':' '#' を含む=引用符付きで書かれる
+      content: "本文\n2行目\n---区切りっぽい行", // 本文中の --- でも壊れない
+      pinned: true,
+      order: 5,
+      tags: ["a,b", "c"], // ',' を含む=引用符
+      createdAt: Date.UTC(2026, 6, 12, 7, 0, 0),
+      updatedAt: Date.UTC(2026, 6, 12, 7, 20, 0),
+      done: true,
+      sourceNoteId: "orig",
+      generatedBy: "gemini",
+    };
+    expect(markdownToNote(noteToMarkdown(note))).toMatchObject({
+      id: "n1",
+      title: "会議: メモ #x",
+      content: "本文\n2行目\n---区切りっぽい行",
+      pinned: true,
+      order: 5,
+      tags: ["a,b", "c"],
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt,
+      done: true,
+      sourceNoteId: "orig",
+      generatedBy: "gemini",
+    });
+  });
+
+  it("tags:[] のノートは tags 無し・pinned/done は既定falseで戻る", () => {
+    const back = markdownToNote(
+      noteToMarkdown({ id: "n2", title: "t", content: "x", pinned: false, order: 2, tags: [] }),
+    );
+    expect(back.tags).toBeUndefined();
+    expect(back.pinned).toBe(false);
+    expect(back.done).toBeUndefined();
+    expect(back.order).toBe(2);
+  });
+
+  it("front matterが無ければ全体を本文として扱い、idとfallback orderを補う", () => {
+    const back = markdownToNote("ただの本文", 3);
+    expect(back.content).toBe("ただの本文");
+    expect(back.order).toBe(3);
+    expect(typeof back.id).toBe("string");
+    expect(back.id.length).toBeGreaterThan(0);
   });
 });
 
