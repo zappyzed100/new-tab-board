@@ -154,6 +154,8 @@
 - `src/lib/entities/todos.test.ts` — todos.test.ts — todos.ts の純粋関数の単体テスト
 - `src/lib/entities/todos.ts` — todos.ts — 単体TODOリストの純粋な状態更新関数(I/Oを持たない。TodoMVC相当・ノート非依存)
 - `src/lib/externalIO/CLAUDE.md`
+- `src/lib/externalIO/nasActiveSync.test.ts` — nasActiveSync.test.ts — 世代同期の判定/push/pull の単体テスト
+- `src/lib/externalIO/nasActiveSync.ts` — nasActiveSync.ts — タブ(ブラウザ)とNAS activeの「世代番号」ベース同期(ユーザー指示)。
 - `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
 - `src/lib/externalIO/nasArchive.ts` — nasArchive.ts — SSD一次退避(IndexedDB)→NAS本archiveのstore-and-forward(SPEC.md §4.3)
 - `src/lib/externalIO/nasNativeHost.test.ts` — nasNativeHost.test.ts — nasNativeHost.ts(NASブリッジnative messagingクライアント)の単体テスト
@@ -594,6 +596,14 @@
 - function toggleTodo
 - function removeTodo
 - function sortedTodos
+
+### `src/lib/externalIO/nasActiveSync.ts`
+- type SyncDecision
+- function decideActiveSync
+- type PullDeps
+- function pullActiveFromNas
+- type PushDeps
+- function pushActiveToNas
 
 ### `src/lib/externalIO/nasArchive.ts`
 - function noteToMarkdown
