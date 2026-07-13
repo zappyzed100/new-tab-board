@@ -165,6 +165,8 @@
 - `src/lib/externalIO/nasNativeHost.ts` — nasNativeHost.ts — NASブリッジ native messaging hostの拡張側クライアント(SPEC.md §4.3)
 - `src/lib/externalIO/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
 - `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
+- `src/lib/externalIO/specialSync.test.ts` — specialSync.test.ts — NASの special/ 書き出し・突き合わせ削除の単体テスト
+- `src/lib/externalIO/specialSync.ts` — specialSync.ts — スペシャル(⭐)をNASの special/<folder>/<id>.md へ書き出し、消えたものを削除する
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
 - `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
@@ -654,6 +656,12 @@
 - const NATIVE_HOST_NAME
 - type ConnectNativeFn
 - function pullPendingFile
+
+### `src/lib/externalIO/specialSync.ts`
+- function specialRelPath
+- function specialEntryToMarkdown
+- type SpecialNasDeps
+- function pushSpecialToNas
 
 ### `src/lib/fileio/exportImport.ts`
 - const EXPORT_VERSION

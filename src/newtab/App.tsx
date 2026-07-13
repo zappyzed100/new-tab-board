@@ -34,9 +34,11 @@ import {
   freezeNoteToSpecial,
   removeSpecialItem,
   setSpecialItemFolder,
+  specialEntries,
   toggleNoteSpecial,
   upsertSpecialItem,
 } from "../lib/entities/special";
+import { pushSpecialToNas } from "../lib/externalIO/specialSync";
 import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
@@ -160,6 +162,9 @@ export function App() {
   const nasOwnerRef = useRef(false);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
+  // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
+  const specialItemsRef = useRef<SpecialItem[]>([]);
+  specialItemsRef.current = specialItems;
   // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
   const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
@@ -249,7 +254,10 @@ export function App() {
         applyPulledNotes(pulled);
       }
     } else if (decision === "push") {
-      await pushActiveToNas(notesRef.current ?? [], clockNow());
+      const current = notesRef.current ?? [];
+      await pushActiveToNas(current, clockNow());
+      // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
+      await pushSpecialToNas(specialEntries(current, specialItemsRef.current));
     }
   }
   // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runNasSyncTickは
