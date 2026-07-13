@@ -112,6 +112,9 @@ export type LocalData = {
   specialItems?: SpecialItem[];
   /** スペシャルのフォルダ一覧(パス文字列。例: ["仕事", "仕事/2026"])。 */
   specialFolders?: string[];
+  /** NASへ最後に保存した各ノートの保存フィンガープリント(id→ハッシュ)。同じなら再保存しない
+   * (ユーザー指示: ハッシュで保存済みか判定して無駄な再保存を避ける)。再読込後も比較できるよう永続化。 */
+  nasSavedHashes?: Record<string, string>;
 };
 
 export type Snapshot = {

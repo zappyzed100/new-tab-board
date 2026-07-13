@@ -5,8 +5,21 @@
 //   - NASの世代 > 自分の世代: pull(NAS activeでタブのノートを上書き。最終操作者優先——ユーザー指示)。
 import { readNasActive } from "./nasNativeHost";
 import { getNasFolderPath } from "../storage/db";
-import { markdownToNote, reconcileActiveNotesOnNas, writeNoteToNasStructure } from "./nasArchive";
+import {
+  markdownToNote,
+  noteToMarkdown,
+  reconcileActiveNotesOnNas,
+  writeNoteToNasStructure,
+} from "./nasArchive";
+import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
+
+/** ノートの「保存フィンガープリント」= 保存する.md全体のハッシュ(ユーザー指示: ハッシュで保存済みか判定)。
+ * noteToMarkdown はタイトル/本文/タグ/order/pinned/done/special等の永続フィールドだけを含む(driveFileId/
+ * taggedHash等の揮発フィールドは含まない)ので、これ1つで「保存すべき変化があったか」を捉えられる。 */
+export function noteSaveFingerprint(note: Note): string {
+  return contentHash(noteToMarkdown(note));
+}
 
 export type SyncDecision = "push" | "pull" | "noop";
 
@@ -43,20 +56,34 @@ export type PushDeps = {
 };
 
 /** push: 現在の非空・非junkノートを active/<id>.md と 日付フォルダへ書き、消えた/空になった
- * ノートを active から削除する。書き込めた件数を返す(NAS未設定なら writeNoteToNasStructure が
- * 静かにfalseで0件)。 */
+ * ノートを active から削除する。**保存フィンガープリントが前回と同じノートは書かない**(ユーザー指示:
+ * ハッシュで保存済みか判定して無駄な再保存を避ける。日付フォルダも「その日に変わったノート」だけになる)。
+ * savedHashes は id→前回保存時のフィンガープリント。更新後のマップと書込件数を返す(呼び出し側が永続化)。
+ * NAS未設定なら writeNoteToNasStructure が静かにfalseで0件。 */
 export async function pushActiveToNas(
   notes: Note[],
   now: number,
+  savedHashes: Record<string, string>,
   deps: PushDeps = {},
-): Promise<number> {
+): Promise<{ written: number; savedHashes: Record<string, string> }> {
   const _write = deps.writeNoteToNasStructure ?? writeNoteToNasStructure;
   const _reconcile = deps.reconcileActiveNotesOnNas ?? reconcileActiveNotesOnNas;
+  const next: Record<string, string> = {};
   let written = 0;
   for (const n of notes) {
-    if (n.content.trim() === "" || n.junk) continue;
-    if (await _write(n, now)) written += 1;
+    if (n.content.trim() === "" || n.junk) continue; // 空・ゴミは保存対象外(ハッシュも捨てる)
+    const fp = noteSaveFingerprint(n);
+    if (savedHashes[n.id] === fp) {
+      next[n.id] = fp; // 変更なし=保存済み。書かずにハッシュだけ引き継ぐ。
+      continue;
+    }
+    if (await _write(n, now)) {
+      next[n.id] = fp;
+      written += 1;
+    } else if (savedHashes[n.id] !== undefined) {
+      next[n.id] = savedHashes[n.id]; // 書けなかった: 旧ハッシュ維持(次回再試行)
+    }
   }
   await _reconcile(notes);
-  return written;
+  return { written, savedHashes: next };
 }

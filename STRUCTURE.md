@@ -620,6 +620,7 @@
 - function sortedTodos
 
 ### `src/lib/externalIO/nasActiveSync.ts`
+- function noteSaveFingerprint
 - type SyncDecision
 - function decideActiveSync
 - type PullDeps

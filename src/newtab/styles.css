@@ -298,9 +298,11 @@ body {
   background: var(--surface-2);
 }
 
+/* 貼り付け画像は原本(フル解像度)を保存している。表示を大きめにして細部まで見えるようにする
+   (ユーザー指示)。画質を保つため拡大時のスムージングは効かせつつ、原寸より大きくは引き伸ばさない。 */
 .pasted-image-thumb {
-  max-width: 160px;
-  max-height: 160px;
+  max-width: 360px;
+  max-height: 360px;
   object-fit: contain;
   border-radius: var(--radius-sm);
   background: var(--surface);

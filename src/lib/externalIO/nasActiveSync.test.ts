@@ -59,7 +59,7 @@ describe("pullActiveFromNas", () => {
 });
 
 describe("pushActiveToNas", () => {
-  it("非空・非junkだけ書き、reconcileで削除突合する", async () => {
+  it("非空・非junkだけ書き、reconcileで削除突合する。ハッシュを返す", async () => {
     const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);
     const reconcileActiveNotesOnNas = vi.fn().mockResolvedValue(0);
     const notes = [
@@ -67,13 +67,53 @@ describe("pushActiveToNas", () => {
       note({ id: "b", content: "  " }), // 空→書かない
       note({ id: "c", content: "ゴミ", junk: true }), // junk→書かない
     ];
-    const written = await pushActiveToNas(notes, 1000, {
-      writeNoteToNasStructure,
-      reconcileActiveNotesOnNas,
-    });
-    expect(written).toBe(1);
+    const res = await pushActiveToNas(
+      notes,
+      1000,
+      {},
+      {
+        writeNoteToNasStructure,
+        reconcileActiveNotesOnNas,
+      },
+    );
+    expect(res.written).toBe(1);
     expect(writeNoteToNasStructure).toHaveBeenCalledTimes(1);
     expect(writeNoteToNasStructure).toHaveBeenCalledWith(notes[0], 1000);
     expect(reconcileActiveNotesOnNas).toHaveBeenCalledWith(notes);
+    expect(res.savedHashes).toHaveProperty("a"); // aのハッシュが記録される
+    expect(res.savedHashes).not.toHaveProperty("b"); // 空・junkは記録しない
+  });
+
+  it("フィンガープリントが前回と同じノートは書かない(ハッシュで保存済み判定)", async () => {
+    const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);
+    const reconcileActiveNotesOnNas = vi.fn().mockResolvedValue(0);
+    const notes = [note({ id: "a", content: "本文" }), note({ id: "b", content: "別" })];
+    // 1回目: 全部書く。
+    const r1 = await pushActiveToNas(
+      notes,
+      1000,
+      {},
+      {
+        writeNoteToNasStructure,
+        reconcileActiveNotesOnNas,
+      },
+    );
+    expect(r1.written).toBe(2);
+    // 2回目: 内容不変なら書かない(r1のハッシュを渡す)。
+    writeNoteToNasStructure.mockClear();
+    const r2 = await pushActiveToNas(notes, 2000, r1.savedHashes, {
+      writeNoteToNasStructure,
+      reconcileActiveNotesOnNas,
+    });
+    expect(r2.written).toBe(0);
+    expect(writeNoteToNasStructure).not.toHaveBeenCalled();
+    // 3回目: aの本文を変えたらaだけ書く。
+    const changed = [note({ id: "a", content: "本文(変更)" }), note({ id: "b", content: "別" })];
+    const r3 = await pushActiveToNas(changed, 3000, r2.savedHashes, {
+      writeNoteToNasStructure,
+      reconcileActiveNotesOnNas,
+    });
+    expect(r3.written).toBe(1);
+    expect(writeNoteToNasStructure).toHaveBeenCalledWith(changed[0], 3000);
   });
 });

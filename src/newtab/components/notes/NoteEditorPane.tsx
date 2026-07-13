@@ -3,7 +3,7 @@
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
+import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import type { DragEvent as ReactDragEvent } from "react";
@@ -372,77 +372,85 @@ export function NoteEditorPane({
         {/* 2行目: 操作ボタンを全て「アイコン＋説明」で統一・順序も統一(移動→表示→AI→編集操作)。
             ピン/自由チェック/同期状態はノート名の行(1行目)へ移動済み。 */}
         <Flex align="center" gap="2" wrap="wrap">
-          <Button
+          {/* 操作ボタンはアイコンのみ(説明はtitleツールチップ)にして3行以内に収める(ユーザー指示)。 */}
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`move-note-up-${note.id}`}
             title="優先度を上げる(ひとつ前=左上寄りへ移動。左上ほど優先度が高い)"
             disabled={isFirst}
             onClick={() => onMoveUp(note.id)}
           >
-            ⬆️ 優先度
-          </Button>
-          <Button
+            ⬆️
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant={showPreview ? "solid" : "soft"}
             data-testid={`toggle-preview-${note.id}`}
-            title="Markdown記法(見出し・リスト等)を清書して表示する"
+            title={showPreview ? "編集に戻す" : "Markdownを清書してプレビュー表示する"}
             onClick={() => setShowPreview((v) => !v)}
           >
-            {showPreview ? "✏️ 編集" : "📖 プレビュー"}
-          </Button>
-          <Button
+            {showPreview ? "✏️" : "📖"}
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant={showHistory ? "solid" : "soft"}
             data-testid={`toggle-history-${note.id}`}
             title="過去のスナップショット一覧・差分表示・復元"
             onClick={() => setShowHistory((v) => !v)}
           >
-            🕑 {showHistory ? "履歴を閉じる" : "履歴"}
-          </Button>
-          <Button
+            🕑
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`summarize-${note.id}`}
             title="Geminiでこのノートを要約し、「〇〇の要約」ノートを新規作成する"
             disabled={aiBusy !== null}
             onClick={() => void handleSummarize()}
           >
-            {aiBusy === "summary" ? "✨ 要約中…" : "✨ 要約"}
-          </Button>
-          <Button
+            {aiBusy === "summary" ? "⏳" : "✨"}
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`extract-todos-${note.id}`}
-            title="Geminiでこのノートからやるべきこと(TODO)を抽出し、TODOリストへ追加する"
+            title="GeminiでこのノートからTODOを抽出し、TODOリストへ追加する"
             disabled={aiBusy !== null}
             onClick={() => void handleExtractTodos()}
           >
-            {aiBusy === "todo" ? "✅ 抽出中…" : "✅ TODO抽出"}
-          </Button>
-          <Button
+            {aiBusy === "todo" ? "⏳" : "✅"}
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`tag-note-${note.id}`}
             title="Geminiでこのノートにタグとタイトルを付ける"
             disabled={aiBusy !== null}
             onClick={() => void handleTagThisNote()}
           >
-            {aiBusy === "tag" ? "🏷️ 付与中…" : "🏷️ タグ・タイトル"}
-          </Button>
-          <Button
+            {aiBusy === "tag" ? "⏳" : "🏷️"}
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`copy-note-${note.id}`}
             title="このノートの本文をクリップボードにコピーする"
             onClick={() => void handleCopy()}
           >
-            📋 コピー
-          </Button>
-          {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物。
-              消える前の本文は大量削除の安全網で履歴に刻まれるため復元可能。 */}
-          <Button
+            📋
+          </IconButton>
+          {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物。 */}
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             data-testid={`reset-note-${note.id}`}
             title="このノートの内容を初期化する(空に戻す。ノート自体は残る)"
@@ -462,18 +470,19 @@ export function NoteEditorPane({
               setRestoreCounter((c) => c + 1);
             }}
           >
-            🧹 初期化
-          </Button>
-          <Button
+            🧹
+          </IconButton>
+          <IconButton
             type="button"
+            size="1"
             variant="soft"
             color="red"
             data-testid={`delete-note-${note.id}`}
             title="このノートを削除する(スター済みならスペシャルへ凍結して残す)"
             onClick={() => onDeleteNote(note.id)}
           >
-            🗑️ 削除
-          </Button>
+            🗑️
+          </IconButton>
         </Flex>
         {showHistory ? (
           <Suspense fallback={<div data-testid="history-loading">履歴を読み込み中…</div>}>

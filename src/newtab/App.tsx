@@ -168,6 +168,8 @@ export function App() {
   specialItemsRef.current = specialItems;
   // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
   const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
+  // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
+  const nasSavedHashesRef = useRef<Record<string, string>>({});
   // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
   // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
   function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
@@ -180,6 +182,7 @@ export function App() {
       lastDailyMaintenanceDay: lastDailyMaintDayRef.current,
       specialItems,
       specialFolders,
+      nasSavedHashes: nasSavedHashesRef.current,
       ...overrides,
     };
   }
@@ -201,6 +204,7 @@ export function App() {
       setAlarmActive(localData.alarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
       lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
+      nasSavedHashesRef.current = localData.nasSavedHashes ?? {};
       setSpecialItems(localData.specialItems ?? []);
       setSpecialFolders(localData.specialFolders ?? []);
     });
@@ -256,7 +260,11 @@ export function App() {
       }
     } else if (decision === "push") {
       const current = notesRef.current ?? [];
-      await pushActiveToNas(current, clockNow());
+      // ハッシュで保存済みか判定して、変わったノートだけ NAS へ書く(ユーザー指示: 無駄な再保存を避ける)。
+      const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
+      nasSavedHashesRef.current = r.savedHashes;
+      const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
+      await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
       // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
       await pushSpecialToNas(specialEntries(current, specialItemsRef.current));
     }
