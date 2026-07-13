@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   addNote,
   addNoteAfter,
-  applyAutoTagToNote,
   createNote,
   mergeDroppedContent,
   pasteResultsIntoNotes,
@@ -17,7 +16,6 @@ import {
   sortedNotes,
   updateNote,
 } from "./notes";
-import type { Note } from "../../types";
 
 describe("createNote / addNote", () => {
   it("空の内容で新しいノートを作る", () => {
@@ -143,61 +141,6 @@ describe("mergeDroppedContent(ファイルドロップの本文取り込み)", (
   });
   it("非空ノートは空行区切りで末尾へ追記する(既存を消さない)", () => {
     expect(mergeDroppedContent("既存メモ", "追加分")).toBe("既存メモ\n\n追加分");
-  });
-});
-
-describe("applyAutoTagToNote(保存時: タグ確定後にNASへ書くノートを合成する)", () => {
-  const base: Note = {
-    id: "n1",
-    title: "ノートA", // 既定タイトル
-    content: "旧",
-    tags: ["旧タグ"],
-    pinned: false,
-    order: 0,
-  };
-
-  it("analysisのtags/junkを反映し、既定タイトルなら生成タイトルも採用する", () => {
-    const out = applyAutoTagToNote(
-      base,
-      "新しい本文",
-      { tags: ["登山", "高尾山"], junk: false, title: "高尾山メモ" },
-      5000,
-    );
-    expect(out.tags).toEqual(["登山", "高尾山"]);
-    expect(out.junk).toBe(false);
-    expect(out.title).toBe("高尾山メモ"); // 既定タイトルだったので上書き
-    expect(out.content).toBe("新しい本文");
-    expect(out.updatedAt).toBe(5000);
-  });
-
-  it("手動命名(既定でない)タイトルは生成タイトルで上書きしない", () => {
-    const named: Note = { ...base, title: "自分の会議メモ" };
-    const out = applyAutoTagToNote(
-      named,
-      "本文",
-      { tags: ["会議"], junk: false, title: "生成タイトル" },
-      1,
-    );
-    expect(out.title).toBe("自分の会議メモ");
-    expect(out.tags).toEqual(["会議"]);
-  });
-
-  it("junk判定はそのまま乗せる(呼び出し側がNAS除外に使う)", () => {
-    const out = applyAutoTagToNote(base, "らくがき", { tags: [], junk: true, title: "" }, 1);
-    expect(out.junk).toBe(true);
-  });
-
-  it("analysisがnull(タグ付けスキップ)なら既存tags/title/junkのまま本文とupdatedAtだけ更新する", () => {
-    const out = applyAutoTagToNote(base, "本文だけ更新", null, 9000);
-    expect(out.tags).toEqual(["旧タグ"]); // 変えない
-    expect(out.title).toBe("ノートA");
-    expect(out.content).toBe("本文だけ更新");
-    expect(out.updatedAt).toBe(9000);
-  });
-
-  it("生成タイトルが空文字なら既定タイトルでも上書きしない", () => {
-    const out = applyAutoTagToNote(base, "本文", { tags: ["x"], junk: false, title: "" }, 1);
-    expect(out.title).toBe("ノートA");
   });
 });
 

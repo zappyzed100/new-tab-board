@@ -8,7 +8,6 @@ import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import type { DragEvent as ReactDragEvent } from "react";
 import {
-  applyAutoTagToNote,
   isDefaultNoteTitle,
   mergeDroppedContent,
   removeNote,
@@ -17,7 +16,6 @@ import {
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
-import { writeNoteToNasStructure } from "../../../lib/externalIO/nasArchive";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
@@ -154,20 +152,9 @@ export function NoteEditorPane({
     );
   }
 
-  // 保存(スナップショット)の瞬間に「自動タグ付け → タグ確定 → NASへ書く」を1本の非同期で直列化する
-  // (ユーザー指示: 必ずタグ確定後にNASへ書く)。保存タイミング(更新5分/200字/blur/paste)は
-  // SnapshotScheduler(useSnapshotScheduler)が唯一の発火源。時間依存の待ち(例: APIの後に3秒)は
-  // 入れず、analyzeNoteの戻り値を手元でマージして書くことで再レンダ待ちの競合を根本から無くす。
-  async function handleSaveMoment(savedContent: string) {
-    if (savedContent.trim() === "") return;
-    const analysis = await runAutoTag(savedContent); // タグ確定(スキップ時はnull)
-    // 確定したタグ/タイトル/junkを手元で合成してNASへ書く。junk(ゴミ)はNAS保管対象外。
-    const persisted = applyAutoTagToNote(note, savedContent, analysis, clockNow());
-    if (persisted.junk) return;
-    await writeNoteToNasStructure(persisted, clockNow());
-  }
-
-  // 保存時の自動タグ付け(ユーザー指示)。実行できたら結果(tags/junk/title)を返しつつ状態も更新する。
+  // 保存(スナップショット)の瞬間に自動タグ付けする(ユーザー指示)。タグは notes state に反映され、
+  // NAS active への書き込みは App の世代同期(5分毎の push)がその state を読んで行う——push は
+  // state を読むので「タグ確定後に書く」も自然に満たす(NoteEditorPane からは NAS へ直接書かない)。
   // キー未設定・前回から変更なし・別ペイン処理中・意味のある結果なしは null(タグ付けせず)。
   async function runAutoTag(savedContent: string): Promise<NoteAnalysis | null> {
     if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return null;
@@ -296,7 +283,11 @@ export function NoteEditorPane({
       onDrop={() => onDropNote(note.id)}
     >
       <Flex direction="column" gap="3">
-        <SnapshotScheduler noteId={note.id} content={note.content} onSnapshot={handleSaveMoment} />
+        <SnapshotScheduler
+          noteId={note.id}
+          content={note.content}
+          onSnapshot={(c) => void runAutoTag(c)}
+        />
         {/* 1行目: ノート名を一番左上に、枠なし・太字・大きめで置く(クリックでそのまま編集)。
             その右に自由チェック(何とも連動しない)・ドラッグつまみ・同期状態、右端にピンアイコン。 */}
         <Flex align="center" gap="2">

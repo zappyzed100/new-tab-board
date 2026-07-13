@@ -85,6 +85,9 @@ export type LocalData = {
   /** 日次メンテ(Drive日付フォルダ格納 + SQLite再生成)を最後に実行した日 "YYYY/M/D"。
    * 同じ日には二重実行しないためのガード(background.ts の runDailyMaintenance)。 */
   lastDailyMaintenanceDay?: string;
+  /** タブ↔NAS active の世代同期で、このタブが最後に同期した世代番号(ユーザー指示)。
+   * NASの現在世代がこれより大きければ他セッションが新しい→pull。永続化して再読込後も比較できる。 */
+  nasGeneration?: number;
 };
 
 export type Snapshot = {

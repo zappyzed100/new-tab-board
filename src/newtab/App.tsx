@@ -42,7 +42,14 @@ import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
-import { flushAllToNas, reconcileActiveNotesOnNas } from "../lib/externalIO/nasArchive";
+import { flushAllToNas } from "../lib/externalIO/nasArchive";
+import {
+  decideActiveSync,
+  pullActiveFromNas,
+  pushActiveToNas,
+} from "../lib/externalIO/nasActiveSync";
+import { bumpNasGeneration, readNasGeneration } from "../lib/externalIO/nasNativeHost";
+import { getNasFolderPath } from "../lib/storage/db";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
@@ -92,6 +99,9 @@ function MeasuredNote({
   );
 }
 
+// タブ↔NAS active の世代同期の間隔(ユーザー指示: activeで5分毎に最新データと連携)。
+const NAS_SYNC_INTERVAL_MS = 300_000;
+
 // ノートボードの列数(1列あたり概ね280px、最大3列)。実測masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
   return Math.max(1, Math.min(3, Math.floor(width / 280)));
@@ -130,6 +140,13 @@ export function App() {
   const userSelectedNoteRef = useRef(false);
   // ドラッグ交換で「掴んでいるノートid」を保持するref(同期更新——下記handleNoteDragStart参照)。
   const dragNoteIdRef = useRef<string | null>(null);
+  // タブ↔NAS active の世代同期(ユーザー指示)。nasGenRef=このタブが同期済みの世代、
+  // nasOwnerRef=このセッションが操作開始時にbumpして所有権を得たか。notesRefは同期tickが最新の
+  // ノートを読むための鏡(effectの依存を増やさずに現在値を参照する)。
+  const nasGenRef = useRef(0);
+  const nasOwnerRef = useRef(false);
+  const notesRef = useRef<Note[] | null>(null);
+  notesRef.current = notes;
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
@@ -146,6 +163,7 @@ export function App() {
       setActiveNoteId(localData.notes[0]?.id ?? null);
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
+      nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
     });
     return () => {
       cancelled = true;
@@ -165,31 +183,54 @@ export function App() {
   useEffect(() => {
     if (!notes) return;
     if (ensureTrailingEmptyNotes(notes, TRAILING_EMPTY_NOTES, clockNow()) !== notes) {
-      updateNotes((prev) => ensureTrailingEmptyNotes(prev, TRAILING_EMPTY_NOTES, clockNow()));
+      // 末尾空補充はプログラム的更新(人間の操作ではない)——世代所有権のbumpを起こさない。
+      updateNotes((prev) => ensureTrailingEmptyNotes(prev, TRAILING_EMPTY_NOTES, clockNow()), {
+        programmatic: true,
+      });
     }
   }, [notes]);
 
-  // active/ の突き合わせ削除は「非空ノートIDの集合」が変わった時だけ走らせる(ユーザー指摘:
-  // 並べ替えや本文編集は集合を変えないので同期/Drive一覧を叩く必要がない)。集合の署名を ref に
-  // 覚え、削除/空化/新規非空でのみ再突合する。実際に突合できた署名だけ記録するので、debounce中に
-  // 並べ替えても取りこぼさない(未突合の削除は次の窓で再試行される)。
-
-  // NASの active/<id>.md を現在の非空・非junkノートへ突き合わせて消えたものを削除(統一構造)。
-  const nasReconciledSigRef = useRef<string>("");
+  // タブ↔NAS active の世代同期(ユーザー指示)。世代を突き合わせ、自分が所有者で同世代なら push
+  // (active上書き+日付追記+削除突合)、NASが新しければ pull(NAS activeでノートを丸ごと上書き。
+  // 最終操作者優先)。NAS未設定/未接続は静かにスキップ。全refで現在値を読むので依存は不要。
+  function applyPulledNotes(pulled: Note[]) {
+    // pull はプログラム的更新(所有権bumpを起こさない)。末尾空3つを維持して置き換える。
+    const next = ensureTrailingEmptyNotes(pulled, TRAILING_EMPTY_NOTES, clockNow());
+    setNotes(next);
+    setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
+    void loadLocalData().then((local) =>
+      saveLocalData({ ...local, notes: next, nasGeneration: nasGenRef.current }),
+    );
+  }
+  async function runNasSyncTick() {
+    const path = await getNasFolderPath();
+    if (!path) return; // NAS未設定なら同期しない
+    const nasGen = await readNasGeneration(path);
+    if (nasGen === null) return; // 未接続/失敗は静かに次回へ
+    const decision = decideActiveSync(nasGenRef.current, nasGen, nasOwnerRef.current);
+    if (decision === "pull") {
+      const pulled = await pullActiveFromNas();
+      if (pulled) {
+        nasGenRef.current = nasGen;
+        nasOwnerRef.current = false; // pull後は受動(次の人間の編集で再びbump)
+        applyPulledNotes(pulled);
+      }
+    } else if (decision === "push") {
+      await pushActiveToNas(notesRef.current ?? [], clockNow());
+    }
+  }
+  // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runNasSyncTickは
+  // 全て ref/安定setterで現在値を読むため依存に含めなくてよい——本リポの他effectと同じ流儀)。
   useEffect(() => {
-    if (!notes) return;
-    const sig = notes
-      .filter((n) => n.content.trim() !== "" && !n.junk)
-      .map((n) => n.id)
-      .sort()
-      .join(",");
-    if (sig === nasReconciledSigRef.current) return; // 集合不変(並べ替え/本文編集)→突合不要
-    const timer = setTimeout(() => {
-      void reconcileActiveNotesOnNas(notes).then(() => {
-        nasReconciledSigRef.current = sig;
-      });
-    }, 5000);
-    return () => clearTimeout(timer);
+    const interval = setInterval(() => void runNasSyncTick(), NAS_SYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+  // ロード直後(notesが初めて入った時)に1回だけ初期同期する(pullで最新を取り込む)。
+  const initialSyncDoneRef = useRef(false);
+  useEffect(() => {
+    if (!notes || initialSyncDoneRef.current) return;
+    initialSyncDoneRef.current = true;
+    void runNasSyncTick();
   }, [notes]);
 
   // Google Drive の active/ を現在の非空ノートへ突き合わせて消えたものを削除する(ユーザー指示)。
@@ -219,10 +260,9 @@ export function App() {
     return () => clearTimeout(timer);
   }, [notes]);
 
-  // 統一構造の正本(active/<id>.md + 日付フォルダ)へのノート書き込みは、各ペインの保存の瞬間
-  // (SnapshotScheduler)から「自動タグ付け→タグ確定→NASへ書く」で行う(NoteEditorPane.handleSaveMoment)。
-  // App側は削除の突合(下の reconcileActiveNotesOnNas)だけを担う——保存タイミングの唯一の発火源を
-  // useSnapshotScheduler に一本化し、タグ確定前に書いてしまう競合を根絶するため(ユーザー指示)。
+  // NAS active への書き込みは上の世代同期(5分毎の push)に一本化した。各ペインの保存の瞬間
+  // (SnapshotScheduler)は自動タグ付けだけを行い、タグは notes state に反映される——push はその
+  // state を読むので「タグ確定後に書く」も自然に満たす。junk/空は push 側で除外。
 
   // 新規タブページが開くたびにFlow Launcher(native messaging host)へ接続し、
   // 保留中のファイルがあれば新規ノートとして取り込む(SPEC.md §4.10-d「pull型」)。
@@ -380,7 +420,30 @@ export function App() {
     void saveSyncData(next);
   }
 
-  function updateNotes(update: Note[] | ((prev: Note[]) => Note[])) {
+  // 人間がノートを操作したら、NAS世代同期の所有権をこのセッションが得る(初回だけbump——ユーザー指示
+  // 「人間が操作しNASと通信し始めるとき、新しい世代をもらう」)。NAS未設定なら何もしない。
+  // pull(NASで上書き)やロード時の末尾空補充はプログラム的更新なのでここを通さない。
+  function markUserEdit() {
+    if (nasOwnerRef.current) return;
+    nasOwnerRef.current = true; // 楽観的に所有者化(bump失敗時も次tickでpush可否を再判定)
+    void (async () => {
+      const path = await getNasFolderPath();
+      if (!path) return; // NAS未設定なら世代同期は使わない(ローカルのみ)
+      const g = await bumpNasGeneration(path);
+      if (g !== null) {
+        nasGenRef.current = g;
+        const local = await loadLocalData();
+        await saveLocalData({ ...local, nasGeneration: g });
+      }
+    })();
+  }
+
+  function updateNotes(
+    update: Note[] | ((prev: Note[]) => Note[]),
+    opts?: { programmatic?: boolean },
+  ) {
+    // programmatic(末尾空補充・pull等の非ユーザー更新)以外は「人間の操作」として世代所有権を得る。
+    if (!opts?.programmatic) markUserEdit();
     // 常にsetNotesの関数型updaterを経由する(引数が配列であっても内部で関数化する)。
     // 「タブ追加ボタンを連打すると作ったノートが消える」バグの原因は、複数の呼び出しが
     // それぞれ古いclosure内のnotes(propsとして渡された時点のスナップショット)から
@@ -392,10 +455,16 @@ export function App() {
       const base = prev ?? [];
       const nextNotes = typeof update === "function" ? update(base) : update;
       // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
-      // (todos/nextEventCache/alarmActive)を巻き込まないよう現在値を明示的に含めて
+      // (todos/nextEventCache/alarmActive/nasGeneration)を巻き込まないよう現在値を明示的に含めて
       // 保存する(含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が
       // 消えてしまう)。
-      void saveLocalData({ notes: nextNotes, todos, nextEventCache, alarmActive });
+      void saveLocalData({
+        notes: nextNotes,
+        todos,
+        nextEventCache,
+        alarmActive,
+        nasGeneration: nasGenRef.current,
+      });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
@@ -405,7 +474,13 @@ export function App() {
 
   function updateTodos(nextTodos: Todo[]) {
     setTodos(nextTodos);
-    void saveLocalData({ notes: notes ?? [], todos: nextTodos, nextEventCache, alarmActive });
+    void saveLocalData({
+      notes: notes ?? [],
+      todos: nextTodos,
+      nextEventCache,
+      alarmActive,
+      nasGeneration: nasGenRef.current,
+    });
   }
 
   // ノートボードの並べ替え/ピン(すべてlinear order=sortedNotes上の操作。列固定masonryの
@@ -525,7 +600,13 @@ export function App() {
     setNotes(data.notes);
     setActiveNoteId(data.notes[0]?.id ?? null);
     void saveSyncData(data.sync);
-    void saveLocalData({ notes: data.notes, todos, nextEventCache, alarmActive });
+    void saveLocalData({
+      notes: data.notes,
+      todos,
+      nextEventCache,
+      alarmActive,
+      nasGeneration: nasGenRef.current,
+    });
   }
 
   function openFileAsNote(

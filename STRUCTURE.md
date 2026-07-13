@@ -570,7 +570,6 @@
 - function createNote
 - function addNote
 - function isDefaultNoteTitle
-- function applyAutoTagToNote
 - function addNoteAfter
 - function updateNote
 - function mergeDroppedContent
