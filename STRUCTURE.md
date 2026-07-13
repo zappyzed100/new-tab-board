@@ -323,6 +323,9 @@
 - def handle_write_file
 - def handle_read_file
 - def handle_delete_file
+- def handle_read_generation
+- def handle_bump_generation
+- def handle_read_active
 - def handle_rebuild_index
 - def handle_search
 - def handle_list_tree
@@ -349,6 +352,10 @@
 - def test_read_file_failure_for_missing_file
 - def test_delete_file_removes_and_missing_is_ok
 - def test_delete_file_rejects_path_traversal
+- def test_generation_starts_at_zero_and_bumps
+- def test_generation_fails_for_missing_base
+- def test_read_active_returns_all_md_with_content
+- def test_read_active_empty_when_no_active_dir
 - def test_write_file_creates_date_subfolders
 - def test_write_file_rejects_path_traversal
 - def test_rebuild_index_then_search_by_tag_and_text

@@ -73,6 +73,51 @@ def test_delete_file_rejects_path_traversal(tmp_path) -> None:
     assert "error" in res
 
 
+def test_generation_starts_at_zero_and_bumps(tmp_path) -> None:
+    nas = str(tmp_path)
+    # 未作成なら世代0。
+    assert handle({"type": "read-generation", "path": nas}) == {
+        "type": "generation-result",
+        "ok": True,
+        "generation": 0,
+    }
+    # bumpするたびに+1され、read-generationにも反映される。
+    assert handle({"type": "bump-generation", "path": nas})["generation"] == 1
+    assert handle({"type": "bump-generation", "path": nas})["generation"] == 2
+    assert handle({"type": "read-generation", "path": nas})["generation"] == 2
+    # ファイルに整数で永続化されている。
+    with open(os.path.join(nas, "data", "generation.txt"), encoding="utf-8") as f:
+        assert f.read().strip() == "2"
+
+
+def test_generation_fails_for_missing_base(tmp_path) -> None:
+    missing = str(tmp_path / "no-such-nas")
+    for t in ("read-generation", "bump-generation"):
+        res = handle({"type": t, "path": missing})
+        assert res["ok"] is False
+        assert "error" in res
+
+
+def test_read_active_returns_all_md_with_content(tmp_path) -> None:
+    nas = str(tmp_path)
+    handle({"type": "write-file", "path": nas, "filename": "active/n1.md", "content": "本文1"})
+    handle({"type": "write-file", "path": nas, "filename": "active/n2.md", "content": "本文2"})
+    # active直下でない/非.mdは対象外。
+    handle({"type": "write-file", "path": nas, "filename": "active/sub/n3.md", "content": "x"})
+    handle({"type": "write-file", "path": nas, "filename": "active/note.txt", "content": "y"})
+    res = handle({"type": "read-active", "path": nas})
+    assert res["ok"] is True
+    assert res["files"] == [
+        {"filename": "n1.md", "content": "本文1"},
+        {"filename": "n2.md", "content": "本文2"},
+    ]
+
+
+def test_read_active_empty_when_no_active_dir(tmp_path) -> None:
+    res = handle({"type": "read-active", "path": str(tmp_path)})
+    assert res == {"type": "read-active-result", "ok": True, "files": []}
+
+
 def test_write_file_creates_date_subfolders(tmp_path) -> None:
     # filenameが 年/月/日 のサブフォルダ付きでも、親フォルダを自動生成して書ける。
     write_result = handle(

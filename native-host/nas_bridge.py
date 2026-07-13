@@ -100,6 +100,66 @@ def handle_delete_file(message: dict) -> dict:
         return {"type": "delete-result", "ok": False, "error": str(exc)}
 
 
+# タブ(ブラウザ)とNAS active の世代同期(SPEC: ユーザー指示)。世代カウンタは data/generation.txt に
+# 整数1つで持つ。ブラウザは「操作開始時に bump-generation で新世代=所有権を得て」、以後 active を
+# 上書きしてよいのは NAS の世代==自分の世代のときだけ。NASの方が大きい=他セッションが新しい→pull。
+GENERATION_REL = os.path.join("data", "generation.txt")
+
+
+def _read_generation(base: str) -> int:
+    """NAS上の現在の世代番号を読む(ファイル未作成・壊れは 0 とみなす)。"""
+    try:
+        with open(_safe_target(base, GENERATION_REL), "r", encoding="utf-8") as f:
+            return int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return 0
+
+
+def handle_read_generation(message: dict) -> dict:
+    """NASの現在の世代番号を返す(ブラウザが自分の世代と比較して push/pull を決める)。"""
+    try:
+        base = message["path"]
+        if not os.path.isdir(base):
+            raise FileNotFoundError(f"base folder not found: {base!r}")
+        return {"type": "generation-result", "ok": True, "generation": _read_generation(base)}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "generation-result", "ok": False, "error": str(exc)}
+
+
+def handle_bump_generation(message: dict) -> dict:
+    """世代番号を+1して新値を返す(ブラウザが操作開始時に呼び所有権を得る)。読取→+1→書込。"""
+    try:
+        base = message["path"]
+        if not os.path.isdir(base):
+            raise FileNotFoundError(f"base folder not found: {base!r}")
+        target = _safe_target(base, GENERATION_REL)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        new_gen = _read_generation(base) + 1
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(str(new_gen))
+        return {"type": "generation-result", "ok": True, "generation": new_gen}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "generation-result", "ok": False, "error": str(exc)}
+
+
+def handle_read_active(message: dict) -> dict:
+    """active/ 直下の .md を全部(ファイル名+内容)返す(pull用: タブをNAS activeで上書きする)。
+    active/ が無ければ空リスト。サブフォルダは対象外(active は <id>.md の平置き)。"""
+    try:
+        base = message["path"]
+        active_dir = _safe_target(base, "active")
+        files = []
+        if os.path.isdir(active_dir):
+            for name in sorted(os.listdir(active_dir)):
+                full = os.path.join(active_dir, name)
+                if name.endswith(".md") and os.path.isfile(full):
+                    with open(full, "r", encoding="utf-8") as f:
+                        files.append({"filename": name, "content": f.read()})
+        return {"type": "read-active-result", "ok": True, "files": files}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "read-active-result", "ok": False, "error": str(exc)}
+
+
 def handle_rebuild_index(message: dict) -> dict:
     """notes/*.md と履歴 年/月/日/*.txt から data/index.db を作り直す(タグ検索の索引更新)。"""
     try:
@@ -291,6 +351,9 @@ HANDLERS = {
     "write-file": handle_write_file,
     "read-file": handle_read_file,
     "delete-file": handle_delete_file,
+    "read-generation": handle_read_generation,
+    "bump-generation": handle_bump_generation,
+    "read-active": handle_read_active,
     "rebuild-index": handle_rebuild_index,
     "search": handle_search,
     "search-notes": handle_search_notes,
