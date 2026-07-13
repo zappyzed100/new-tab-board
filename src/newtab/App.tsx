@@ -66,6 +66,7 @@ import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
+import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, SpecialItem, Todo } from "../types";
 import { SpecialPanel } from "./components/shell/SpecialPanel";
@@ -300,6 +301,30 @@ export function App() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [notes]);
+
+  // スペシャル(⭐)を Google Drive の special/<folder>/<id>.md へ書き出す(ユーザー指示。NAS側は
+  // 同期tickの pushSpecialToNas が担う)。スペシャル(ノートのstar/folder/本文 or 凍結項目)が
+  // 変わった時だけ、5分debounceで push。Drive未接続なら静かに何もしない。
+  const driveSpecialSigRef = useRef<string>("");
+  useEffect(() => {
+    if (!notes) return;
+    const entries = specialEntries(notes, specialItems);
+    const sig = JSON.stringify(entries.map((e) => [e.id, e.folder ?? "", e.title, e.content]));
+    if (sig === driveSpecialSigRef.current) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const token = await getAuthToken(false);
+          if (!token) return;
+          await pushSpecialToDrive(entries, token);
+          driveSpecialSigRef.current = sig;
+        } catch {
+          // Drive同期の失敗はUIを止めない(次のスペシャル変化で再試行)。
+        }
+      })();
+    }, NAS_SYNC_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [notes, specialItems]);
 
   // NAS active への書き込みは上の世代同期(5分毎の push)に一本化した。各ペインの保存の瞬間
   // (SnapshotScheduler)は自動タグ付けだけを行い、タグは notes state に反映される——push はその
