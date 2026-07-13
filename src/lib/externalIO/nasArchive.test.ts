@@ -253,6 +253,8 @@ describe("markdownToNote(世代pull: mdをNoteへ戻す)", () => {
       createdAt: Date.UTC(2026, 6, 12, 7, 0, 0),
       updatedAt: Date.UTC(2026, 6, 12, 7, 20, 0),
       done: true,
+      special: true,
+      specialFolder: "仕事/2026",
       sourceNoteId: "orig",
       generatedBy: "gemini",
     };
@@ -266,6 +268,8 @@ describe("markdownToNote(世代pull: mdをNoteへ戻す)", () => {
       createdAt: note.createdAt,
       updatedAt: note.updatedAt,
       done: true,
+      special: true,
+      specialFolder: "仕事/2026",
       sourceNoteId: "orig",
       generatedBy: "gemini",
     });

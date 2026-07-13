@@ -23,11 +23,20 @@ import {
   isDefaultNoteTitle,
   pasteResultsIntoNotes,
   moveNoteUp,
+  removeNote,
   reorderNotesById,
   sortedNotes,
   TRAILING_EMPTY_NOTES,
   updateNote,
 } from "../lib/entities/notes";
+import {
+  addSpecialFolder,
+  freezeNoteToSpecial,
+  removeSpecialItem,
+  setSpecialItemFolder,
+  toggleNoteSpecial,
+  upsertSpecialItem,
+} from "../lib/entities/special";
 import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
@@ -56,7 +65,8 @@ import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
-import type { AppLaunch, Bookmark, LocalData, Note, Settings, Todo } from "../types";
+import type { AppLaunch, Bookmark, LocalData, Note, Settings, SpecialItem, Todo } from "../types";
+import { SpecialPanel } from "./components/shell/SpecialPanel";
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
 
@@ -111,6 +121,9 @@ export function App() {
   const [sync, setSync] = useState<SyncState | null>(null);
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
+  // スペシャル(⭐)の凍結項目とフォルダ一覧(localDataに永続化。ユーザー指示)。
+  const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
+  const [specialFolders, setSpecialFolders] = useState<string[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   // 全文検索バーは常時表示(開閉トグルは撤去済み——ユーザー指示)。Cmd/Ctrl+Fは
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
@@ -147,6 +160,23 @@ export function App() {
   const nasOwnerRef = useRef(false);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
+  // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
+  const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
+  // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
+  // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
+  function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
+    return {
+      notes: notes ?? [],
+      todos,
+      nextEventCache,
+      alarmActive,
+      nasGeneration: nasGenRef.current,
+      lastDailyMaintenanceDay: lastDailyMaintDayRef.current,
+      specialItems,
+      specialFolders,
+      ...overrides,
+    };
+  }
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
@@ -164,6 +194,9 @@ export function App() {
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
+      lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
+      setSpecialItems(localData.specialItems ?? []);
+      setSpecialFolders(localData.specialFolders ?? []);
     });
     return () => {
       cancelled = true;
@@ -458,13 +491,7 @@ export function App() {
       // (todos/nextEventCache/alarmActive/nasGeneration)を巻き込まないよう現在値を明示的に含めて
       // 保存する(含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が
       // 消えてしまう)。
-      void saveLocalData({
-        notes: nextNotes,
-        todos,
-        nextEventCache,
-        alarmActive,
-        nasGeneration: nasGenRef.current,
-      });
+      void saveLocalData(buildLocalData({ notes: nextNotes }));
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
@@ -474,13 +501,41 @@ export function App() {
 
   function updateTodos(nextTodos: Todo[]) {
     setTodos(nextTodos);
-    void saveLocalData({
-      notes: notes ?? [],
-      todos: nextTodos,
-      nextEventCache,
-      alarmActive,
-      nasGeneration: nasGenRef.current,
-    });
+    void saveLocalData(buildLocalData({ todos: nextTodos }));
+  }
+
+  // スペシャル(⭐)の凍結項目/フォルダを更新して永続化する(ユーザー指示)。
+  function updateSpecialItems(next: SpecialItem[]) {
+    setSpecialItems(next);
+    void saveLocalData(buildLocalData({ specialItems: next }));
+  }
+  function updateSpecialFolders(next: string[]) {
+    setSpecialFolders(next);
+    void saveLocalData(buildLocalData({ specialFolders: next }));
+  }
+  // ⭐トグル(ノートのspecialを反転)。
+  function toggleSpecial(noteId: string) {
+    updateNotes((prev) => toggleNoteSpecial(prev, noteId));
+  }
+  // ノート削除。スター済みなら削除時の内容で凍結してスペシャルへ残す(ユーザー指示)。
+  function deleteNote(noteId: string) {
+    const target = (notes ?? []).find((n) => n.id === noteId);
+    const frozen = target ? freezeNoteToSpecial(target, clockNow()) : null;
+    if (frozen) updateSpecialItems(upsertSpecialItem(specialItems, frozen));
+    updateNotes((prev) => removeNote(prev, noteId));
+  }
+  // スペシャルのフォルダ移動(live=ノートのspecialFolder / frozen=凍結項目のfolder)。
+  function moveSpecialToFolder(id: string, source: "live" | "frozen", folder: string) {
+    if (source === "live") updateNotes((prev) => updateNote(prev, id, { specialFolder: folder }));
+    else updateSpecialItems(setSpecialItemFolder(specialItems, id, folder));
+  }
+  // スペシャルから外す(live=スター解除 / frozen=凍結項目を削除)。
+  function removeSpecial(id: string, source: "live" | "frozen") {
+    if (source === "live") updateNotes((prev) => updateNote(prev, id, { special: false }));
+    else updateSpecialItems(removeSpecialItem(specialItems, id));
+  }
+  function createSpecialFolder(path: string) {
+    updateSpecialFolders(addSpecialFolder(specialFolders, path));
   }
 
   // ノートボードの並べ替え/ピン(すべてlinear order=sortedNotes上の操作。列固定masonryの
@@ -600,13 +655,7 @@ export function App() {
     setNotes(data.notes);
     setActiveNoteId(data.notes[0]?.id ?? null);
     void saveSyncData(data.sync);
-    void saveLocalData({
-      notes: data.notes,
-      todos,
-      nextEventCache,
-      alarmActive,
-      nasGeneration: nasGenRef.current,
-    });
+    void saveLocalData(buildLocalData({ notes: data.notes }));
   }
 
   function openFileAsNote(
@@ -763,6 +812,16 @@ export function App() {
               <div className="app-sidebar">
                 <MiniCalendar />
                 <TodoList todos={todos} onTodosChange={updateTodos} />
+                {/* スペシャル(⭐)は TODO の下・タグ候補の上に置く(ユーザー指示)。 */}
+                <SpecialPanel
+                  notes={notes}
+                  specialItems={specialItems}
+                  folders={specialFolders}
+                  onSelectNote={selectNote}
+                  onMoveToFolder={moveSpecialToFolder}
+                  onRemove={removeSpecial}
+                  onCreateFolder={createSpecialFolder}
+                />
                 <TagCandidatesPanel
                   candidates={tagCandidates}
                   onCandidatesChange={(next) => updateSettings({ tagCandidates: next })}
@@ -857,6 +916,8 @@ export function App() {
                               onAddTodos={addTodos}
                               onMessage={setDataPanelMessage}
                               onTogglePin={togglePinNote}
+                              onToggleSpecial={toggleSpecial}
+                              onDeleteNote={deleteNote}
                               onMoveUp={moveNoteUpOne}
                               onDragStartNote={handleNoteDragStart}
                               onDropNote={handleNoteDrop}

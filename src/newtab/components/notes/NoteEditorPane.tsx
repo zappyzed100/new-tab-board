@@ -7,12 +7,7 @@ import { Badge, Button, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import type { DragEvent as ReactDragEvent } from "react";
-import {
-  isDefaultNoteTitle,
-  mergeDroppedContent,
-  removeNote,
-  updateNote,
-} from "../../../lib/entities/notes";
+import { isDefaultNoteTitle, mergeDroppedContent, updateNote } from "../../../lib/entities/notes";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
@@ -76,6 +71,10 @@ type Props = {
   onMessage: (message: string) => void;
   /** ピン留めの切替(ピンしたノートは最優先で左上へ)。 */
   onTogglePin: (noteId: string) => void;
+  /** ⭐スター(スペシャルへ保管)の切替。 */
+  onToggleSpecial: (noteId: string) => void;
+  /** ノート削除(スター済みならApp側でスペシャルへ凍結してから消す)。 */
+  onDeleteNote: (noteId: string) => void;
   /** 順序列で1つ前(表示上ひとつ左上)のノートと入れ替える。 */
   onMoveUp: (noteId: string) => void;
   /** ドラッグ交換: つまみを掴んだ時に自分のidを「掴んだノート」として通知する。 */
@@ -99,6 +98,8 @@ export function NoteEditorPane({
   onAddTodos,
   onMessage,
   onTogglePin,
+  onToggleSpecial,
+  onDeleteNote,
   onMoveUp,
   onDragStartNote,
   onDropNote,
@@ -341,6 +342,20 @@ export function NoteEditorPane({
               {DRIVE_SYNC_LABEL[driveSyncStatus]}
             </Text>
           ) : null}
+          {/* ⭐スター(スペシャルへ保管)。ノート名の右・ピンの左。スター中は塗りつぶし。 */}
+          <IconButton
+            type="button"
+            variant={note.special ? "solid" : "soft"}
+            data-testid={`star-note-${note.id}`}
+            title={
+              note.special
+                ? "スターを外す(スペシャルから外す)"
+                : "スターしてスペシャル(保管棚)に入れる"
+            }
+            onClick={() => onToggleSpecial(note.id)}
+          >
+            {note.special ? "⭐" : "☆"}
+          </IconButton>
           {/* ピンは説明なしのアイコンだけ・右端に(ユーザー指示)。ピン中は塗りつぶしで示す。 */}
           <IconButton
             type="button"
@@ -454,8 +469,8 @@ export function NoteEditorPane({
             variant="soft"
             color="red"
             data-testid={`delete-note-${note.id}`}
-            title="このノートを削除する"
-            onClick={() => onNotesChange((prev) => removeNote(prev, note.id))}
+            title="このノートを削除する(スター済みならスペシャルへ凍結して残す)"
+            onClick={() => onDeleteNote(note.id)}
           >
             🗑️ 削除
           </Button>

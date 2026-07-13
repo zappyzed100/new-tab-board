@@ -59,6 +59,8 @@ export function noteToMarkdown(note: Note): string {
   fm.push(`order: ${note.order}`);
   if (note.pinned) fm.push("pinned: true");
   if (note.done) fm.push("done: true");
+  if (note.special) fm.push("special: true");
+  if (note.specialFolder) fm.push(`special_folder: ${yamlScalar(note.specialFolder)}`);
   if (note.sourceNoteId) fm.push(`source_note_id: ${note.sourceNoteId}`);
   if (note.generatedBy) fm.push(`generated_by: ${yamlScalar(note.generatedBy)}`);
   fm.push("---");
@@ -119,6 +121,8 @@ export function markdownToNote(md: string, fallbackOrder = 0): Note {
       if (!Number.isNaN(n)) note.order = n;
     } else if (key === "pinned") note.pinned = value === "true";
     else if (key === "done") note.done = value === "true";
+    else if (key === "special") note.special = value === "true";
+    else if (key === "special_folder") note.specialFolder = yamlUnscalar(value);
     else if (key === "source_note_id") note.sourceNoteId = value;
     else if (key === "generated_by") note.generatedBy = yamlUnscalar(value);
   }
