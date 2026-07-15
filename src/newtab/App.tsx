@@ -708,42 +708,6 @@ export function App() {
     }
   }
 
-  // 「アクティブノートを再送信」: NAS/Driveの保管先を外部で消した後などに、通常の同期を
-  // 待たず今アクティブな(非空・非junkの)ノートだけを強制的にNAS active/日付フォルダ・
-  // Driveへ書き直す(ユーザー指示)。通常の同期は保存フィンガープリント(nasSavedHashes)が
-  // 前回と同じなら書かない最適化があるが、それだと「内容は変わっていないのにファイルだけ
-  // 外部で消えた」場合に再送信されない——ここではハッシュを空で渡し、強制的に全件書く。
-  // NAS世代も明示的に取り直し、このタブを所有者にしてからpushする(所有権が無いと
-  // 通常のsyncTickと同じ理由でpushが起きない)。Drive側はuploadNoteが既存driveFileIdの
-  // 404を自動で新規作成にフォールバックするため、キャッシュのリセットは不要——
-  // manualSyncSignalを上げてCmd/Ctrl+Sと同じ即時同期を全ペインへ促すだけでよい。
-  async function forceResyncActiveNotes(): Promise<{ nasWritten: number; nasConfigured: boolean }> {
-    const path = await getNasFolderPath();
-    const current = notesRef.current ?? [];
-    let nasWritten = 0;
-    if (path) {
-      const g = await bumpNasGeneration(path);
-      if (g !== null) {
-        nasGenRef.current = g;
-        nasOwnerRef.current = true;
-      }
-      const r = await pushActiveToNas(current, clockNow(), {});
-      nasSavedHashesRef.current = r.savedHashes;
-      nasWritten = r.written;
-      const local = await loadLocalData();
-      await saveLocalData({
-        ...local,
-        nasSavedHashes: r.savedHashes,
-        nasGeneration: nasGenRef.current,
-      });
-      const specialEntriesNow = specialEntries(current, specialItemsRef.current);
-      await pushSpecialToNas(specialEntriesNow);
-      nasSpecialSigRef.current = specialSyncSignature(specialEntriesNow);
-    }
-    setManualSyncSignal((v) => v + 1); // Drive側: 各ペインへCmd/Ctrl+Sと同じ即時同期を促す
-    return { nasWritten, nasConfigured: Boolean(path) };
-  }
-
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
@@ -900,7 +864,6 @@ export function App() {
                   onOpenFileAsNote={openFileAsNote}
                   onMessage={setDataPanelMessage}
                   onBackupToDrive={() => void handleBackupToDrive()}
-                  onForceResyncActive={forceResyncActiveNotes}
                 />
 
                 {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
