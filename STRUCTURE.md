@@ -153,6 +153,8 @@
 - `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 - `src/lib/drive/driveActiveMirror.test.ts` — driveActiveMirror.test.ts — active/ の突き合わせ削除と日付フォルダ格納の単体テスト
 - `src/lib/drive/driveActiveMirror.ts` — driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
+- `src/lib/drive/driveGeneration.test.ts` — driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
+- `src/lib/drive/driveGeneration.ts` — driveGeneration.ts — Drive版の世代カウンタ(native-host/nas_bridge.pyのread/bump-generationと対)。
 - `src/lib/drive/driveSpecial.test.ts` — driveSpecial.test.ts — Driveのspecial/書き出し・フォルダ内突き合わせ削除の単体テスト
 - `src/lib/drive/driveSpecial.ts` — driveSpecial.ts — スペシャル(⭐)を Google Drive の app/New Tab Board/special/<folder>/<id>.md へ
 - `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
@@ -629,6 +631,10 @@
 - type ReconcileDeps
 - function reconcileDriveActive
 - function copyNotesToDriveDateFolder
+
+### `src/lib/drive/driveGeneration.ts`
+- function readDriveGeneration
+- function bumpDriveGeneration
 
 ### `src/lib/drive/driveSpecial.ts`
 - type SpecialDriveDeps

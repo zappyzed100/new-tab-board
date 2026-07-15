@@ -76,6 +76,7 @@ import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
+import { bumpDriveGeneration } from "../lib/drive/driveGeneration";
 import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
@@ -179,6 +180,12 @@ export function App() {
   // ノートを読むための鏡(effectの依存を増やさずに現在値を参照する)。
   const nasGenRef = useRef(0);
   const nasOwnerRef = useRef(false);
+  // Drive版の世代カウンタ(ユーザー指示: NAS/Driveどちらかへの接続が失敗しても、接続できた
+  // 方の世代だけを進める)。driveOwnerRefはNASと違い「pullで受動に戻す」経路がまだ無いため、
+  // セッション中の最初の1回だけbumpする(将来Drive側にもpull経路を作る時にnasOwnerRefと
+  // 同じ扱いへ揃える)。
+  const driveGenRef = useRef(0);
+  const driveOwnerRef = useRef(false);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
@@ -201,6 +208,7 @@ export function App() {
       nextEventCache,
       alarmActive,
       nasGeneration: nasGenRef.current,
+      driveGeneration: driveGenRef.current,
       lastDailyMaintenanceDay: lastDailyMaintDayRef.current,
       specialItems,
       specialFolders,
@@ -225,6 +233,7 @@ export function App() {
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
+      driveGenRef.current = localData.driveGeneration ?? 0;
       lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
       nasSavedHashesRef.current = localData.nasSavedHashes ?? {};
       setSpecialItems(localData.specialItems ?? []);
@@ -527,19 +536,37 @@ export function App() {
   // 人間がノートを操作したら、NAS世代同期の所有権をこのセッションが得る(初回だけbump——ユーザー指示
   // 「人間が操作しNASと通信し始めるとき、新しい世代をもらう」)。NAS未設定なら何もしない。
   // pull(NASで上書き)やロード時の末尾空補充はプログラム的更新なのでここを通さない。
+  // Drive側も同じ考え方で独立にbumpする(ユーザー指示: 接続がうまく行った方の世代だけを
+  // 進めることで抜けの無い情報受け渡しの土台にする)——NASが未設定/未接続でもDrive側は
+  // 試みる(どちらか一方が失敗してももう一方は進む、が本来の狙いのため早期returnで
+  // まとめない)。
   function markUserEdit() {
-    if (nasOwnerRef.current) return;
-    nasOwnerRef.current = true; // 楽観的に所有者化(bump失敗時も次tickでpush可否を再判定)
-    void (async () => {
-      const path = await getNasFolderPath();
-      if (!path) return; // NAS未設定なら世代同期は使わない(ローカルのみ)
-      const g = await bumpNasGeneration(path);
-      if (g !== null) {
-        nasGenRef.current = g;
-        const local = await loadLocalData();
-        await saveLocalData({ ...local, nasGeneration: g });
-      }
-    })();
+    if (!nasOwnerRef.current) {
+      nasOwnerRef.current = true; // 楽観的に所有者化(bump失敗時も次tickでpush可否を再判定)
+      void (async () => {
+        const path = await getNasFolderPath();
+        if (!path) return; // NAS未設定なら世代同期は使わない(ローカルのみ)
+        const g = await bumpNasGeneration(path);
+        if (g !== null) {
+          nasGenRef.current = g;
+          const local = await loadLocalData();
+          await saveLocalData({ ...local, nasGeneration: g });
+        }
+      })();
+    }
+    if (!driveOwnerRef.current) {
+      driveOwnerRef.current = true;
+      void (async () => {
+        const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
+        if (!token) return;
+        const g = await bumpDriveGeneration(token);
+        if (g !== null) {
+          driveGenRef.current = g;
+          const local = await loadLocalData();
+          await saveLocalData({ ...local, driveGeneration: g });
+        }
+      })();
+    }
   }
 
   function updateNotes(
