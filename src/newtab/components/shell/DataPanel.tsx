@@ -52,6 +52,9 @@ type Props = {
   onBackupToDrive: () => void;
   /** NASのdata/settings-backup.json(notesを除く全体設定)を読み戻して適用する。 */
   onRestoreFromNas: () => void;
+  /** 現在開いているノートを即座にNASのactive/と今日の日付フォルダへ反映する
+   * (ユーザー指示: 「今すぐNASへ書き出し」でも通常のtickを待たずに反映してほしい)。 */
+  onPushNasActiveNow: () => Promise<void>;
 };
 
 export function DataPanel({
@@ -61,6 +64,7 @@ export function DataPanel({
   onMessage,
   onBackupToDrive,
   onRestoreFromNas,
+  onPushNasActiveNow,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -200,6 +204,9 @@ export function DataPanel({
 
   async function handleFlushNow() {
     const { flushed, failed } = await flushAllToNas();
+    // 未保管の履歴フラッシュに加え、現在開いているノートもactive/日付フォルダへ即座に反映する
+    // (ユーザー指示: ボタンを押した時点で通常のtickを待たずに反映してほしい)。
+    await onPushNasActiveNow();
     onMessage(`NASへ${flushed}件書き出しました(失敗${failed}件)`);
   }
 

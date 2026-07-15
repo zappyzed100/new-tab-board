@@ -73,6 +73,7 @@ import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCou
 import { flushAllToNas } from "../lib/externalIO/nasArchive";
 import {
   decideActiveSync,
+  noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
 } from "../lib/externalIO/nasActiveSync";
@@ -84,7 +85,8 @@ import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { bumpDriveGeneration } from "../lib/drive/driveGeneration";
 import { logOp } from "../lib/runtime/log";
-import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
+import { copyNotesToDriveDateFolder, reconcileDriveActive } from "../lib/drive/driveActiveMirror";
+import { syncNoteToDrive } from "../lib/drive/driveSync";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, SpecialItem, Todo } from "../types";
@@ -213,6 +215,9 @@ export function App() {
   const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
   const nasSavedHashesRef = useRef<Record<string, string>>({});
+  // 「Driveへ退避」の即時active push専用の保存フィンガープリント(nasSavedHashesRefのDrive版。
+  // ユーザー指示: 変更が無いノートを送るな・ハッシュで確認しろ)。5分debounceの通常同期は見ない。
+  const driveActiveSavedHashesRef = useRef<Record<string, string>>({});
   // NAS special(⭐)の直近pushシグネチャ(driveSpecialSigRefと同じ発想)。pushSpecialToNasは
   // 全件突き合わせ書き込みでハッシュ差分を持たないため、これが無いと5分毎のpushのたびに
   // 内容不変でも⭐全件がNASへ無駄に再書き込みされていた(2026-07-16 是正)。
@@ -234,6 +239,7 @@ export function App() {
       specialItems,
       specialFolders,
       nasSavedHashes: nasSavedHashesRef.current,
+      driveActiveSavedHashes: driveActiveSavedHashesRef.current,
       ...overrides,
     };
   }
@@ -258,6 +264,7 @@ export function App() {
       driveGenRef.current = localData.driveGeneration ?? 0;
       lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
       nasSavedHashesRef.current = localData.nasSavedHashes ?? {};
+      driveActiveSavedHashesRef.current = localData.driveActiveSavedHashes ?? {};
       setSpecialItems(localData.specialItems ?? []);
       setSpecialFolders(localData.specialFolders ?? []);
     });
@@ -298,6 +305,50 @@ export function App() {
       saveLocalData({ ...local, notes: next, nasGeneration: nasGenRef.current }),
     );
   }
+  // NASへの「push」本体(世代同期tickのpush分岐と、「今すぐNASへ書き出し」ボタンの両方から
+  // 呼ぶ共通処理——ユーザー指示: ボタンでも即座にactive/日付フォルダへ反映してほしい)。
+  // ハッシュで保存済みか判定して変わったノートだけ書く・消えたノートはpushActiveToNas内部の
+  // reconcileActiveNotesOnNasが削除する(いずれもユーザー指示: 無駄な再保存を避ける/古い
+  // ファイルを消す)。
+  async function pushNasActiveNow(): Promise<void> {
+    const current = notesRef.current ?? [];
+    const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
+    nasSavedHashesRef.current = r.savedHashes;
+    const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
+    await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
+    // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
+    // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
+    // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
+    const specialEntriesNow = specialEntries(current, specialItemsRef.current);
+    const specialSig = specialSyncSignature(specialEntriesNow);
+    if (specialSig !== nasSpecialSigRef.current) {
+      await pushSpecialToNas(specialEntriesNow);
+      nasSpecialSigRef.current = specialSig;
+    }
+    // 設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)も
+    // activeと同じタイミングでNASへ書く(ユーザー指示: 特にTODOリストはactiveの同期サイクルに
+    // 乗せてほしい)。notesは含めない(active/日付フォルダで既に別途同期されているため)。
+    if (syncRef.current) {
+      const settingsJson = serializeSettingsBackup(
+        buildSettingsBackupPayload(
+          syncRef.current,
+          {
+            todos: todosRef.current,
+            specialItems: specialItemsRef.current,
+            specialFolders: specialFoldersRef.current,
+          },
+          clockNow(),
+        ),
+      );
+      const settingsHash = contentHash(settingsJson);
+      if (settingsHash !== nasSettingsSigRef.current) {
+        if (await pushSettingsBackupToNas(settingsJson)) {
+          nasSettingsSigRef.current = settingsHash;
+        }
+      }
+    }
+  }
+
   async function runNasSyncTick() {
     const path = await getNasFolderPath();
     if (!path) return; // NAS未設定なら同期しない
@@ -312,43 +363,7 @@ export function App() {
         applyPulledNotes(pulled);
       }
     } else if (decision === "push") {
-      const current = notesRef.current ?? [];
-      // ハッシュで保存済みか判定して、変わったノートだけ NAS へ書く(ユーザー指示: 無駄な再保存を避ける)。
-      const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
-      nasSavedHashesRef.current = r.savedHashes;
-      const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
-      await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
-      // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
-      // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
-      // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
-      const specialEntriesNow = specialEntries(current, specialItemsRef.current);
-      const specialSig = specialSyncSignature(specialEntriesNow);
-      if (specialSig !== nasSpecialSigRef.current) {
-        await pushSpecialToNas(specialEntriesNow);
-        nasSpecialSigRef.current = specialSig;
-      }
-      // 設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)も
-      // activeと同じ5分tickでNASへ書く(ユーザー指示: 特にTODOリストはactiveの同期サイクルに
-      // 乗せてほしい)。notesは含めない(active/日付フォルダで既に別途同期されているため)。
-      if (syncRef.current) {
-        const settingsJson = serializeSettingsBackup(
-          buildSettingsBackupPayload(
-            syncRef.current,
-            {
-              todos: todosRef.current,
-              specialItems: specialItemsRef.current,
-              specialFolders: specialFoldersRef.current,
-            },
-            clockNow(),
-          ),
-        );
-        const settingsHash = contentHash(settingsJson);
-        if (settingsHash !== nasSettingsSigRef.current) {
-          if (await pushSettingsBackupToNas(settingsJson)) {
-            nasSettingsSigRef.current = settingsHash;
-          }
-        }
-      }
+      await pushNasActiveNow();
     }
   }
   // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runNasSyncTickは
@@ -783,6 +798,31 @@ export function App() {
   }
 
   // 「☁️ Driveへ退避」: 自動同期を待たず、現在の全データを今すぐDriveへ書き出す(退避の即時版)。
+  // Driveの「push」本体(「Driveへ退避」ボタンから即座に呼ぶ専用。ユーザー指示: 押した瞬間に
+  // 現在のノートをapp/New Tab Board/active/と今日の日付フォルダへ反映してほしい)。
+  // ハッシュで保存済みか判定して変わったノートだけ送り(pushNasActiveNowと同じ発想。ユーザー指示:
+  // 変更が無いノートを送るな)、消えたノートはreconcileDriveActiveが削除する。
+  async function pushDriveActiveNow(token: string): Promise<void> {
+    const current = notesRef.current ?? [];
+    const now = clockNow();
+    const updates: Record<string, { driveFileId: string; lastSyncedAt: number }> = {};
+    for (const n of current) {
+      if (n.content.trim() === "" || n.junk) continue;
+      const fp = noteSaveFingerprint(n);
+      if (driveActiveSavedHashesRef.current[n.id] === fp) continue; // 変更なし→送らない
+      const result = await syncNoteToDrive(n, now, false);
+      if (result.status === "synced") {
+        updates[n.id] = { driveFileId: result.driveFileId, lastSyncedAt: result.lastSyncedAt };
+        driveActiveSavedHashesRef.current[n.id] = fp;
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      updateNotes((prev) => prev.map((n) => (updates[n.id] ? { ...n, ...updates[n.id] } : n)));
+    }
+    await reconcileDriveActive(current, token);
+    await copyNotesToDriveDateFolder(current, now, token);
+  }
+
   async function handleBackupToDrive() {
     if (!backupJson) return;
     setDataPanelMessage("Google Driveへ退避中…");
@@ -794,6 +834,12 @@ export function App() {
     );
     if (result.status === "synced") {
       updateSettings({ jsonBackupFileId: result.fileId });
+      // 設定バックアップだけでなく、現在開いているノートも即座にactive/と今日の日付フォルダへ
+      // 反映する(ユーザー指示: 退避ボタンを押した時点の状態を通常同期のタイミングを待たずに
+      // Driveへ)。JSONバックアップと同じ認証(非対話——既にsynced実績があるのでトークンは
+      // 取得済みのはず)を使い回す。
+      const token = await getAuthToken(false);
+      if (token) await pushDriveActiveNow(token);
       setDataPanelMessage("Google Driveへ退避しました(以後の変更は自動でも同期されます)");
     } else if (result.status === "unauthenticated") {
       setDataPanelMessage(
@@ -1024,6 +1070,7 @@ export function App() {
                   onMessage={setDataPanelMessage}
                   onBackupToDrive={() => void handleBackupToDrive()}
                   onRestoreFromNas={() => void handleRestoreFromNas()}
+                  onPushNasActiveNow={pushNasActiveNow}
                 />
 
                 {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
