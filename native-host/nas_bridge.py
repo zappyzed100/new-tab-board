@@ -161,13 +161,15 @@ def handle_read_active(message: dict) -> dict:
 
 
 def handle_rebuild_index(message: dict) -> dict:
-    """notes/*.md と履歴 年/月/日/*.txt から data/index.db を作り直す(タグ検索の索引更新)。"""
+    """active/notes/*.md・日付フォルダ YYYY/M/D/*.md・履歴 年/月/日/*.txt から
+    data/index.db を作り直す(タグ検索の索引更新)。"""
     try:
         counts = build_index(message["path"])
         return {
             "type": "rebuild-result",
             "ok": True,
             "notes": counts["notes"],
+            "dateNotes": counts["date_notes"],
             "snapshots": counts["snapshots"],
         }
     except (OSError, sqlite3.Error, KeyError) as exc:

@@ -131,8 +131,8 @@ describe("rebuildNasIndex", () => {
   it("rebuild-resultのok:trueなら件数を返し、rebuild-indexメッセージを送る", async () => {
     const fake = makeFakePort();
     const promise = rebuildNasIndex("Z:\\NAS", () => fake.port);
-    fake.emitMessage({ type: "rebuild-result", ok: true, notes: 3, snapshots: 12 });
-    expect(await promise).toEqual({ notes: 3, snapshots: 12 });
+    fake.emitMessage({ type: "rebuild-result", ok: true, notes: 3, dateNotes: 5, snapshots: 12 });
+    expect(await promise).toEqual({ notes: 3, dateNotes: 5, snapshots: 12 });
     expect(fake.sentMessages).toEqual([{ type: "rebuild-index", path: "Z:\\NAS" }]);
   });
 

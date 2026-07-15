@@ -127,6 +127,47 @@ def test_active_txt_not_indexed_as_snapshot(tmp_path) -> None:
     assert result["snapshots"] == 0
 
 
+def test_build_index_ingests_date_folder_md(tmp_path) -> None:
+    # 統一構造の日付フォルダ(YYYY/M/D/<id>.md。writeNoteToNasStructureの日次コピー)は
+    # 正しく取り込まれる(2026-07-16 追加: 従来はnotes/active/しか索引せず、この階層が
+    # まるごと未索引だった欠落の回帰テスト)。
+    date_dir = str(tmp_path / "2026" / "7" / "16")
+    os.makedirs(date_dir, exist_ok=True)
+    with open(os.path.join(date_dir, "n1.md"), "w", encoding="utf-8") as f:
+        f.write("---\nid: n1\ntitle: 山行記録\ntags:\n  - 登山\n---\n\n本日は高尾山へ。")
+
+    # special/の入れ子フォルダ(ユーザーが任意の深さで作れる)も4階層.mdになり得るため、
+    # 日付フォルダと誤って混同しないことも同時に確認する。
+    special_dir = str(tmp_path / "special" / "仕事" / "2026")
+    os.makedirs(special_dir, exist_ok=True)
+    with open(os.path.join(special_dir, "sp1.md"), "w", encoding="utf-8") as f:
+        f.write("---\nid: sp1\ntitle: スペシャル項目\n---\n\nスペシャル本文")
+
+    result = build_index(str(tmp_path))
+    assert result["date_notes"] == 1
+
+    db = sqlite3.connect(str(tmp_path / "data" / "index.db"))
+    try:
+        row = db.execute(
+            "SELECT note_id, date_path, title, content FROM date_notes WHERE id = '2026/7/16/n1'"
+        ).fetchone()
+        assert row == ("n1", "2026/7/16", "山行記録", "本日は高尾山へ。")
+        # タグでも引ける
+        tagged = db.execute(
+            "SELECT date_notes.title FROM date_notes"
+            " JOIN date_note_tags ON date_notes.id = date_note_tags.date_note_id"
+            " JOIN tags ON tags.id = date_note_tags.tag_id"
+            " WHERE tags.name = '登山'"
+        ).fetchall()
+        assert [r[0] for r in tagged] == ["山行記録"]
+        # special/配下の4階層.mdは日付フォルダとして取り込まれない(年/月/日が数字でないため)
+        assert (
+            db.execute("SELECT COUNT(*) FROM date_notes WHERE note_id = 'sp1'").fetchone()[0] == 0
+        )
+    finally:
+        db.close()
+
+
 def test_build_index_is_regenerable(tmp_path) -> None:
     notes = str(tmp_path / "notes")
     _write_note(notes, "a.md", "---\nid: a\ntitle: 初回\ntags:\n  - x\n---\n\n本文")

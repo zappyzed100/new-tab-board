@@ -127,7 +127,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
     setBusy(null);
     setMsg(
       counts
-        ? `索引を更新しました(ノート${counts.notes}件・履歴${counts.snapshots}件)`
+        ? `索引を更新しました(ノート${counts.notes}件・日付フォルダ${counts.dateNotes}件・履歴${counts.snapshots}件)`
         : "索引の更新に失敗しました(NASブリッジ未導入か到達不可)",
     );
   }

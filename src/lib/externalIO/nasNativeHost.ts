@@ -44,6 +44,7 @@ type RebuildResult = {
   type: "rebuild-result";
   ok: boolean;
   notes?: number;
+  dateNotes?: number;
   snapshots?: number;
   error?: string;
 };
@@ -158,14 +159,19 @@ export async function deleteFileFromNas(
   return result?.type === "delete-result" && result.ok;
 }
 
-/** NAS上の検索索引(data/index.db)を .md と履歴 .txt から作り直す。件数を返す(失敗はnull)。 */
+/** NAS上の検索索引(data/index.db)を .md(active・日付フォルダ)と履歴 .txt から作り直す。
+ * 件数を返す(失敗はnull)。 */
 export async function rebuildNasIndex(
   path: string,
   connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
-): Promise<{ notes: number; snapshots: number } | null> {
+): Promise<{ notes: number; dateNotes: number; snapshots: number } | null> {
   const result = await callHost({ type: "rebuild-index", path }, connectNative);
   if (result?.type === "rebuild-result" && result.ok) {
-    return { notes: result.notes ?? 0, snapshots: result.snapshots ?? 0 };
+    return {
+      notes: result.notes ?? 0,
+      dateNotes: result.dateNotes ?? 0,
+      snapshots: result.snapshots ?? 0,
+    };
   }
   return null;
 }

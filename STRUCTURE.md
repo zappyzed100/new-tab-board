@@ -358,6 +358,7 @@
 - def parse_front_matter
 - def create_schema
 - def parse_snapshot_filename
+- def parse_date_note_path
 - def build_index
 - def main
 
@@ -390,6 +391,7 @@
 - def test_parse_snapshot_filename
 - def test_build_index_ingests_history_snapshots
 - def test_active_txt_not_indexed_as_snapshot
+- def test_build_index_ingests_date_folder_md
 - def test_build_index_is_regenerable
 
 ### `native-host/test_nas_bridge.py`

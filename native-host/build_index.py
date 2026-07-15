@@ -65,8 +65,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         DROP TABLE IF EXISTS note_tags;
+        DROP TABLE IF EXISTS date_note_tags;
         DROP TABLE IF EXISTS tags;
         DROP TABLE IF EXISTS notes;
+        DROP TABLE IF EXISTS date_notes;
         DROP TABLE IF EXISTS snapshots;
         CREATE TABLE notes (
             id TEXT PRIMARY KEY,
@@ -87,7 +89,29 @@ def create_schema(conn: sqlite3.Connection) -> None:
             tag_id INTEGER NOT NULL,
             PRIMARY KEY (note_id, tag_id)
         );
-        -- 過去の履歴(NASの 年/月/日/*.txt スナップショット群)。本文の部分一致検索(LIKE)用。
+        -- 新形式の日付フォルダ(NASの YYYY/M/D/<noteId>.md。writeNoteToNasStructureが書く
+        -- active/<id>.md の日次コピー)。1ノートにつき「その日書かれた内容」が1行になるため
+        -- 主キーは date_path+note_id の組み合わせ(2026-07-16 追加: 旧版はこの階層を索引していなかった)。
+        CREATE TABLE date_notes (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            date_path TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            title TEXT,
+            content TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+        CREATE INDEX idx_date_notes_note_id ON date_notes (note_id);
+        CREATE INDEX idx_date_notes_date_path ON date_notes (date_path);
+        CREATE INDEX idx_date_notes_created_at ON date_notes (created_at);
+        CREATE TABLE date_note_tags (
+            date_note_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (date_note_id, tag_id)
+        );
+        -- 過去の履歴(NASの 年/月/日/*.txt スナップショット群。統一構造以前の旧形式)。
+        -- 本文の部分一致検索(LIKE)用。
         CREATE TABLE snapshots (
             id TEXT PRIMARY KEY,
             note_id TEXT NOT NULL,
@@ -117,9 +141,28 @@ def parse_snapshot_filename(name: str):
     return note_id, int(ts_str), snapshot_id
 
 
+def parse_date_note_path(nas_folder: str, path: str):
+    """新形式の日付フォルダ(YYYY/M/D/<noteId>.md)かどうかを判定し、(date_path, note_id) を返す。
+    年/月/日がすべて数字であることを確認する——`special/<フォルダ>/<サブフォルダ>/<id>.md`
+    のような4階層になり得る非日付パス(スペシャルはネストしたフォルダを許すため)と誤って
+    一致しないためのガード(parse_snapshot_filenameの.txt版と同じ「厳密に検証してから拾う」方針)。
+    形式が違えばNone。"""
+    rel = os.path.relpath(path, nas_folder).replace(os.sep, "/")
+    parts = rel.split("/")
+    if len(parts) != 4:
+        return None
+    year, month, day, filename = parts
+    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        return None
+    if not filename.endswith(".md"):
+        return None
+    return f"{year}/{month}/{day}", filename[: -len(".md")]
+
+
 def build_index(nas_folder: str) -> dict:
-    """active/*.md(現在ブラウザにある非空ノートの正本。統一構造)と 年/月/日/*.txt(旧履歴)を読み、
-    data/index.db を作り直す。取り込んだ件数 {"notes": n, "snapshots": m} を返す。
+    """active/*.md(現在ブラウザにある非空ノートの正本。統一構造)・YYYY/M/D/*.md(日付フォルダの
+    日次コピー。統一構造)・年/月/日/*.txt(統一構造以前の旧履歴)を読み、data/index.db を作り直す。
+    取り込んだ件数 {"notes": n, "date_notes": d, "snapshots": m} を返す。
     旧構造 notes/*.md も残っていれば取り込む(移行期の後方互換。同id は active/ が上書き)。"""
     data_dir = os.path.join(nas_folder, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -173,6 +216,49 @@ def build_index(nas_folder: str) -> dict:
             seen_ids.add(note_id)
         count = len(seen_ids)
 
+        # 新形式の日付フォルダ(YYYY/M/D/<id>.md。writeNoteToNasStructureの日次コピー)を取り込む。
+        # 1ノートにつき「その日書かれた内容」が1行になる(2026-07-16 追加: 従来は未索引だった)。
+        date_note_count = 0
+        for path in sorted(glob.glob(os.path.join(nas_folder, "*", "*", "*", "*.md"))):
+            parsed = parse_date_note_path(nas_folder, path)
+            if parsed is None:
+                continue  # special/配下等、日付フォルダでない4階層.mdは対象外
+            date_path, note_id_from_name = parsed
+            with open(path, "r", encoding="utf-8") as f:
+                meta, body = parse_front_matter(f.read())
+            note_id = meta.get("id") or note_id_from_name
+            row_id = f"{date_path}/{note_id}"
+            conn.execute(
+                "INSERT OR REPLACE INTO date_notes"
+                " (id, note_id, date_path, file_path, title, content, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    row_id,
+                    note_id,
+                    date_path,
+                    path,
+                    meta.get("title"),
+                    body,
+                    meta.get("created_at"),
+                    meta.get("updated_at"),
+                ),
+            )
+            conn.execute("DELETE FROM date_note_tags WHERE date_note_id = ?", (row_id,))
+            for tag in meta.get("tags", []):
+                if tag not in tag_ids:
+                    cur = conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+                    if cur.lastrowid:
+                        tag_ids[tag] = cur.lastrowid
+                    else:
+                        tag_ids[tag] = conn.execute(
+                            "SELECT id FROM tags WHERE name = ?", (tag,)
+                        ).fetchone()[0]
+                conn.execute(
+                    "INSERT OR IGNORE INTO date_note_tags (date_note_id, tag_id) VALUES (?, ?)",
+                    (row_id, tag_ids[tag]),
+                )
+            date_note_count += 1
+
         # 履歴スナップショット(年/月/日/*.txt)を取り込む。4階層グロブなので active/(2階層)とは衝突しない。
         snap_count = 0
         for path in sorted(glob.glob(os.path.join(nas_folder, "*", "*", "*", "*.txt"))):
@@ -190,7 +276,7 @@ def build_index(nas_folder: str) -> dict:
             snap_count += 1
 
         conn.commit()
-        return {"notes": count, "snapshots": snap_count}
+        return {"notes": count, "date_notes": date_note_count, "snapshots": snap_count}
     finally:
         conn.close()
 
@@ -200,7 +286,10 @@ def main() -> None:
         print("usage: python build_index.py <NASフォルダ>", file=sys.stderr)
         sys.exit(2)
     n = build_index(sys.argv[1])
-    print(f"index.db を再生成しました: ノート{n['notes']}件・履歴{n['snapshots']}件を取り込みました")
+    print(
+        f"index.db を再生成しました: ノート{n['notes']}件・"
+        f"日付フォルダ{n['date_notes']}件・履歴{n['snapshots']}件を取り込みました"
+    )
 
 
 if __name__ == "__main__":
