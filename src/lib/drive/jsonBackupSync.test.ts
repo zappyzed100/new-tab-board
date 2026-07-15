@@ -19,27 +19,32 @@ describe("syncJsonBackupToDrive", () => {
   it("既知ファイルIDが無ければ検索してから新規アップロードする", async () => {
     const findBackupFile = vi.fn().mockResolvedValue(null);
     const uploadBackup = vi.fn().mockResolvedValue("new-file-id");
+    const resolveFolderPath = vi.fn().mockResolvedValue("folder-app");
     const result = await syncJsonBackupToDrive(json, 1000, false, undefined, {
       getAuthToken: vi.fn().mockResolvedValue("token-abc"),
       findBackupFile,
       uploadBackup,
+      resolveFolderPath,
     });
     expect(result).toEqual({ status: "synced", fileId: "new-file-id", syncedAt: 1000 });
     expect(findBackupFile).toHaveBeenCalledWith("token-abc");
-    expect(uploadBackup).toHaveBeenCalledWith(json, "token-abc", null);
+    expect(resolveFolderPath).toHaveBeenCalledWith(["app", "New Tab Board"], "token-abc");
+    expect(uploadBackup).toHaveBeenCalledWith(json, "token-abc", null, "folder-app");
   });
 
   it("既知ファイルIDがあれば検索をスキップして更新アップロードする", async () => {
     const findBackupFile = vi.fn();
     const uploadBackup = vi.fn().mockResolvedValue("existing-file");
+    const resolveFolderPath = vi.fn().mockResolvedValue("folder-app");
     const result = await syncJsonBackupToDrive(json, 2000, false, "existing-file", {
       getAuthToken: vi.fn().mockResolvedValue("token-abc"),
       findBackupFile,
       uploadBackup,
+      resolveFolderPath,
     });
     expect(result).toEqual({ status: "synced", fileId: "existing-file", syncedAt: 2000 });
     expect(findBackupFile).not.toHaveBeenCalled();
-    expect(uploadBackup).toHaveBeenCalledWith(json, "token-abc", "existing-file");
+    expect(uploadBackup).toHaveBeenCalledWith(json, "token-abc", "existing-file", "folder-app");
   });
 
   it("アップロード失敗はerrorステータスを返す", async () => {
@@ -47,6 +52,15 @@ describe("syncJsonBackupToDrive", () => {
       getAuthToken: vi.fn().mockResolvedValue("token-abc"),
       findBackupFile: vi.fn().mockResolvedValue(null),
       uploadBackup: vi.fn().mockRejectedValue(new Error("network down")),
+      resolveFolderPath: vi.fn().mockResolvedValue("folder-app"),
+    });
+    expect(result).toEqual({ status: "error" });
+  });
+
+  it("フォルダ解決の失敗もerrorステータスを返す", async () => {
+    const result = await syncJsonBackupToDrive(json, 1000, false, undefined, {
+      getAuthToken: vi.fn().mockResolvedValue("token-abc"),
+      resolveFolderPath: vi.fn().mockRejectedValue(new Error("network down")),
     });
     expect(result).toEqual({ status: "error" });
   });

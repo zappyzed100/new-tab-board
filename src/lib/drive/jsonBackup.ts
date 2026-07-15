@@ -27,11 +27,16 @@ export async function findBackupFile(
   return data.files?.[0]?.id ?? null;
 }
 
-/** バックアップJSONをDriveへアップロードする(新規=POST/既存=PATCH)。アップロード先ファイルIDを返す。 */
+/** バックアップJSONをDriveへアップロードする(新規=POST/既存=PATCH)。アップロード先ファイルIDを返す。
+ * folderIdを渡すと、新規作成時はそこへ作り、既存ファイルの上書き時もそこへ入れ直す(移動)。
+ * 元々マイドライブ直下に固定名で置く設計だったが、ユーザー指示によりapp/New Tab Board/配下へ
+ * 統一した(2026-07-16)。既に作成済みの古いファイル(ルート直下)も、次の上書きで自動的に
+ * 正しいフォルダへ移る(uploadNoteのreparentQueryと同じ発想)。 */
 export async function uploadBackup(
   json: string,
   token: string,
   existingFileId: string | null,
+  folderId: string | null,
   fetchImpl: FetchLike = fetch,
 ): Promise<string> {
   const boundary = "newtabboard-backup";
@@ -46,6 +51,7 @@ export async function uploadBackup(
   if (!existingFileId) {
     metadata.name = BACKUP_FILE_NAME;
     metadata.mimeType = "application/json";
+    if (folderId) metadata.parents = [folderId];
   }
   const body =
     `--${boundary}\r\n` +
@@ -54,8 +60,10 @@ export async function uploadBackup(
     `Content-Type: application/json; charset=UTF-8\r\n\r\n${json}\r\n` +
     `--${boundary}--`;
 
+  const reparentQuery =
+    existingFileId && folderId ? `&addParents=${folderId}&removeParents=root` : "";
   const url = existingFileId
-    ? `${UPLOAD_URL}/${existingFileId}?uploadType=multipart`
+    ? `${UPLOAD_URL}/${existingFileId}?uploadType=multipart${reparentQuery}`
     : `${UPLOAD_URL}?uploadType=multipart`;
   const res = await fetchImpl(url, {
     method: existingFileId ? "PATCH" : "POST",
@@ -70,7 +78,7 @@ export async function uploadBackup(
     // なるのを防ぐため、新規作成へフォールバックする(呼び出し側は返り値の新IDを保存する)。
     if (existingFileId && res.status === 404) {
       logOp("jsonBackup", "upload-recreate", "existing file gone (404); creating new");
-      return uploadBackup(json, token, null, fetchImpl);
+      return uploadBackup(json, token, null, folderId, fetchImpl);
     }
     logOp("jsonBackup", "upload-error", `status=${res.status}`);
     throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
