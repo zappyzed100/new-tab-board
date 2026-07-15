@@ -35,12 +35,30 @@ export async function syncJsonBackupToDrive(
   const _findBackupFile = deps.findBackupFile ?? findBackupFile;
   const _uploadBackup = deps.uploadBackup ?? uploadBackup;
 
+  logOp(
+    "jsonBackupSync",
+    "sync-start",
+    `interactive=${interactive} knownFileId=${knownFileId ?? "none"}`,
+  );
   const token = await _getAuthToken(interactive);
-  if (!token) return { status: "unauthenticated" };
+  if (!token) {
+    logOp("jsonBackupSync", "sync-unauthenticated", "");
+    return { status: "unauthenticated" };
+  }
 
   try {
+    // 注意: バックアップファイルはappPropertiesで検索するだけで、フォルダには一切置かない
+    // (Drive直下=マイドライブに単一ファイルとして置く設計)。ここではフォルダ解決を一切行わない
+    // ——「Driveへ退避」でappフォルダが増えるように見える場合、原因はこの関数ではない
+    // (ユーザー報告の切り分け用ログ・一時的)。
     const existingId = knownFileId ?? (await _findBackupFile(token));
+    logOp(
+      "jsonBackupSync",
+      "sync-resolved-existing-id",
+      `existingId=${existingId ?? "none(will create)"} source=${knownFileId ? "known" : "search"}`,
+    );
     const fileId = await _uploadBackup(json, token, existingId ?? null);
+    logOp("jsonBackupSync", "sync-done", `fileId=${fileId}`);
     return { status: "synced", fileId, syncedAt: now };
   } catch (err) {
     logOp("jsonBackupSync", "sync-error", "", { error: err });

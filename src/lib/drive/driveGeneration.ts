@@ -5,6 +5,7 @@
 // 経路はまだ無い——将来マルチデバイス対応する時にNASのdecideActiveSyncと同じ判定を追加できる
 // よう、世代を記録するところまでを先に用意する布石)。
 import { resolveFolderPath, type FetchLike } from "./drive";
+import { logOp } from "../runtime/log";
 
 const GENERATION_FOLDER_PATH = ["app", "New Tab Board", "data"];
 const GENERATION_FILENAME = "generation.txt";
@@ -84,11 +85,18 @@ export async function readDriveGeneration(
   fetchImpl: FetchLike = fetch,
 ): Promise<number | null> {
   try {
+    logOp("driveGeneration", "read-start", `path=${GENERATION_FOLDER_PATH.join("/")}`);
     const folderId = await resolveFolderPath(GENERATION_FOLDER_PATH, token, fetchImpl);
     const fileId = await findGenerationFile(folderId, token, fetchImpl);
-    if (!fileId) return 0; // 未作成=世代0(NAS側の「ファイル未作成は0」と同じ規則)
-    return await readGenerationFileContent(fileId, token, fetchImpl);
-  } catch {
+    if (!fileId) {
+      logOp("driveGeneration", "read-no-file", `folderId=${folderId}`);
+      return 0; // 未作成=世代0(NAS側の「ファイル未作成は0」と同じ規則)
+    }
+    const value = await readGenerationFileContent(fileId, token, fetchImpl);
+    logOp("driveGeneration", "read-done", `folderId=${folderId} fileId=${fileId} value=${value}`);
+    return value;
+  } catch (err) {
+    logOp("driveGeneration", "read-error", "", { error: err });
     return null;
   }
 }
@@ -99,13 +107,20 @@ export async function bumpDriveGeneration(
   fetchImpl: FetchLike = fetch,
 ): Promise<number | null> {
   try {
+    logOp("driveGeneration", "bump-start", `path=${GENERATION_FOLDER_PATH.join("/")}`);
     const folderId = await resolveFolderPath(GENERATION_FOLDER_PATH, token, fetchImpl);
     const fileId = await findGenerationFile(folderId, token, fetchImpl);
     const current = fileId ? await readGenerationFileContent(fileId, token, fetchImpl) : 0;
     const next = current + 1;
     await writeGenerationFileContent(fileId, folderId, next, token, fetchImpl);
+    logOp(
+      "driveGeneration",
+      "bump-done",
+      `folderId=${folderId} fileId=${fileId ?? "new"} ${current}->${next}`,
+    );
     return next;
-  } catch {
+  } catch (err) {
+    logOp("driveGeneration", "bump-error", "", { error: err });
     return null;
   }
 }

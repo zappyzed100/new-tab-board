@@ -83,6 +83,7 @@ import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { bumpDriveGeneration } from "../lib/drive/driveGeneration";
+import { logOp } from "../lib/runtime/log";
 import { reconcileDriveActive } from "../lib/drive/driveActiveMirror";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
@@ -612,9 +613,21 @@ export function App() {
     }
     if (!driveOwnerRef.current) {
       driveOwnerRef.current = true;
+      logOp(
+        "driveGeneration",
+        "markUserEdit-drive-claim",
+        "first user edit this session — claiming ownership",
+      );
       void (async () => {
         const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
-        if (!token) return;
+        if (!token) {
+          logOp(
+            "driveGeneration",
+            "markUserEdit-drive-no-token",
+            "non-interactive getAuthToken returned null",
+          );
+          return;
+        }
         const g = await bumpDriveGeneration(token);
         if (g !== null) {
           driveGenRef.current = g;

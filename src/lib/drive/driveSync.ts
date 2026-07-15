@@ -58,7 +58,13 @@ export async function syncNoteToDrive(
   if (!token) return { status: "unauthenticated" };
 
   try {
+    logOp(
+      "driveSync",
+      "resolve-folder-start",
+      `note=${note.id} path=${ACTIVE_FOLDER_PATH.join("/")}`,
+    );
     const folderId = await _resolveFolderPath(ACTIVE_FOLDER_PATH, token);
+    logOp("driveSync", "resolve-folder-done", `note=${note.id} folderId=${folderId}`);
     const existingId =
       note.driveFileId ?? (await _findFileForNote(note.id, token, undefined, ACTIVE_KIND));
     // ファイル内容(front matter付きmd)はNASのactive/<id>.mdと同一構造だが、Driveのファイル名

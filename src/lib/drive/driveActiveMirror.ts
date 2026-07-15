@@ -39,7 +39,9 @@ export async function reconcileDriveActive(
 
   const keepIds = new Set(notes.filter((n) => n.content.trim() !== "").map((n) => n.id));
 
+  logOp("driveActiveMirror", "resolve-folder-start", `path=${ACTIVE_FOLDER_PATH.join("/")}`);
   const activeFolder = await _resolve(ACTIVE_FOLDER_PATH, token);
+  logOp("driveActiveMirror", "resolve-folder-done", `folderId=${activeFolder}`);
   const activeFiles = await _list(activeFolder, token);
   let deleted = 0;
   for (const file of activeFiles) {
@@ -68,7 +70,14 @@ export async function copyNotesToDriveDateFolder(
 
   const nonEmpty = notes.filter((n) => n.content.trim() !== "");
   const dateKind = `date:${dateFolderParts(dayMs).join("/")}`;
-  const dateFolder = await _resolve([...APP_ROOT, ...dateFolderParts(dayMs)], token);
+  const datePath = [...APP_ROOT, ...dateFolderParts(dayMs)];
+  logOp("driveActiveMirror", "resolve-folder-start", `path=${datePath.join("/")}`);
+  const dateFolder = await _resolve(datePath, token);
+  logOp(
+    "driveActiveMirror",
+    "resolve-folder-done",
+    `path=${datePath.join("/")} folderId=${dateFolder}`,
+  );
   const dateFiles = await _list(dateFolder, token);
   const dateIdByNote = new Map(dateFiles.map((f) => [f.noteId, f.id]));
   let dated = 0;

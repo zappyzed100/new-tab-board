@@ -41,13 +41,35 @@ export async function getOrCreateFolder(
 ): Promise<string> {
   const parentClause = parentId ? `'${parentId}' in parents` : "'root' in parents";
   const q = `name='${name.replace(/'/g, "\\'")}' and mimeType='${FOLDER_MIME}' and ${parentClause} and trashed=false`;
+  logOp("drive", "getOrCreateFolder-search", `name=${name} parentId=${parentId ?? "root"} q=${q}`);
   const findRes = await fetchImpl(`${FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id)`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!findRes.ok) throw new Error(`Driveフォルダ検索失敗: HTTP ${findRes.status}`);
-  const found = ((await findRes.json()) as { files?: { id: string }[] }).files?.[0]?.id;
-  if (found) return found;
+  if (!findRes.ok) {
+    logOp(
+      "drive",
+      "getOrCreateFolder-search-error",
+      `name=${name} parentId=${parentId ?? "root"} status=${findRes.status}`,
+    );
+    throw new Error(`Driveフォルダ検索失敗: HTTP ${findRes.status}`);
+  }
+  const foundFiles = ((await findRes.json()) as { files?: { id: string }[] }).files ?? [];
+  logOp(
+    "drive",
+    "getOrCreateFolder-search-result",
+    `name=${name} parentId=${parentId ?? "root"} matches=${foundFiles.length} ids=${foundFiles.map((f) => f.id).join(",")}`,
+  );
+  const found = foundFiles[0]?.id;
+  if (found) {
+    logOp(
+      "drive",
+      "getOrCreateFolder-hit",
+      `name=${name} parentId=${parentId ?? "root"} id=${found}`,
+    );
+    return found;
+  }
 
+  logOp("drive", "getOrCreateFolder-create-start", `name=${name} parentId=${parentId ?? "root"}`);
   const createRes = await fetchImpl(`${FILES_URL}?fields=id`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -57,8 +79,21 @@ export async function getOrCreateFolder(
       parents: parentId ? [parentId] : ["root"],
     }),
   });
-  if (!createRes.ok) throw new Error(`Driveフォルダ作成失敗: HTTP ${createRes.status}`);
-  return ((await createRes.json()) as { id: string }).id;
+  if (!createRes.ok) {
+    logOp(
+      "drive",
+      "getOrCreateFolder-create-error",
+      `name=${name} parentId=${parentId ?? "root"} status=${createRes.status}`,
+    );
+    throw new Error(`Driveフォルダ作成失敗: HTTP ${createRes.status}`);
+  }
+  const createdId = ((await createRes.json()) as { id: string }).id;
+  logOp(
+    "drive",
+    "getOrCreateFolder-created",
+    `name=${name} parentId=${parentId ?? "root"} id=${createdId}`,
+  );
+  return createdId;
 }
 
 /** 1段分を解決する(ユーザー設計の優先順位): ①保存済みのフォルダIDがあればそれを使う
@@ -73,18 +108,35 @@ async function resolveSegment(
   fetchImpl: FetchLike,
 ): Promise<string> {
   const cached = folderIdCache.get(path);
-  if (cached) return cached;
+  if (cached) {
+    logOp("drive", "resolveSegment-mem-cache-hit", `path=${path} id=${cached}`);
+    return cached;
+  }
   const inFlight = folderResolvePromiseCache.get(path);
-  if (inFlight) return inFlight;
+  if (inFlight) {
+    logOp("drive", "resolveSegment-join-inflight", `path=${path}`);
+    return inFlight;
+  }
+  logOp(
+    "drive",
+    "resolveSegment-start",
+    `path=${path} part=${part} parentId=${parentId ?? "root"}`,
+  );
   const promise = (async () => {
     const persisted = (await getDriveFolderIds())[path];
-    if (persisted) return persisted;
+    if (persisted) {
+      logOp("drive", "resolveSegment-persisted-hit", `path=${path} id=${persisted}`);
+      return persisted;
+    }
+    logOp("drive", "resolveSegment-persisted-miss", `path=${path} — falling back to name search`);
     const id = await getOrCreateFolder(part, parentId, token, fetchImpl);
     await saveDriveFolderId(path, id);
+    logOp("drive", "resolveSegment-persisted-save", `path=${path} id=${id}`);
     return id;
   })()
     .then((id) => {
       folderIdCache.set(path, id);
+      logOp("drive", "resolveSegment-done", `path=${path} id=${id}`);
       return id;
     })
     .finally(() => folderResolvePromiseCache.delete(path));
@@ -100,14 +152,19 @@ export async function resolveFolderPath(
   fetchImpl: FetchLike = fetch,
 ): Promise<string> {
   const cacheKey = parts.join("/");
+  logOp("drive", "resolveFolderPath-call", `parts=${cacheKey}`);
   const cached = folderIdCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    logOp("drive", "resolveFolderPath-mem-cache-hit", `parts=${cacheKey} id=${cached}`);
+    return cached;
+  }
   let parentId: string | null = null;
   let path = "";
   for (const part of parts) {
     path = path ? `${path}/${part}` : part;
     parentId = await resolveSegment(path, part, parentId, token, fetchImpl);
   }
+  logOp("drive", "resolveFolderPath-resolved", `parts=${cacheKey} id=${parentId}`);
   return parentId as string;
 }
 

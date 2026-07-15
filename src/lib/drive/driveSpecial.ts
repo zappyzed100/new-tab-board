@@ -4,6 +4,7 @@
 import { deleteDriveFile, listNoteFilesInFolder, resolveFolderPath, uploadNote } from "./drive";
 import { specialEntryToMarkdown } from "../externalIO/specialSync";
 import { normalizeFolder, type SpecialEntry } from "../entities/special";
+import { logOp } from "../runtime/log";
 
 const SPECIAL_ROOT = ["app", "New Tab Board", "special"];
 
@@ -40,7 +41,9 @@ export async function pushSpecialToDrive(
   let deleted = 0;
   for (const [folder, group] of byFolder) {
     const parts = folder ? [...SPECIAL_ROOT, ...folder.split("/")] : SPECIAL_ROOT;
+    logOp("driveSpecial", "resolve-folder-start", `path=${parts.join("/")}`);
     const folderId = await _resolve(parts, token);
+    logOp("driveSpecial", "resolve-folder-done", `path=${parts.join("/")} folderId=${folderId}`);
     const existing = await _list(folderId, token); // [{id, noteId}]
     const idToFile = new Map(existing.map((f) => [f.noteId, f.id]));
     const keep = new Set(group.map((e) => e.id));
