@@ -115,6 +115,11 @@ export type LocalData = {
   /** NASへ最後に保存した各ノートの保存フィンガープリント(id→ハッシュ)。同じなら再保存しない
    * (ユーザー指示: ハッシュで保存済みか判定して無駄な再保存を避ける)。再読込後も比較できるよう永続化。 */
   nasSavedHashes?: Record<string, string>;
+  /** 予定前アラームを最後にスケジュール/発火させた対象イベントの startsAt。次のポーリング
+   * (15分毎)でも同じ予定であれば再スケジュールしない——alarmTimeが既に過去だと
+   * resolveAlarmTimeがnowへ丸めるため、対策が無いとポーリングのたびに何度も鳴っていた
+   * (2026-07-16 是正)。予定が変わる/無くなれば undefined に戻す。 */
+  preEventAlarmFor?: number;
 };
 
 export type Snapshot = {

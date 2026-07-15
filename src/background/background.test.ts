@@ -109,9 +109,11 @@ function makeFakeChrome(initialStore: Record<string, unknown> = {}) {
 }
 
 /** モックしたPromise群(getAuthToken/fetchNextEvent/chrome.storage等)が解決するまで
- * マイクロタスクキューを回す。実タイマーは使わない(test-sleep対策)。 */
+ * マイクロタスクキューを回す。実タイマーは使わない(test-sleep対策)。scheduleOrClearPreEventAlarmが
+ * loadLocalData/saveLocalDataをもう1往復するようになった分(2026-07-16 予定前アラーム重複発火の
+ * 是正)、8では足りずタイムアウト前に打ち切られていたため16へ増やした。 */
 async function flushMicrotasks(): Promise<void> {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 16; i++) {
     await Promise.resolve();
   }
 }
@@ -245,6 +247,33 @@ describe("next-event-poll アラーム", () => {
       opts: { when: startsAt - 10 * 60_000 },
     });
   });
+
+  it(
+    "同じ予定に対しては次のポーリングで再スケジュールしない(2026-07-16 是正の回帰テスト: " +
+      "予定開始まで10分未満の間はalarmTimeが既に過去になりnowへ丸められるため、対策が無いと" +
+      "15分毎のポーリングのたびに毎回アラームが再作成され何度も鳴っていた)",
+    async () => {
+      const fake = makeFakeChrome();
+      vi.stubGlobal("chrome", fake.chromeStub);
+      const startsAt = FIXED_NOW + 5 * 60_000; // 残り5分(既にalarmTime=開始-10分は過去)
+      vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+      vi.mocked(fetchNextEvent).mockResolvedValue({ title: "MTG", startsAt });
+
+      // 1回目のポーリング: アラームを1回スケジュールする。
+      handlers.onAlarm({ name: POLL_ALARM_NAME });
+      await flushMicrotasks();
+      expect(fake.calls.alarmsCreate.filter((c) => c.name === PRE_EVENT_ALARM_NAME)).toHaveLength(
+        1,
+      );
+
+      // 2回目のポーリング(同じ予定・まだ開始前): 再スケジュールしない。
+      handlers.onAlarm({ name: POLL_ALARM_NAME });
+      await flushMicrotasks();
+      expect(fake.calls.alarmsCreate.filter((c) => c.name === PRE_EVENT_ALARM_NAME)).toHaveLength(
+        1,
+      );
+    },
+  );
 
   it("予定が無ければキャッシュを消し、予定前アラームもクリアする", async () => {
     const fake = makeFakeChrome({

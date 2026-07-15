@@ -119,20 +119,36 @@ async function runDailyMaintenance(): Promise<void> {
   logOp("background", "daily-maintenance", `day=${today}`);
 }
 
-/** 予定が変わる/無くなるたびに予定前アラームを再スケジュール(既存は上書き/クリア)する。 */
+/** 予定が変わる/無くなるたびに予定前アラームを再スケジュール(既存は上書き/クリア)する。
+ * 同じ予定(startsAtが同一)に対しては1回しかスケジュールしない——15分毎のポーリングの
+ * たびに呼ばれるため、対策が無いと「予定開始まで10分未満(alarmTimeが既に過去)」の間は
+ * resolveAlarmTimeがnowへ丸めた時刻を返し続け、ポーリングのたびにアラームが再作成されて
+ * 何度も鳴っていた(ユーザー指摘「なるのは一回だけでいい。その後何回かなったけど、あれ全部
+ * いらない」2026-07-16 是正)。 */
 async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null): Promise<void> {
+  const local = await loadLocalData();
   if (!event) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
+    if (local.preEventAlarmFor !== undefined) {
+      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+    }
     logOp("background", "pre-event-alarm-clear", "no next event");
     return;
+  }
+  if (local.preEventAlarmFor === event.startsAt) {
+    return; // この予定は既にスケジュール/発火済み——再作成しない
   }
   const when = resolveAlarmTime(event.startsAt, clockNow());
   if (when === null) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
+    if (local.preEventAlarmFor !== undefined) {
+      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+    }
     logOp("background", "pre-event-alarm-clear", `startsAt=${event.startsAt} (既に開始済み)`);
     return;
   }
   chrome.alarms.create(PRE_EVENT_ALARM_NAME, { when });
+  await saveLocalData({ ...local, preEventAlarmFor: event.startsAt });
   logOp("background", "pre-event-alarm-schedule", `when=${when}`);
 }
 
