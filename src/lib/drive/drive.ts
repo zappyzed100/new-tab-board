@@ -1,7 +1,12 @@
 // drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 // 履歴は上げない・現行内容のみ上書き(競合はlast-write-winsで単純化——SPEC.md §8)。
 import { logOp } from "../runtime/log";
-import { clearDriveFolderIds, getDriveFolderIds, saveDriveFolderId } from "../storage/db";
+import {
+  clearDriveFolderIds,
+  deleteDriveFolderId,
+  getDriveFolderIds,
+  saveDriveFolderId,
+} from "../storage/db";
 
 const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const FILES_URL = "https://www.googleapis.com/drive/v3/files";
@@ -96,10 +101,32 @@ export async function getOrCreateFolder(
   return createdId;
 }
 
+/** 永続キャッシュのフォルダIDがまだDrive上に実在するか(trashedでないか)を確認する。
+ * ユーザーがDriveの中身を手で削除した後、キャッシュだけが死んだIDを返し続け、そのIDを
+ * addParents等で使う操作が軒並みHTTP 404になる不具合の是正(2026-07-16実機確認)。 */
+async function folderStillExists(
+  id: string,
+  token: string,
+  fetchImpl: FetchLike,
+): Promise<boolean> {
+  try {
+    const res = await fetchImpl(`${FILES_URL}/${id}?fields=id,trashed`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false; // 404等=もう存在しない
+    const data = (await res.json()) as { trashed?: boolean };
+    return data.trashed !== true;
+  } catch {
+    return false;
+  }
+}
+
 /** 1段分を解決する(ユーザー設計の優先順位): ①保存済みのフォルダIDがあればそれを使う
  * (名前検索すらしない)②無ければ名前+親で検索③見つかれば保存④無ければ新規作成して保存
  * ——以後は名前でなくIDでアクセスする。同じpath(累積パス)への同時呼び出しはPromiseを共有し、
- * 実際のDrive通信を1回に絞る(上のfolderResolvePromiseCacheコメント参照)。 */
+ * 実際のDrive通信を1回に絞る(上のfolderResolvePromiseCacheコメント参照)。保存済みIDは
+ * 使う前に実在確認する(folderStillExists参照——手動削除でキャッシュだけが死んだIDを
+ * 指し続ける不具合の是正)。 */
 async function resolveSegment(
   path: string,
   part: string,
@@ -125,10 +152,19 @@ async function resolveSegment(
   const promise = (async () => {
     const persisted = (await getDriveFolderIds())[path];
     if (persisted) {
-      logOp("drive", "resolveSegment-persisted-hit", `path=${path} id=${persisted}`);
-      return persisted;
+      if (await folderStillExists(persisted, token, fetchImpl)) {
+        logOp("drive", "resolveSegment-persisted-hit", `path=${path} id=${persisted}`);
+        return persisted;
+      }
+      logOp(
+        "drive",
+        "resolveSegment-persisted-stale",
+        `path=${path} id=${persisted} — folder missing/trashed on Drive, re-resolving`,
+      );
+      await deleteDriveFolderId(path);
+    } else {
+      logOp("drive", "resolveSegment-persisted-miss", `path=${path} — falling back to name search`);
     }
-    logOp("drive", "resolveSegment-persisted-miss", `path=${path} — falling back to name search`);
     const id = await getOrCreateFolder(part, parentId, token, fetchImpl);
     await saveDriveFolderId(path, id);
     logOp("drive", "resolveSegment-persisted-save", `path=${path} id=${id}`);

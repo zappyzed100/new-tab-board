@@ -148,17 +148,34 @@ describe("getOrCreateFolder / resolveFolderPath", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
-  it("永続キャッシュに保存済みのIDがあれば、名前検索すらせず直接使う(ユーザー設計の優先順位1: セッションを跨いだ再訪問を模す)", async () => {
+  it("永続キャッシュに保存済みのIDがあれば、名前検索はせず実在確認だけして直接使う(ユーザー設計の優先順位1: セッションを跨いだ再訪問を模す)", async () => {
     // resetDriveFolderCacheForTestsで空にしたところへ、前回セッションで解決済みだった
     // 想定のIDを直接書き込む(セッション内のfolderIdCacheには一切触れない=タブを閉じて
-    // 開き直した状況を再現する)。
+    // 開き直した状況を再現する)。名前+親での検索(getOrCreateFolder)は行わないが、
+    // 実在確認(GET /files/{id})は行う(手動削除の検知——下の「stale」テスト参照)。
     await saveDriveFolderId("app", "app-id");
     await saveDriveFolderId("app/New Tab Board", "board-id");
     await saveDriveFolderId("app/New Tab Board/active", "active-id");
-    const fetchImpl = vi.fn(); // 一度もDriveへ問い合わせないはず
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "x", trashed: false }));
     const parts = ["app", "New Tab Board", "active"];
     expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
-    expect(fetchImpl).not.toHaveBeenCalled();
+    // 3段それぞれ実在確認の1回だけ(名前+親の検索クエリは1回も飛ばない)。
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    for (const call of fetchImpl.mock.calls) {
+      expect(call[0]).not.toContain("q=");
+    }
+  });
+
+  it("永続キャッシュのIDがDrive上で削除/ゴミ箱済みなら、キャッシュを捨てて名前検索→作成へ再解決する(ユーザーがDriveの中身を手で削除した後もキャッシュが死んだIDを返し続け、addParents等が404し続けた不具合の回帰)", async () => {
+    await saveDriveFolderId("solo", "dead-id");
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({}, false, 404)) // 実在確認: 404(消えている)
+      .mockResolvedValueOnce(fakeResponse({ files: [] })) // 名前+親での検索: 無し
+      .mockResolvedValueOnce(fakeResponse({ id: "revived-id" })); // 新規作成
+    const id = await resolveFolderPath(["solo"], "tok", fetchImpl);
+    expect(id).toBe("revived-id");
+    expect(await getDriveFolderIds()).toEqual({ solo: "revived-id" });
   });
 
   it("新規に解決したフォルダIDは永続キャッシュへ保存する(次回セッションは検索しない)", async () => {

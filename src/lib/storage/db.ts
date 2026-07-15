@@ -187,6 +187,20 @@ export async function clearDriveFolderIds(): Promise<void> {
   await db.delete("settings", DRIVE_FOLDER_IDS_KEY);
 }
 
+/** 1パス分のフォルダIDだけを永続キャッシュから消す(他パスは残す)。ユーザーがDrive上で
+ * フォルダを手動削除した後もキャッシュが死んだIDを返し続け、addParents等の操作が404に
+ * なり続けた不具合の是正(drive.tsのresolveSegmentが再検証で不在を検知した時に呼ぶ)。 */
+export async function deleteDriveFolderId(path: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("settings", "readwrite");
+  const current =
+    ((await tx.store.get(DRIVE_FOLDER_IDS_KEY)) as Record<string, string> | undefined) ?? {};
+  delete current[path];
+  await tx.store.put(current, DRIVE_FOLDER_IDS_KEY);
+  await tx.done;
+  logOp("db", "delete", `settings/driveFolderIds/${path}`);
+}
+
 // Gemini APIの1日あたり使用回数(ユーザー指示: 450回でGPT-OSS 120Bへの乗り換え警告を出す)。
 const GEMINI_USAGE_KEY = "geminiUsage";
 type GeminiUsageRecord = { date: string; count: number };

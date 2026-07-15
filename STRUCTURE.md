@@ -963,6 +963,7 @@
 - function getDriveFolderIds
 - function saveDriveFolderId
 - function clearDriveFolderIds
+- function deleteDriveFolderId
 - function geminiUsageDateKey
 - function getGeminiUsageCount
 - function recordGeminiUsage
