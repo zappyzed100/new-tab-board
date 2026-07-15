@@ -85,6 +85,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
@@ -95,6 +96,11 @@
 - `e2e/specs/special.spec.ts` — special.spec.ts — ⭐スター/スペシャル(保管棚)の回帰。スターでスペシャル一覧に出る、削除で凍結して
 - `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
+
+## `gas/`
+
+- `gas/README.md`
+- `gas/battery-webhook.gs`
 
 ## `native-host/`
 
@@ -140,6 +146,8 @@
 - `src/background/CLAUDE.md`
 - `src/background/background.test.ts` — background.test.ts — background.ts(サービスワーカー: Calendar定期ポーリング+予定前アラーム)の単体テスト
 - `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
+- `src/lib/battery/batteryAlarm.test.ts` — batteryAlarm.test.ts — decideBatteryAlarm(閾値越え判定)の単体テスト
+- `src/lib/battery/batteryAlarm.ts` — batteryAlarm.ts — バッテリー低下アラームの閾値越え判定(純関数)。
 - `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(GCal URL生成)の単体テスト
 - `src/lib/display/calendarMonth.ts` — calendarMonth.ts — Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/display/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
@@ -180,6 +188,8 @@
 - `src/lib/entities/todos.test.ts` — todos.test.ts — todos.ts の純粋関数の単体テスト
 - `src/lib/entities/todos.ts` — todos.ts — 単体TODOリストの純粋な状態更新関数(I/Oを持たない。TodoMVC相当・ノート非依存)
 - `src/lib/externalIO/CLAUDE.md`
+- `src/lib/externalIO/batteryStatus.test.ts` — batteryStatus.test.ts — batteryStatus.ts(GAS Web App中継クライアント)の単体テスト
+- `src/lib/externalIO/batteryStatus.ts` — batteryStatus.ts — スマホのバッテリー低下警告(GAS Web App中継)の拡張側クライアント。
 - `src/lib/externalIO/nasActiveSync.test.ts` — nasActiveSync.test.ts — 世代同期の判定/push/pull の単体テスト
 - `src/lib/externalIO/nasActiveSync.ts` — nasActiveSync.ts — タブ(ブラウザ)とNAS activeの「世代番号」ベース同期(ユーザー指示)。
 - `src/lib/externalIO/nasArchive.test.ts` — nasArchive.test.ts — nasArchive.ts(SSD→NAS store-and-forward)の単体テスト
@@ -599,6 +609,11 @@
 - def dart_package_roots
 - def is_kit_source_repo
 
+### `src/lib/battery/batteryAlarm.ts`
+- const DEFAULT_BATTERY_THRESHOLDS
+- type BatteryAlarmDecision
+- function decideBatteryAlarm
+
 ### `src/lib/display/calendarMonth.ts`
 - function buildGCalUrl
 - function buildGCalMonthUrl
@@ -727,6 +742,11 @@
 - function toggleTodo
 - function removeTodo
 - function sortedTodos
+
+### `src/lib/externalIO/batteryStatus.ts`
+- type FetchLike
+- type BatteryStatus
+- function fetchBatteryStatus
 
 ### `src/lib/externalIO/nasActiveSync.ts`
 - function noteSaveFingerprint
@@ -913,6 +933,9 @@
 - function setNasFolderPath
 - function getGeminiApiKey
 - function setGeminiApiKey
+- type BatteryWebhookConfig
+- function getBatteryWebhookConfig
+- function setBatteryWebhookConfig
 - function geminiUsageDateKey
 - function getGeminiUsageCount
 - function recordGeminiUsage

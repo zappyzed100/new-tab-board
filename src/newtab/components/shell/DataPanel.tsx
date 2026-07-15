@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
 import {
+  BatteryWarning,
   CloudDownload,
   CloudUpload,
   FileText,
@@ -19,8 +20,10 @@ import {
   Upload,
 } from "lucide-react";
 import {
+  getBatteryWebhookConfig,
   getGeminiApiKey,
   getNasFolderPath,
+  setBatteryWebhookConfig,
   setGeminiApiKey,
   setNasFolderPath,
 } from "../../../lib/storage/db";
@@ -60,12 +63,24 @@ export function DataPanel({
   const [showGeminiInput, setShowGeminiInput] = useState(false);
   const [geminiKeyInput, setGeminiKeyInput] = useState("");
   const [geminiKeySet, setGeminiKeySet] = useState(false);
+  // スマホのバッテリー低下警告(GAS Web App中継。gas/README.md参照)の接続設定。
+  // トークンは秘匿情報なのでGeminiキーと同じ扱い(保存済みの値は画面に出さない)。
+  const [showBatteryInput, setShowBatteryInput] = useState(false);
+  const [batteryUrlInput, setBatteryUrlInput] = useState("");
+  const [batteryTokenInput, setBatteryTokenInput] = useState("");
+  const [batteryConfigSet, setBatteryConfigSet] = useState(false);
 
   useEffect(() => {
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
     void getGeminiApiKey().then((key) => setGeminiKeySet(Boolean(key)));
+    void getBatteryWebhookConfig().then((config) => {
+      if (config) {
+        setBatteryUrlInput(config.url);
+        setBatteryConfigSet(true);
+      }
+    });
   }, []);
 
   async function handleSaveGeminiKey() {
@@ -155,6 +170,20 @@ export function DataPanel({
     await setNasFolderPath(path);
     setShowNasInput(false);
     onMessage("NASフォルダを設定しました");
+  }
+
+  async function handleSaveBatteryConfig() {
+    const url = batteryUrlInput.trim();
+    const token = batteryTokenInput.trim();
+    if (!url || !token) {
+      onMessage("GAS Web AppのURLと共有トークンの両方を入力してください");
+      return;
+    }
+    await setBatteryWebhookConfig({ url, token });
+    setBatteryTokenInput("");
+    setBatteryConfigSet(true);
+    setShowBatteryInput(false);
+    onMessage("バッテリー低下警告の接続設定を保存しました");
   }
 
   async function handleFlushNow() {
@@ -282,6 +311,51 @@ export function DataPanel({
               data-testid="data-save-gemini-key"
               title="入力したAPIキーを保存する"
               onClick={() => void handleSaveGeminiKey()}
+            >
+              保存
+            </Button>
+          </>
+        ) : null}
+        <Button
+          type="button"
+          variant={showBatteryInput ? "solid" : "soft"}
+          data-testid="data-set-battery-webhook"
+          title="スマホのバッテリー低下警告(GAS Web App中継)の接続先を設定する(gas/README.md参照)"
+          onClick={() => setShowBatteryInput((v) => !v)}
+        >
+          <BatteryWarning size={14} aria-hidden="true" />
+          バッテリー警告を設定{batteryConfigSet ? "(設定済み)" : ""}
+        </Button>
+        {showBatteryInput ? (
+          <>
+            <TextField.Root
+              aria-label="バッテリー警告のGAS Web App URL"
+              placeholder="https://script.google.com/macros/s/xxx/exec"
+              data-testid="data-battery-url-input"
+              autoFocus
+              value={batteryUrlInput}
+              onChange={(e) => setBatteryUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveBatteryConfig();
+              }}
+            />
+            <TextField.Root
+              aria-label="バッテリー警告の共有トークン"
+              type="password"
+              placeholder={batteryConfigSet ? "設定済み(再入力で上書き)" : "共有トークン"}
+              data-testid="data-battery-token-input"
+              value={batteryTokenInput}
+              onChange={(e) => setBatteryTokenInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSaveBatteryConfig();
+              }}
+            />
+            <Button
+              type="button"
+              variant="soft"
+              data-testid="data-save-battery-webhook"
+              title="入力したURL・トークンを保存する"
+              onClick={() => void handleSaveBatteryConfig()}
             >
               保存
             </Button>

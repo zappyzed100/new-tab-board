@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp as ArrowUpIcon,
+  BatteryWarning,
   BellOff,
   CalendarClock,
   Keyboard,
@@ -153,6 +154,9 @@ export function App() {
   const [dataPanelMessage, setDataPanelMessage] = useState<string | null>(null);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
+  // スマホのバッテリー低下警告(GAS Web App中継)が鳴動中か(ユーザー指示: New Tab Boardに
+  // 警告を出したい)。予定前アラームと同じ「停止」ボタンパターンで表示する。
+  const [batteryAlarmActive, setBatteryAlarmActive] = useState(false);
   // resolveTheme()の解決結果("light"/"dark"。"auto"はメディアクエリで解決済みの値)を
   // document.documentElement.dataset.themeへの書き込みと同時にstateへも保持し、
   // Radixの<Theme appearance>propへ同じ値を配線する(二重の解決ロジックを作らない)。
@@ -232,6 +236,7 @@ export function App() {
       setActiveNoteId(localData.notes[0]?.id ?? null);
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
+      setBatteryAlarmActive(localData.batteryAlarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
       driveGenRef.current = localData.driveGeneration ?? 0;
       lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
@@ -396,6 +401,7 @@ export function App() {
       void loadLocalData().then((local) => {
         setNextEventCache(local.nextEventCache);
         setAlarmActive(local.alarmActive ?? false);
+        setBatteryAlarmActive(local.batteryAlarmActive ?? false);
       });
     }, 30_000);
     return () => clearInterval(interval);
@@ -419,6 +425,14 @@ export function App() {
     // background.tsのstopAlarm()を待たず、UI側でも即座に永続化する(30秒間隔の
     // 定期リフレッシュが古いalarmActive:trueを読み直して復活させるのを防ぐため)。
     void loadLocalData().then((local) => saveLocalData({ ...local, alarmActive: false }));
+  }
+
+  function stopBatteryAlarm() {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: "stop-battery-alarm" });
+    }
+    setBatteryAlarmActive(false);
+    void loadLocalData().then((local) => saveLocalData({ ...local, batteryAlarmActive: false }));
   }
 
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
@@ -864,6 +878,18 @@ export function App() {
               >
                 <BellOff size={14} aria-hidden="true" />
                 アラーム停止
+              </Button>
+            ) : null}
+            {batteryAlarmActive ? (
+              <Button
+                type="button"
+                color="red"
+                data-testid="stop-battery-alarm"
+                title="スマホのバッテリー低下警告の音を止める"
+                onClick={stopBatteryAlarm}
+              >
+                <BatteryWarning size={14} aria-hidden="true" />
+                バッテリー警告停止
               </Button>
             ) : null}
 

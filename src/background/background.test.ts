@@ -10,22 +10,29 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
-import { getNasFolderPath } from "../lib/storage/db";
+import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
+import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
 import type { LocalData } from "../types";
 
 vi.mock("../lib/drive/googleAuth", () => ({ getAuthToken: vi.fn() }));
 vi.mock("../lib/nextEvent/calendar", () => ({ fetchNextEvent: vi.fn() }));
-vi.mock("../lib/storage/db", () => ({ getNasFolderPath: vi.fn() }));
+vi.mock("../lib/storage/db", () => ({
+  getNasFolderPath: vi.fn(),
+  getBatteryWebhookConfig: vi.fn(),
+}));
 vi.mock("../lib/externalIO/nasNativeHost", () => ({ rebuildNasIndex: vi.fn() }));
+vi.mock("../lib/externalIO/batteryStatus", () => ({ fetchBatteryStatus: vi.fn() }));
 vi.mock("../lib/drive/driveActiveMirror", () => ({ copyNotesToDriveDateFolder: vi.fn() }));
 
 const FIXED_NOW = 1_700_000_000_000;
 const POLL_ALARM_NAME = "next-event-poll";
 const PRE_EVENT_ALARM_NAME = "pre-event-alarm";
 const DAILY_ALARM_NAME = "daily-maintenance";
+const BATTERY_POLL_ALARM_NAME = "battery-poll";
 const NOTIFICATION_ID = "pre-event-notification";
+const BATTERY_NOTIFICATION_ID = "battery-low-notification";
 
 // background.ts の dayKey / previousDayMs と同じローカル日付計算(TZに依らず一致する)。
 const TODAY_KEY = (() => {
@@ -146,6 +153,10 @@ describe("インストール/起動", () => {
       name: DAILY_ALARM_NAME,
       opts: { periodInMinutes: 60 },
     });
+    expect(fake.calls.alarmsCreate).toContainEqual({
+      name: BATTERY_POLL_ALARM_NAME,
+      opts: { periodInMinutes: 15 },
+    });
   });
 
   it("onStartupでも同じポーリング用アラームを作成する", () => {
@@ -154,6 +165,10 @@ describe("インストール/起動", () => {
     handlers.onStartup();
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: POLL_ALARM_NAME,
+      opts: { periodInMinutes: 15 },
+    });
+    expect(fake.calls.alarmsCreate).toContainEqual({
+      name: BATTERY_POLL_ALARM_NAME,
       opts: { periodInMinutes: 15 },
     });
   });
@@ -377,5 +392,106 @@ describe("pre-event-alarm アラーム(発火/停止)", () => {
 
     expect(fake.calls.offscreenCloseCount).toBe(0);
     expect(fake.calls.notificationsClear).toEqual([]);
+  });
+});
+
+describe("battery-poll アラーム(スマホのバッテリー低下警告・GAS Web App中継)", () => {
+  it("未設定ならfetchBatteryStatusを呼ばず何もしない", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue(undefined);
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(fetchBatteryStatus).not.toHaveBeenCalled();
+    expect(fake.calls.notificationsCreate).toEqual([]);
+  });
+
+  it("未接続/未報告(null)なら静かにスキップする", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+    vi.mocked(fetchBatteryStatus).mockResolvedValue(null);
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(fake.calls.notificationsCreate).toEqual([]);
+  });
+
+  it("閾値を新たに下回れば警告を鳴らし、発火済み閾値を永続化する", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+    vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null });
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    const saved = fake.store.localData as LocalData;
+    expect(saved.batteryAlarmActive).toBe(true);
+    expect(saved.batteryFiredThresholds).toEqual([50, 20]);
+    expect(fake.calls.offscreenCreate).toHaveLength(1);
+    expect(fake.calls.notificationsCreate).toEqual([
+      {
+        id: BATTERY_NOTIFICATION_ID,
+        opts: expect.objectContaining({
+          message: "残り15%です",
+          buttons: [{ title: "停止" }],
+          requireInteraction: true,
+        }),
+      },
+    ]);
+  });
+
+  it("同じ低電力エピソード中は同じ閾値で再度鳴らさない", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+    vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null });
+    const fake = makeFakeChrome({
+      localData: { notes: [], batteryFiredThresholds: [50, 20] },
+    });
+    vi.stubGlobal("chrome", fake.chromeStub);
+
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(fake.calls.notificationsCreate).toEqual([]);
+  });
+
+  it("「停止」ボタンで通知を消しbatteryAlarmActiveをfalseにする(予定前アラームが非鳴動ならoffscreenも閉じる)", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+    vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 5, updatedAt: null });
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    handlers.onButtonClicked(BATTERY_NOTIFICATION_ID);
+    await flushMicrotasks();
+
+    expect(fake.calls.offscreenCloseCount).toBe(1);
+    expect(fake.calls.notificationsClear).toContain(BATTERY_NOTIFICATION_ID);
+    expect((fake.store.localData as LocalData).batteryAlarmActive).toBe(false);
+  });
+
+  it("予定前アラームが同時に鳴っている間は、バッテリー警告を停止してもoffscreenを閉じない", async () => {
+    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+    vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 5, updatedAt: null });
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    // 先に予定前アラームを鳴らし、次にバッテリー警告も鳴らす(offscreenは共用で1つのまま)。
+    handlers.onAlarm({ name: PRE_EVENT_ALARM_NAME });
+    await flushMicrotasks();
+    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+    await flushMicrotasks();
+    expect(fake.calls.offscreenCreate).toHaveLength(1); // 2回目は既存を再利用(二重作成しない)
+
+    handlers.onButtonClicked(BATTERY_NOTIFICATION_ID);
+    await flushMicrotasks();
+
+    expect(fake.calls.offscreenCloseCount).toBe(0); // 予定前アラームがまだ鳴っているので閉じない
+    expect((fake.store.localData as LocalData).batteryAlarmActive).toBe(false);
+    expect((fake.store.localData as LocalData).alarmActive).toBe(true);
   });
 });

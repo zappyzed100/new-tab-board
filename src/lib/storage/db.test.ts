@@ -7,6 +7,7 @@ import {
   getAllIndexEntries,
   getAllPastedImages,
   getAllSnapshots,
+  getBatteryWebhookConfig,
   getGeminiUsageCount,
   getIndexEntry,
   getNasFolderPath,
@@ -17,6 +18,7 @@ import {
   putPastedImage,
   putSnapshot,
   recordGeminiUsage,
+  setBatteryWebhookConfig,
   setNasFolderPath,
 } from "./db";
 
@@ -101,6 +103,23 @@ describe("NASフォルダのパス", () => {
   it("put/get で往復できる", async () => {
     await setNasFolderPath("Z:\\NAS\\backup");
     expect(await getNasFolderPath()).toBe("Z:\\NAS\\backup");
+  });
+});
+
+describe("バッテリー低下警告のGAS Web App接続設定", () => {
+  it("未設定ならundefinedを返す", async () => {
+    expect(await getBatteryWebhookConfig()).toBeUndefined();
+  });
+
+  it("put/get で往復できる", async () => {
+    await setBatteryWebhookConfig({
+      url: "https://script.google.com/macros/s/xxx/exec",
+      token: "secret-token",
+    });
+    expect(await getBatteryWebhookConfig()).toEqual({
+      url: "https://script.google.com/macros/s/xxx/exec",
+      token: "secret-token",
+    });
   });
 });
 

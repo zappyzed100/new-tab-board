@@ -8,6 +8,9 @@ const NAS_FOLDER_PATH_KEY = "nasFolderPath";
 // Driveの全データJSONバックアップ(buildExportPayloadはsync+notesのみ)にも乗らないため、
 // キーが同期・バックアップ経由で外部へ漏れない(§7 秘匿)。
 const GEMINI_API_KEY_KEY = "geminiApiKey";
+// スマホのバッテリー低下警告(GAS Web App中継)の接続設定。トークンは秘匿情報のため
+// GEMINI_API_KEY_KEYと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
+const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -133,6 +136,23 @@ export async function setGeminiApiKey(key: string): Promise<void> {
   await db.put("settings", key, GEMINI_API_KEY_KEY);
   // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
   logOp("db", "put", "settings/geminiApiKey");
+}
+
+/** スマホのバッテリー低下警告のGAS Web App接続設定(url+共有トークン)。未設定ならundefined。 */
+export type BatteryWebhookConfig = { url: string; token: string };
+
+export async function getBatteryWebhookConfig(): Promise<BatteryWebhookConfig | undefined> {
+  const db = await getDb();
+  return db.get("settings", BATTERY_WEBHOOK_CONFIG_KEY) as Promise<
+    BatteryWebhookConfig | undefined
+  >;
+}
+
+export async function setBatteryWebhookConfig(config: BatteryWebhookConfig): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", config, BATTERY_WEBHOOK_CONFIG_KEY);
+  // NO-LOG: 共有トークンそのものはログに出さない(§7 秘匿。geminiApiKeyと同じ扱い)。
+  logOp("db", "put", "settings/batteryWebhookConfig");
 }
 
 // Gemini APIの1日あたり使用回数(ユーザー指示: 450回でGPT-OSS 120Bへの乗り換え警告を出す)。

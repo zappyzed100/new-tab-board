@@ -5,9 +5,11 @@ import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
 import { loadLocalData, saveLocalData } from "../lib/storage/storage";
-import { getNasFolderPath } from "../lib/storage/db";
+import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
+import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
+import { decideBatteryAlarm } from "../lib/battery/batteryAlarm";
 import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
@@ -20,17 +22,24 @@ const NOTIFICATION_ID = "pre-event-notification";
 // する方式にする(ユーザー指示の「一日一回・0:30くらい・起動時に未実行なら補完」を満たす)。
 const DAILY_ALARM_NAME = "daily-maintenance";
 const DAILY_INTERVAL_MINUTES = 60;
+// スマホのバッテリー低下警告(GAS Web App中継。gas/README.md参照)。予定ポーリングと同じ
+// 15分間隔で確認する(ユーザー指示)。
+const BATTERY_POLL_ALARM_NAME = "battery-poll";
+const BATTERY_POLL_INTERVAL_MINUTES = 15;
+const BATTERY_NOTIFICATION_ID = "battery-low-notification";
 
 chrome.runtime.onInstalled.addListener(() => {
   logOp("background", "installed", "extension service worker started");
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
+  chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
   void runDailyMaintenance(); // 起動直後にも未実行なら補完する(前日分の取りこぼし防止)。
 });
 
 chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
+  chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
   void runDailyMaintenance();
 });
 
@@ -38,14 +47,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === POLL_ALARM_NAME) void pollNextEvent();
   if (alarm.name === PRE_EVENT_ALARM_NAME) void fireAlarm();
   if (alarm.name === DAILY_ALARM_NAME) void runDailyMaintenance();
+  if (alarm.name === BATTERY_POLL_ALARM_NAME) void pollBatteryStatus();
 });
 
 chrome.notifications.onButtonClicked.addListener((notificationId) => {
   if (notificationId === NOTIFICATION_ID) void stopAlarm();
+  if (notificationId === BATTERY_NOTIFICATION_ID) void stopBatteryAlarm();
 });
 
 chrome.runtime.onMessage.addListener((message: { type?: string }) => {
   if (message?.type === "stop-pre-event-alarm") void stopAlarm();
+  if (message?.type === "stop-battery-alarm") void stopBatteryAlarm();
 });
 
 async function pollNextEvent(): Promise<void> {
@@ -152,14 +164,21 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
   logOp("background", "pre-event-alarm-schedule", `when=${when}`);
 }
 
+// オフスクリーンのループ音声ドキュメントは予定前アラーム・バッテリー低下警告の共用リソース
+// (chrome.offscreenは拡張全体で1つしか持てない)。二重createDocument()は例外になるため
+// hasDocument()で確認してから作り、閉じる時はもう一方のアラームが鳴っていないか確認してから
+// 閉じる(片方の「停止」でもう片方の音まで止まらないようにする)。
+
 async function fireAlarm(): Promise<void> {
   const local = await loadLocalData();
   await saveLocalData({ ...local, alarmActive: true });
-  await chrome.offscreen.createDocument({
-    url: "offscreen.html",
-    reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
-    justification: "予定前アラームのループ音再生(SPEC.md §4.11)",
-  });
+  if (!(await chrome.offscreen.hasDocument())) {
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: "予定前アラームのループ音再生(SPEC.md §4.11)",
+    });
+  }
   chrome.notifications.create(NOTIFICATION_ID, {
     type: "basic",
     iconUrl: "icon128.png",
@@ -172,11 +191,57 @@ async function fireAlarm(): Promise<void> {
 }
 
 async function stopAlarm(): Promise<void> {
-  if (await chrome.offscreen.hasDocument()) {
+  const local = await loadLocalData();
+  if (!local.batteryAlarmActive && (await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.closeDocument();
   }
   chrome.notifications.clear(NOTIFICATION_ID);
-  const local = await loadLocalData();
   await saveLocalData({ ...local, alarmActive: false });
   logOp("background", "stop-alarm", "pre-event alarm stopped");
+}
+
+/** GAS Web App(gas/README.md参照)へバッテリー残量を問い合わせ、10/20/50%の閾値を新たに
+ * 下回っていれば警告を鳴らす(ユーザー指示)。未設定/未接続は静かにスキップする。 */
+async function pollBatteryStatus(): Promise<void> {
+  const config = await getBatteryWebhookConfig();
+  if (!config) return;
+  const status = await fetchBatteryStatus(config.url, config.token);
+  if (!status) return;
+  const local = await loadLocalData();
+  const decision = decideBatteryAlarm(status.level, local.batteryFiredThresholds ?? []);
+  await saveLocalData({ ...local, batteryFiredThresholds: decision.nextFired });
+  if (decision.toFire.length > 0) {
+    await fireBatteryAlarm(status.level);
+  }
+}
+
+async function fireBatteryAlarm(level: number): Promise<void> {
+  const local = await loadLocalData();
+  await saveLocalData({ ...local, batteryAlarmActive: true });
+  if (!(await chrome.offscreen.hasDocument())) {
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: [chrome.offscreen.Reason.AUDIO_PLAYBACK],
+      justification: "スマホのバッテリー低下警告のループ音再生",
+    });
+  }
+  chrome.notifications.create(BATTERY_NOTIFICATION_ID, {
+    type: "basic",
+    iconUrl: "icon128.png",
+    title: "スマホのバッテリーが少なくなっています",
+    message: `残り${level}%です`,
+    buttons: [{ title: "停止" }],
+    requireInteraction: true,
+  });
+  logOp("background", "fire-battery-alarm", `level=${level}`);
+}
+
+async function stopBatteryAlarm(): Promise<void> {
+  const local = await loadLocalData();
+  if (!local.alarmActive && (await chrome.offscreen.hasDocument())) {
+    await chrome.offscreen.closeDocument();
+  }
+  chrome.notifications.clear(BATTERY_NOTIFICATION_ID);
+  await saveLocalData({ ...local, batteryAlarmActive: false });
+  logOp("background", "stop-battery-alarm", "battery alarm stopped");
 }
