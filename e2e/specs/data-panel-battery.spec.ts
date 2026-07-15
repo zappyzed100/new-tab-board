@@ -1,9 +1,10 @@
 // data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 // (契約はgas/README.md。ユーザー指示: New Tab Boardにバッテリー低下警告を出したい)。
-// 「バッテリー警告を設定」ボタンを押した時だけ入力欄が出る(NAS設定と同じパターン)。
+// 「GAS連携を設定」ボタン(ユーザー指示で「バッテリー警告を設定」から改称。2026-07-16)を
+// 押した時だけ入力欄が出る(NAS設定と同じパターン)。
 import { expect, test } from "../fixtures";
 
-test("「バッテリー警告を設定」を押すまで入力欄は表示されない", async ({ context, newTabUrl }) => {
+test("「GAS連携を設定」を押すまで入力欄は表示されない", async ({ context, newTabUrl }) => {
   const page = await context.newPage();
   await page.goto(newTabUrl);
   await expect(page.getByTestId("app-root")).toBeVisible();

@@ -320,11 +320,11 @@ export function DataPanel({
           type="button"
           variant={showBatteryInput ? "solid" : "soft"}
           data-testid="data-set-battery-webhook"
-          title="スマホのバッテリー低下警告(GAS Web App中継)の接続先を設定する(gas/README.md参照)"
+          title="GAS(Google Apps Script) Web App連携の接続先を設定する(現在はスマホのバッテリー低下警告で使用。gas/README.md参照)"
           onClick={() => setShowBatteryInput((v) => !v)}
         >
           <BatteryWarning size={14} aria-hidden="true" />
-          バッテリー警告を設定{batteryConfigSet ? "(設定済み)" : ""}
+          GAS連携を設定{batteryConfigSet ? "(設定済み)" : ""}
         </Button>
         {showBatteryInput ? (
           <>
