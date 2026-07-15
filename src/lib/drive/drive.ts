@@ -186,24 +186,38 @@ export async function deleteDriveFile(
   logOp("drive", "delete", `fileId=${fileId}`);
 }
 
-/** フォルダ配下の、noteId(appProperties)を持つファイルを列挙する({fileId, noteId}の配列)。 */
+/** フォルダ配下の、noteId(appProperties)を持つファイルを列挙する({fileId, noteId}の配列)。
+ * Drive APIの`appProperties has {...}`句は`value='...'`の完全一致しか受け付けず`!=`は
+ * 使えない(2026-07-16実機確認: `value!=''`を送るとHTTP 400 Bad Requestになるバグだった)。
+ * 「noteIdが空でない」という絞り込みはサーバ側の句からは落とし、フォルダ内の全ファイルを
+ * 取得してからクライアント側のfilterで行う(元々あった)。 */
 export async function listNoteFilesInFolder(
   folderId: string,
   token: string,
   fetchImpl: FetchLike = fetch,
 ): Promise<{ id: string; noteId: string }[]> {
-  const q = `'${folderId}' in parents and appProperties has { key='noteId' and value!='' } and trashed=false`;
+  const q = `'${folderId}' in parents and trashed=false`;
+  logOp("drive", "listNoteFilesInFolder-query", `folderId=${folderId} q=${q}`);
   const res = await fetchImpl(
     `${FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id,appProperties)`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
-  if (!res.ok) throw new Error(`Driveフォルダ一覧失敗: HTTP ${res.status}`);
+  if (!res.ok) {
+    logOp("drive", "listNoteFilesInFolder-error", `folderId=${folderId} status=${res.status}`);
+    throw new Error(`Driveフォルダ一覧失敗: HTTP ${res.status}`);
+  }
   const data = (await res.json()) as {
     files?: { id: string; appProperties?: { noteId?: string } }[];
   };
-  return (data.files ?? [])
+  const result = (data.files ?? [])
     .filter((f) => f.appProperties?.noteId)
     .map((f) => ({ id: f.id, noteId: f.appProperties!.noteId as string }));
+  logOp(
+    "drive",
+    "listNoteFilesInFolder-result",
+    `folderId=${folderId} total=${data.files?.length ?? 0} withNoteId=${result.length}`,
+  );
+  return result;
 }
 
 /** appPropertiesにnoteIdを持たせて検索し、対応するDriveファイルIDを探す。無ければnull。

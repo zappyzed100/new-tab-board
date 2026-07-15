@@ -211,4 +211,12 @@ describe("listNoteFilesInFolder", () => {
       { id: "c", noteId: "n2" },
     ]);
   });
+
+  it("クエリに`!=`を含めない(Drive APIのappProperties has句は完全一致しか受け付けず、実機でHTTP 400になっていた)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ files: [] }));
+    await listNoteFilesInFolder("folder-1", "tok", fetchImpl);
+    const requestedUrl = fetchImpl.mock.calls[0][0] as string;
+    const q = decodeURIComponent(new URL(requestedUrl).searchParams.get("q") ?? "");
+    expect(q).not.toContain("!=");
+  });
 });
