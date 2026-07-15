@@ -199,12 +199,16 @@
 - `src/lib/externalIO/nasNativeHost.ts` — nasNativeHost.ts — NASブリッジ native messaging hostの拡張側クライアント(SPEC.md §4.3)
 - `src/lib/externalIO/nativeMessaging.test.ts` — nativeMessaging.test.ts — nativeMessaging.ts(Flow Launcher native messagingクライアント)の単体テスト
 - `src/lib/externalIO/nativeMessaging.ts` — nativeMessaging.ts — Flow Launcher連携: native messaging hostからファイルをpullする
+- `src/lib/externalIO/settingsBackupSync.test.ts` — settingsBackupSync.test.ts — settingsBackupSync.ts(NASの設定バックアップ書き出し/読み戻し)の単体テスト
+- `src/lib/externalIO/settingsBackupSync.ts` — settingsBackupSync.ts — 全体設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/
 - `src/lib/externalIO/specialSync.test.ts` — specialSync.test.ts — NASの special/ 書き出し・突き合わせ削除の単体テスト
 - `src/lib/externalIO/specialSync.ts` — specialSync.ts — スペシャル(⭐)をNASの special/<folder>/<id>.md へ書き出し、消えたものを削除する
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
-- `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート)のJSON書き出し/取り込み(純関数。SPEC.md §4.7)
+- `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート・TODO・スペシャル)のJSON書き出し/
 - `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
 - `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込みの唯一の入出口(SPEC.md §4.10-a)
+- `src/lib/fileio/settingsBackup.test.ts` — settingsBackup.test.ts — settingsBackup.ts(notes抜きの全体設定バックアップ)の単体テスト
+- `src/lib/fileio/settingsBackup.ts` — settingsBackup.ts — ノート本文を除く全体設定(テーマ/TODO/ブックマーク/ノート文字サイズ/
 - `src/lib/gemini/gemini.test.ts` — gemini.test.ts — gemini.ts(Gemini API呼び出し)の単体テスト。実APIは叩かずfetchをフェイクにする。
 - `src/lib/gemini/gemini.ts` — gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
 - `src/lib/gemini/noteAi.test.ts` — noteAi.test.ts — 要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
@@ -794,6 +798,12 @@
 - type ConnectNativeFn
 - function pullPendingFile
 
+### `src/lib/externalIO/settingsBackupSync.ts`
+- const SETTINGS_BACKUP_FILENAME
+- type SettingsBackupNasDeps
+- function pushSettingsBackupToNas
+- function pullSettingsBackupFromNas
+
 ### `src/lib/externalIO/specialSync.ts`
 - function specialRelPath
 - function specialEntryToMarkdown
@@ -809,6 +819,13 @@
 
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
+
+### `src/lib/fileio/settingsBackup.ts`
+- const SETTINGS_BACKUP_VERSION
+- type SettingsBackupPayload
+- function buildSettingsBackupPayload
+- function serializeSettingsBackup
+- function parseSettingsBackupPayload
 
 ### `src/lib/gemini/gemini.ts`
 - const DEFAULT_GEMINI_MODEL

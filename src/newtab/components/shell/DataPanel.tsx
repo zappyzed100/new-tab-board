@@ -33,17 +33,25 @@ import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
 import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
-import type { AppLaunch, Bookmark, Note, Settings } from "../../../types";
+import type { AppLaunch, Bookmark, Note, Settings, SpecialItem, Todo } from "../../../types";
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
 
 type Props = {
   sync: SyncState;
-  onImportData: (data: { sync: SyncState; notes: Note[] }) => void;
+  onImportData: (data: {
+    sync: SyncState;
+    notes: Note[];
+    todos?: Todo[];
+    specialItems?: SpecialItem[];
+    specialFolders?: string[];
+  }) => void;
   onOpenFileAsNote: (title: string, content: string) => void;
   onMessage: (message: string) => void;
   /** 現在の全データを今すぐGoogle Driveへ退避(バックアップ)する(自動同期の即時版)。 */
   onBackupToDrive: () => void;
+  /** NASのdata/settings-backup.json(notesを除く全体設定)を読み戻して適用する。 */
+  onRestoreFromNas: () => void;
 };
 
 export function DataPanel({
@@ -52,6 +60,7 @@ export function DataPanel({
   onOpenFileAsNote,
   onMessage,
   onBackupToDrive,
+  onRestoreFromNas,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -132,6 +141,9 @@ export function DataPanel({
         settings: payload.settings,
       },
       notes: payload.notes,
+      todos: payload.todos,
+      specialItems: payload.specialItems,
+      specialFolders: payload.specialFolders,
     });
     onMessage("Driveから復元しました");
   }
@@ -215,6 +227,16 @@ export function DataPanel({
         >
           <Upload size={14} aria-hidden="true" />
           今すぐNASへ書き出し
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-restore-from-nas"
+          title="NASに保存された設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補。notesは対象外)から復元する"
+          onClick={onRestoreFromNas}
+        >
+          <CloudDownload size={14} aria-hidden="true" />
+          NASから復元
         </Button>
         <Button
           type="button"

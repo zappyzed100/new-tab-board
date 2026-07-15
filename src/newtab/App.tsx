@@ -50,6 +50,11 @@ import {
   upsertSpecialItem,
 } from "../lib/entities/special";
 import { pushSpecialToNas } from "../lib/externalIO/specialSync";
+import {
+  pullSettingsBackupFromNas,
+  pushSettingsBackupToNas,
+} from "../lib/externalIO/settingsBackupSync";
+import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/fileio/settingsBackup";
 import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
@@ -195,6 +200,14 @@ export function App() {
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
   const specialItemsRef = useRef<SpecialItem[]>([]);
   specialItemsRef.current = specialItems;
+  // 同期tickがTODO/スペシャルフォルダ/ブックマーク・設定の現在値を読むための鏡(ユーザー指示:
+  // これらもNASへ保存する。特にTODOリストはactiveの同期サイクルに乗せてほしい)。
+  const todosRef = useRef<Todo[]>([]);
+  todosRef.current = todos;
+  const specialFoldersRef = useRef<string[]>([]);
+  specialFoldersRef.current = specialFolders;
+  const syncRef = useRef<SyncState | null>(null);
+  syncRef.current = sync;
   // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
   const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
@@ -203,6 +216,9 @@ export function App() {
   // 全件突き合わせ書き込みでハッシュ差分を持たないため、これが無いと5分毎のpushのたびに
   // 内容不変でも⭐全件がNASへ無駄に再書き込みされていた(2026-07-16 是正)。
   const nasSpecialSigRef = useRef<string>("");
+  // NAS設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)の
+  // 直近保存ハッシュ。内容不変のtickで無駄に再書き込みしない(nasSpecialSigRefと同じ発想)。
+  const nasSettingsSigRef = useRef<string>("");
   // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
   // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
   function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
@@ -309,6 +325,28 @@ export function App() {
       if (specialSig !== nasSpecialSigRef.current) {
         await pushSpecialToNas(specialEntriesNow);
         nasSpecialSigRef.current = specialSig;
+      }
+      // 設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)も
+      // activeと同じ5分tickでNASへ書く(ユーザー指示: 特にTODOリストはactiveの同期サイクルに
+      // 乗せてほしい)。notesは含めない(active/日付フォルダで既に別途同期されているため)。
+      if (syncRef.current) {
+        const settingsJson = serializeSettingsBackup(
+          buildSettingsBackupPayload(
+            syncRef.current,
+            {
+              todos: todosRef.current,
+              specialItems: specialItemsRef.current,
+              specialFolders: specialFoldersRef.current,
+            },
+            clockNow(),
+          ),
+        );
+        const settingsHash = contentHash(settingsJson);
+        if (settingsHash !== nasSettingsSigRef.current) {
+          if (await pushSettingsBackupToNas(settingsJson)) {
+            nasSettingsSigRef.current = settingsHash;
+          }
+        }
       }
     }
   }
@@ -476,13 +514,17 @@ export function App() {
     return cols;
   }, [orderedNotes, columnCount, noteHeights]);
 
-  // 全データ(ブックマーク/ノート/設定/TODO)のJSONバックアップをdebounce付きで自動的に
-  // Driveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
-  // exportedAtは常に変わるため、sync/notesが変化した時だけ再計算してdebounceを安定させる。
+  // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
+  // 自動的にDriveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
+  // todos/specialItems/specialFoldersは元々このpayloadに含まれておらず退避/復元で欠落して
+  // いた(ユーザー指摘・2026-07-16是正)。exportedAtは常に変わるため、依存が変化した時だけ
+  // 再計算してdebounceを安定させる。
   const backupJson = useMemo(() => {
     if (!sync || !notes) return null;
-    return serializeExport(buildExportPayload(sync, notes, clockNow()));
-  }, [sync, notes]);
+    return serializeExport(
+      buildExportPayload(sync, { notes, todos, specialItems, specialFolders }, clockNow()),
+    );
+  }, [sync, notes, todos, specialItems, specialFolders]);
   useJsonBackupSync(backupJson, sync?.settings.jsonBackupFileId, (fileId) =>
     updateSettings({ jsonBackupFileId: fileId }),
   );
@@ -749,6 +791,39 @@ export function App() {
     }
   }
 
+  // 「NASから復元」: NASのdata/settings-backup.json(notesを除く、テーマ/TODO/ブックマーク/
+  // ノート文字サイズ/スペシャル/タグ候補)を読み戻して適用する(ユーザー指示: NASにも保存し、
+  // NASからも復元できるように)。notesはNAS active の世代同期(pullActiveFromNas)が別途担う
+  // ため、ここでは触らない——2つの復元経路を混ぜるとどちらが正かが曖昧になる。
+  async function handleRestoreFromNas() {
+    setDataPanelMessage("NASから復元中…");
+    const payload = await pullSettingsBackupFromNas();
+    if (!payload) {
+      setDataPanelMessage(
+        "NASに設定バックアップがまだありません(NAS未設定か、まだ一度も保存されていません)",
+      );
+      return;
+    }
+    const nextSync: SyncState = {
+      bookmarks: payload.bookmarks,
+      appLaunches: payload.appLaunches,
+      settings: payload.settings,
+    };
+    setSync(nextSync);
+    setTodos(payload.todos);
+    setSpecialItems(payload.specialItems);
+    setSpecialFolders(payload.specialFolders);
+    void saveSyncData(nextSync);
+    void saveLocalData(
+      buildLocalData({
+        todos: payload.todos,
+        specialItems: payload.specialItems,
+        specialFolders: payload.specialFolders,
+      }),
+    );
+    setDataPanelMessage("NASから復元しました(ノートは対象外——NASの世代同期が別途復元します)");
+  }
+
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
@@ -768,12 +843,30 @@ export function App() {
     void saveSyncData(next);
   }
 
-  function importData(data: { sync: SyncState; notes: Note[] }) {
+  function importData(data: {
+    sync: SyncState;
+    notes: Note[];
+    todos?: Todo[];
+    specialItems?: SpecialItem[];
+    specialFolders?: string[];
+  }) {
     setSync(data.sync);
     setNotes(data.notes);
     setActiveNoteId(data.notes[0]?.id ?? null);
+    // todos/specialItems/specialFoldersは旧形式のバックアップ(このフィールドが無い)を
+    // 復元した場合にundefinedになりうる——その時は現状を消さず維持する(空へ上書きしない)。
+    if (data.todos !== undefined) setTodos(data.todos);
+    if (data.specialItems !== undefined) setSpecialItems(data.specialItems);
+    if (data.specialFolders !== undefined) setSpecialFolders(data.specialFolders);
     void saveSyncData(data.sync);
-    void saveLocalData(buildLocalData({ notes: data.notes }));
+    void saveLocalData(
+      buildLocalData({
+        notes: data.notes,
+        todos: data.todos ?? todos,
+        specialItems: data.specialItems ?? specialItems,
+        specialFolders: data.specialFolders ?? specialFolders,
+      }),
+    );
   }
 
   function openFileAsNote(
@@ -917,6 +1010,7 @@ export function App() {
                   onOpenFileAsNote={openFileAsNote}
                   onMessage={setDataPanelMessage}
                   onBackupToDrive={() => void handleBackupToDrive()}
+                  onRestoreFromNas={() => void handleRestoreFromNas()}
                 />
 
                 {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
