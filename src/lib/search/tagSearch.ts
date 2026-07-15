@@ -1,5 +1,5 @@
 // tagSearch.ts — タグによるノート絞り込みの純粋ロジック(メモリ内。ノートは最大501件・全件
-// メモリ上なので索引不要で一瞬。SQLiteは外部用でアプリ内検索はこれで足りる——設計はplan.md)。
+// メモリ上なので索引不要で一瞬。SQLiteは外部用でアプリ内検索はこれで足りる——設計はPLAN.md)。
 type TaggedNote = { tags?: string[]; junk?: boolean };
 
 export type TagCount = { tag: string; count: number };

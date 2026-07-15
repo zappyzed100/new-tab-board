@@ -812,6 +812,10 @@ _TS_DEPRECATED = [(re.compile(r"\bchrome\.tabs\.executeScript\s*\("),
                    "chrome.extension.sendMessage（chrome.runtime.sendMessage へ — 出典②同ガイド）")]
 DEPRECATED_PATTERNS[".ts"] = _TS_DEPRECATED; DEPRECATED_PATTERNS[".tsx"] = _TS_DEPRECATED
 PLAN_LAYER_ROOTS += ["src"]
+# 設計根拠文書をplan.mdからPLAN.mdへリネームした(2026-07-16。外部ツール「Progress Proof」の
+# 雛形PLAN.mdフォーマットに合わせるため)。既定値(小文字plan.md)はkitの中立既定のため上書き
+# せず、大文字PLAN.mdも設計根拠として認識するようここへ追加する。
+PLAN_DOC_PATTERNS += [re.compile(r"(^|/)PLAN\.md$")]
 LAYER_FORBIDDEN_IMPORTS += [
     ("src/lib/", re.compile(r"""from\s+['"][^'"]*newtab[^'"]*['"]"""),
      "src/lib は src/newtab を import してはいけない（依存は newtab → lib の一方向のみ）"),

@@ -15,6 +15,7 @@
 - `AGENTS.md.template`
 - `CLAUDE.md`
 - `CLAUDE.md.template`
+- `PLAN.md`
 - `README.md`
 - `SPEC.md`
 - `eslint.config.js`
@@ -22,7 +23,6 @@
 - `offscreen.html`
 - `package-lock.json`
 - `package.json`
-- `plan.md`
 - `playwright.config.ts` — playwright.config.ts — E2E設定(拡張機能ロードにはheaded実行が必須 — GUARDRAILS.md §11)
 - `tsconfig.json`
 - `vite.config.ts` — vite.config.ts — 新しいタブページ(index.html)・background service worker・
@@ -73,6 +73,7 @@
 
 ## `docs/`
 
+- `docs/PLAN_FORMAT.md`
 - `docs/manual-verification.md`
 - `docs/nas-native-messaging-protocol.md`
 - `docs/native-messaging-protocol.md`
