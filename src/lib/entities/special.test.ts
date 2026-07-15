@@ -7,6 +7,7 @@ import {
   removeSpecialItem,
   setSpecialItemFolder,
   specialEntries,
+  specialSyncSignature,
   toggleNoteSpecial,
   upsertSpecialItem,
 } from "./special";
@@ -114,5 +115,28 @@ describe("specialEntries", () => {
       note({ id: "3", title: "い", special: true, specialFolder: "a" }),
     ];
     expect(specialEntries(notes, []).map((e) => e.title)).toEqual(["あ", "い", "び"]);
+  });
+});
+
+describe("specialSyncSignature", () => {
+  it(
+    "notes配列の並び順が変わってもエントリの中身が同じなら同じシグネチャを返す" +
+      "(2026-07-16 是正: 並べ替えのたびに⭐全件がNAS/Driveへ無駄に再書き込みされていた回帰テスト)",
+    () => {
+      const a = note({ id: "a", title: "A", content: "本文A", special: true, specialFolder: "x" });
+      const b = note({ id: "b", title: "B", content: "本文B", special: true, specialFolder: "x" });
+      const sigBefore = specialSyncSignature(specialEntries([a, b], []));
+      // ノート配列の物理的な並び順だけを入れ替える(reorderNotes相当の操作をシミュレート)。
+      const sigAfterReorder = specialSyncSignature(specialEntries([b, a], []));
+      expect(sigAfterReorder).toBe(sigBefore);
+    },
+  );
+
+  it("エントリの内容が変わればシグネチャも変わる", () => {
+    const a = note({ id: "a", title: "A", content: "本文A", special: true });
+    const sigBefore = specialSyncSignature(specialEntries([a], []));
+    const changed = note({ id: "a", title: "A", content: "本文A(編集)", special: true });
+    const sigAfter = specialSyncSignature(specialEntries([changed], []));
+    expect(sigAfter).not.toBe(sigBefore);
   });
 });

@@ -1,6 +1,11 @@
 // nasActiveSync.test.ts — 世代同期の判定/push/pull の単体テスト
 import { describe, expect, it, vi } from "vitest";
-import { decideActiveSync, pullActiveFromNas, pushActiveToNas } from "./nasActiveSync";
+import {
+  decideActiveSync,
+  noteSaveFingerprint,
+  pullActiveFromNas,
+  pushActiveToNas,
+} from "./nasActiveSync";
 import { noteToMarkdown } from "./nasArchive";
 import type { Note } from "../../types";
 
@@ -20,6 +25,30 @@ describe("decideActiveSync", () => {
   });
   it("自分が先行(nasGen<localGen)はnoop", () => {
     expect(decideActiveSync(5, 4, true)).toBe("noop");
+  });
+});
+
+describe("noteSaveFingerprint", () => {
+  it(
+    "orderだけが変わってもフィンガープリントは変わらない(2026-07-16 是正: 並べ替え(ピン留め・" +
+      "上へ・ドラッグ)のたびに全ノートのorderが振り直され、本文不変でもNASへ無駄に再書き込みされていた)",
+    () => {
+      const a = note({ id: "a", content: "本文", order: 0 });
+      const b = note({ id: "a", content: "本文", order: 5 });
+      expect(noteSaveFingerprint(a)).toBe(noteSaveFingerprint(b));
+    },
+  );
+
+  it("pinnedが変わればフィンガープリントは変わる(1ノートだけの正当な内容変化)", () => {
+    const a = note({ id: "a", content: "本文", pinned: false });
+    const b = note({ id: "a", content: "本文", pinned: true });
+    expect(noteSaveFingerprint(a)).not.toBe(noteSaveFingerprint(b));
+  });
+
+  it("本文が変わればフィンガープリントは変わる", () => {
+    const a = note({ id: "a", content: "本文A" });
+    const b = note({ id: "a", content: "本文B" });
+    expect(noteSaveFingerprint(a)).not.toBe(noteSaveFingerprint(b));
   });
 });
 
@@ -116,4 +145,39 @@ describe("pushActiveToNas", () => {
     expect(r3.written).toBe(1);
     expect(writeNoteToNasStructure).toHaveBeenCalledWith(changed[0], 3000);
   });
+
+  it(
+    "並べ替え(reorderNotes相当で全ノートのorderが振り直された)だけでは再書き込みしない" +
+      "(2026-07-16 是正の回帰テスト)",
+    async () => {
+      const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);
+      const reconcileActiveNotesOnNas = vi.fn().mockResolvedValue(0);
+      const notes = [
+        note({ id: "a", content: "本文A", order: 0 }),
+        note({ id: "b", content: "本文B", order: 1 }),
+      ];
+      const r1 = await pushActiveToNas(
+        notes,
+        1000,
+        {},
+        {
+          writeNoteToNasStructure,
+          reconcileActiveNotesOnNas,
+        },
+      );
+      expect(r1.written).toBe(2);
+      writeNoteToNasStructure.mockClear();
+      // reorderNotesは並べ替えのたびに全ノートのorderを0からの連番へ振り直す——本文は同じまま。
+      const reordered = [
+        note({ id: "a", content: "本文A", order: 1 }),
+        note({ id: "b", content: "本文B", order: 0 }),
+      ];
+      const r2 = await pushActiveToNas(reordered, 2000, r1.savedHashes, {
+        writeNoteToNasStructure,
+        reconcileActiveNotesOnNas,
+      });
+      expect(r2.written).toBe(0);
+      expect(writeNoteToNasStructure).not.toHaveBeenCalled();
+    },
+  );
 });

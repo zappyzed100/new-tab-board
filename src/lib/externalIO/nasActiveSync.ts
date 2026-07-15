@@ -16,9 +16,18 @@ import type { Note } from "../../types";
 
 /** ノートの「保存フィンガープリント」= 保存する.md全体のハッシュ(ユーザー指示: ハッシュで保存済みか判定)。
  * noteToMarkdown はタイトル/本文/タグ/order/pinned/done/special等の永続フィールドだけを含む(driveFileId/
- * taggedHash等の揮発フィールドは含まない)ので、これ1つで「保存すべき変化があったか」を捉えられる。 */
+ * taggedHash等の揮発フィールドは含まない)ので、これ1つで「保存すべき変化があったか」を捉えられる。
+ *
+ * ただし order は除外する(2026-07-16 是正): reorderNotes は並べ替えのたびに**全ノート**の order を
+ * 0からの連番へ振り直すため、1回の「上へ」やドラッグ操作だけで全ノートのフィンガープリントが変わり、
+ * 本文が1文字も変わっていないのに全ノートが active/日付フォルダへ無駄に再書き込みされていた
+ * (ユーザー指摘「順番差し替えただけで作動するけど、順番変えても中身変わらないだろ」)。order は
+ * 実際に書き込みが起きた時点の noteToMarkdown には最新値がそのまま入るため、他の理由で再書き込み
+ * されれば追従する——常に最新ではなくなるが、内容不変の並べ替えで書き込みが起きないことを優先する。
+ * pinned は除外しない: togglePinNote は1ノートだけを更新する独立した操作であり、並べ替えのように
+ * 全ノートを巻き込まない正当な内容変化のため。 */
 export function noteSaveFingerprint(note: Note): string {
-  return contentHash(noteToMarkdown(note));
+  return contentHash(noteToMarkdown({ ...note, order: 0 }));
 }
 
 export type SyncDecision = "push" | "pull" | "noop";

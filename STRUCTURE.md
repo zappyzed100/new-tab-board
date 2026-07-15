@@ -699,6 +699,7 @@
 - function setSpecialItemFolder
 - function addSpecialFolder
 - function specialEntries
+- function specialSyncSignature
 
 ### `src/lib/entities/tagCandidates.ts`
 - function addTagCandidate

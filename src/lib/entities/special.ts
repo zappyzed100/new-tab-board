@@ -93,3 +93,12 @@ export function specialEntries(notes: Note[], items: SpecialItem[]): SpecialEntr
     (a, b) => (a.folder ?? "").localeCompare(b.folder ?? "") || a.title.localeCompare(b.title),
   );
 }
+
+/** スペシャルエントリ一覧の「変化検出シグネチャ」(NAS/DriveどちらのpushもハッシュベースではなくJSON
+ * 比較の等価判定で「変わっていなければ書かない」を行うため共用する)。id/folder/title/content だけを
+ * 見るため、ノート本体の並べ替え(ピン留め・上へ・ドラッグ)で order が変わっても、スペシャル項目
+ * そのものの中身が変わらなければ同じ文字列を返す——並べ替えのたびに⭐全件が無駄に再書き込みされて
+ * いた問題の修正(2026-07-16)。 */
+export function specialSyncSignature(entries: SpecialEntry[]): string {
+  return JSON.stringify(entries.map((e) => [e.id, e.folder ?? "", e.title, e.content]));
+}

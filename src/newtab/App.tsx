@@ -45,6 +45,7 @@ import {
   removeSpecialItem,
   setSpecialItemFolder,
   specialEntries,
+  specialSyncSignature,
   toggleNoteSpecial,
   upsertSpecialItem,
 } from "../lib/entities/special";
@@ -180,6 +181,10 @@ export function App() {
   const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
   const nasSavedHashesRef = useRef<Record<string, string>>({});
+  // NAS special(⭐)の直近pushシグネチャ(driveSpecialSigRefと同じ発想)。pushSpecialToNasは
+  // 全件突き合わせ書き込みでハッシュ差分を持たないため、これが無いと5分毎のpushのたびに
+  // 内容不変でも⭐全件がNASへ無駄に再書き込みされていた(2026-07-16 是正)。
+  const nasSpecialSigRef = useRef<string>("");
   // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
   // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
   function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
@@ -276,7 +281,14 @@ export function App() {
       const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
       await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
       // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
-      await pushSpecialToNas(specialEntries(current, specialItemsRef.current));
+      // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
+      // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
+      const specialEntriesNow = specialEntries(current, specialItemsRef.current);
+      const specialSig = specialSyncSignature(specialEntriesNow);
+      if (specialSig !== nasSpecialSigRef.current) {
+        await pushSpecialToNas(specialEntriesNow);
+        nasSpecialSigRef.current = specialSig;
+      }
     }
   }
   // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runNasSyncTickは
@@ -327,7 +339,7 @@ export function App() {
   useEffect(() => {
     if (!notes) return;
     const entries = specialEntries(notes, specialItems);
-    const sig = JSON.stringify(entries.map((e) => [e.id, e.folder ?? "", e.title, e.content]));
+    const sig = specialSyncSignature(entries);
     if (sig === driveSpecialSigRef.current) return;
     const timer = setTimeout(() => {
       void (async () => {
