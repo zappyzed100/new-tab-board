@@ -31,6 +31,8 @@ import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
 import { getGeminiApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
+import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
+import { logOp } from "../../../lib/runtime/log";
 import { buildTagVocabulary } from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
@@ -181,22 +183,41 @@ export function NoteEditorPane({
     );
   }
 
-  // 保存(スナップショット)の瞬間に自動タグ付けする(ユーザー指示)。タグは notes state に反映され、
-  // NAS active への書き込みは App の世代同期(5分毎の push)がその state を読んで行う——push は
-  // state を読むので「タグ確定後に書く」も自然に満たす(NoteEditorPane からは NAS へ直接書かない)。
+  // 自動タグ付け(ユーザー指示: 編集終了から5分 or 400文字変更のみで起動。以前はスナップショット
+  // 保存イベント全般に乗せていたが、blur/paste等でも即発火して早すぎたため分離した——
+  // 起動条件自体は useAutoTagScheduler が管理し、ここは呼ばれた時の実処理のみを担う)。
+  // タグは notes state に反映され、NAS active への書き込みは App の世代同期(5分毎の push)が
+  // その state を読んで行う——push は state を読むので「タグ確定後に書く」も自然に満たす
+  // (NoteEditorPane からは NAS へ直接書かない)。
   // キー未設定・前回から変更なし・別ペイン処理中・意味のある結果なしは null(タグ付けせず)。
   async function runAutoTag(savedContent: string): Promise<NoteAnalysis | null> {
-    if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) return null;
-    if (autoTagInFlight) return null; // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
+    logOp("autotag", "trigger", `note=${note.id} chars=${savedContent.length}`);
+    if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) {
+      logOp("autotag", "skip-no-retag-needed", `note=${note.id}`);
+      return null;
+    }
+    if (autoTagInFlight) {
+      logOp("autotag", "skip-in-flight", `note=${note.id}`); // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
+      return null;
+    }
     const apiKey = await getGeminiApiKey();
-    if (!apiKey) return null;
+    if (!apiKey) {
+      logOp("autotag", "skip-no-api-key", `note=${note.id}`);
+      return null;
+    }
     autoTagInFlight = true;
+    logOp("autotag", "call-start", `note=${note.id}`);
     try {
       const analysis = await analyzeNote(
         savedContent,
         apiKey,
         {},
         buildTagVocabulary(tagCandidates, notes),
+      );
+      logOp(
+        "autotag",
+        "call-done",
+        `note=${note.id} tags=${analysis.tags.length} junk=${analysis.junk} title=${analysis.title !== ""}`,
       );
       if (analysis.tags.length === 0 && !analysis.junk && !analysis.title) return null;
       onNotesChange((prev) => {
@@ -296,6 +317,10 @@ export function NoteEditorPane({
     // syncDriveNow内部でnoteRef経由の最新値を読むため依存に含める必要はない)。
   }, [manualSyncSignal]);
 
+  // 自動タグ付け/タイトル付けの起動(ユーザー指示: 編集終了から5分 or 400文字変更のみ。
+  // スナップショット保存(blur/paste等を含む)には乗せない——早すぎるとの指摘のため分離した)。
+  useAutoTagScheduler(note.id, note.content, (c) => void runAutoTag(c));
+
   return (
     <Card
       data-testid={`note-editor-area-${note.id}`}
@@ -312,11 +337,7 @@ export function NoteEditorPane({
       onDrop={() => onDropNote(note.id)}
     >
       <Flex direction="column" gap="3">
-        <SnapshotScheduler
-          noteId={note.id}
-          content={note.content}
-          onSnapshot={(c) => void runAutoTag(c)}
-        />
+        <SnapshotScheduler noteId={note.id} content={note.content} />
         {/* 1行目: ノート名を一番左上に、枠なし・太字・大きめで置く(クリックでそのまま編集)。
             その右に自由チェック(何とも連動しない)・ドラッグつまみ・同期状態、右端にピンアイコン。 */}
         <Flex align="center" gap="2">

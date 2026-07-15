@@ -3,16 +3,7 @@
 // スケジューラの内部状態(前回スナップショット時刻等)をリセットする設計)
 import { useSnapshotScheduler } from "../../../lib/history/useSnapshotScheduler";
 
-export function SnapshotScheduler({
-  noteId,
-  content,
-  onSnapshot,
-}: {
-  noteId: string;
-  content: string;
-  /** スナップショットが実際に保存された直後に、その本文で呼ばれる(保存時の自動タグ付け用)。 */
-  onSnapshot?: (content: string) => void;
-}) {
-  useSnapshotScheduler(noteId, content, onSnapshot);
+export function SnapshotScheduler({ noteId, content }: { noteId: string; content: string }) {
+  useSnapshotScheduler(noteId, content);
   return null;
 }

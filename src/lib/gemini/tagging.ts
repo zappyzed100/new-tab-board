@@ -21,6 +21,18 @@ export function needsRetag(note: { content: string; taggedHash?: string }): bool
   return contentHash(note.content) !== note.taggedHash;
 }
 
+/** 自動タグ付けの起動条件のひとつ: 前回起動時からの変更量(文字数の絶対差)が閾値を超えたか
+ * (ユーザー指示: 保存イベント全般に乗せると早すぎたため、タグ専用の閾値をスナップショットの
+ * 変更閾値(200字)とは別に400字で持つ)。 */
+export const AUTO_TAG_CHANGE_THRESHOLD_CHARS = 400;
+
+export function exceedsAutoTagChangeThreshold(
+  lastContent: string,
+  currentContent: string,
+): boolean {
+  return Math.abs(currentContent.length - lastContent.length) >= AUTO_TAG_CHANGE_THRESHOLD_CHARS;
+}
+
 /** Geminiのカンマ/読点/改行区切り応答からタグ配列にする(#・記号を外し、最大MAX_TAGS件・重複除去)。 */
 export function parseTags(text: string): string[] {
   const seen = new Set<string>();

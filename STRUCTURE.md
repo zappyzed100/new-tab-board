@@ -215,6 +215,7 @@
 - `src/lib/gemini/noteAi.ts` — noteAi.ts — Geminiを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
 - `src/lib/gemini/tagging.test.ts` — tagging.test.ts — 自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
 - `src/lib/gemini/tagging.ts` — tagging.ts — Geminiによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
+- `src/lib/gemini/useAutoTagScheduler.ts` — useAutoTagScheduler.ts — 自動タグ付け/タイトル付けの起動条件(編集終了から5分 or 400文字変更)を
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
@@ -843,12 +844,17 @@
 - const MAX_TAGS
 - function contentHash
 - function needsRetag
+- const AUTO_TAG_CHANGE_THRESHOLD_CHARS
+- function exceedsAutoTagChangeThreshold
 - function parseTags
 - function tagNote
 - type NoteAnalysis
 - function parseTitle
 - function parseJunkFlag
 - function analyzeNote
+
+### `src/lib/gemini/useAutoTagScheduler.ts`
+- function useAutoTagScheduler
 
 ### `src/lib/history/gzip.ts`
 - function gzipCompress

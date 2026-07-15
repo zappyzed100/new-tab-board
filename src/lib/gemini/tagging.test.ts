@@ -2,7 +2,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   analyzeNote,
+  AUTO_TAG_CHANGE_THRESHOLD_CHARS,
   contentHash,
+  exceedsAutoTagChangeThreshold,
   MAX_TAGS,
   needsRetag,
   parseJunkFlag,
@@ -42,6 +44,21 @@ describe("needsRetag", () => {
 
   it("タグ付け後に本文が変わっていれば要再タグ付け", () => {
     expect(needsRetag({ content: "変更後の本文", taggedHash: contentHash("元の本文") })).toBe(true);
+  });
+});
+
+describe("exceedsAutoTagChangeThreshold", () => {
+  it(`変更が${AUTO_TAG_CHANGE_THRESHOLD_CHARS}字未満ならfalse`, () => {
+    const before = "a".repeat(100);
+    const after = "a".repeat(100 + AUTO_TAG_CHANGE_THRESHOLD_CHARS - 1);
+    expect(exceedsAutoTagChangeThreshold(before, after)).toBe(false);
+  });
+
+  it(`変更が${AUTO_TAG_CHANGE_THRESHOLD_CHARS}字以上ならtrue(追加・削除どちらでも)`, () => {
+    const before = "a".repeat(100);
+    const grown = "a".repeat(100 + AUTO_TAG_CHANGE_THRESHOLD_CHARS);
+    expect(exceedsAutoTagChangeThreshold(before, grown)).toBe(true);
+    expect(exceedsAutoTagChangeThreshold(grown, before)).toBe(true);
   });
 });
 
