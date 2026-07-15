@@ -668,3 +668,51 @@ BINDING_STAMP_FILES = [
     ".claude/hooks/post_edit_format.py",
     ".claude/hooks/post_edit_lint.py",
 ]
+
+# >>> GUARDRAILS BINDING >>>
+# v2.42移行用: 既存充填(bindings/catalog.md 列 ts-react-crx@1)をこの区画に複製した。
+# 上の本体側の記述は install_kit.py の UPGRADED で新版に置き換わり、この区画の中身だけが
+# 引き継がれる（Phase 44）。
+CODE_EXTS |= {".ts", ".tsx"}
+HEADER_REQUIRED_EXTS |= {".ts", ".tsx"}
+TEST_PATH_PATTERNS += [re.compile(p) for p in (r"\.test\.tsx?$", r"^e2e/.*\.spec\.ts$")]
+_TS_SLEEP = [(re.compile(r"\bsetTimeout\s*\(|\bsleep\s*\("), "setTimeout/sleep")]
+SLEEP_PATTERNS[".ts"] = _TS_SLEEP; SLEEP_PATTERNS[".tsx"] = _TS_SLEEP
+_TS_NONDET = [(re.compile(r"\bDate\.now\s*\("), "Date.now()（Clock抽象で注入する）"),
+              (re.compile(r"\bnew Date\s*\(\s*\)"), "引数なし new Date()（固定時刻を渡す）"),
+              (re.compile(r"\bMath\.random\s*\("), "Math.random()（seed付き乱数を注入する）")]
+NONDETERMINISM_PATTERNS[".ts"] = _TS_NONDET; NONDETERMINISM_PATTERNS[".tsx"] = _TS_NONDET
+_TS_NET = [(re.compile(r"\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b"), "fetch/axios/XHR")]
+TEST_NETWORK_PATTERNS[".ts"] = _TS_NET; TEST_NETWORK_PATTERNS[".tsx"] = _TS_NET
+_TS_PRINT = [(re.compile(r"\bconsole\.(log|info|debug)\s*\("), "console.*(")]
+PRINT_CALL_PATTERNS[".ts"] = _TS_PRINT; PRINT_CALL_PATTERNS[".tsx"] = _TS_PRINT
+LOG_EXIT_FILES |= {"src/lib/runtime/log.ts"}
+_TS_LOG_BOUNDARY = [(re.compile(r"\bchrome\.storage\.(?:local|sync)\.(?:get|set)\s*\("), "chrome.storage I/O"),
+                    (re.compile(r"^\s*catch\b"), "エラーハンドラ")]
+LOG_BOUNDARY_PATTERNS[".ts"] = _TS_LOG_BOUNDARY; LOG_BOUNDARY_PATTERNS[".tsx"] = _TS_LOG_BOUNDARY
+LOG_CALL_PATTERN[".ts"] = re.compile(r"\blogOp\s*\("); LOG_CALL_PATTERN[".tsx"] = re.compile(r"\blogOp\s*\(")
+UI_TESTID_RULES += [(re.compile(r"\.tsx$"),
+                     re.compile(r"<(?:button|a|input|select|textarea|[A-Z]\w*)\b[^>]*on(?:Click|Submit|Change)=[^>]*>"),
+                     re.compile(r"data-testid\s*="),
+                     "React操作要素")]
+ORPHAN_UNIVERSES += [(["src/"], ".ts", [re.compile(r"(^|/)main\.tsx?$"), re.compile(r"vite\.config"),
+                                        re.compile(r"(^|/)background\.ts$")]),
+                     (["src/"], ".tsx", [re.compile(r"(^|/)main\.tsx?$")])]
+IMPORT_TARGET_EXTRACTORS[".ts"] = _ts_import_targets
+IMPORT_TARGET_EXTRACTORS[".tsx"] = _ts_import_targets
+SYMBOL_EXTRACTORS[".ts"] = _ts_public_symbols
+SYMBOL_EXTRACTORS[".tsx"] = _ts_public_symbols
+_TS_DEPRECATED = [(re.compile(r"\bchrome\.tabs\.executeScript\s*\("),
+                   "chrome.tabs.executeScript（MV3で非推奨。chrome.scripting.executeScript へ — 出典②公式MV3移行ガイド）"),
+                  (re.compile(r"\bchrome\.extension\.sendMessage\s*\("),
+                   "chrome.extension.sendMessage（chrome.runtime.sendMessage へ — 出典②同ガイド）")]
+DEPRECATED_PATTERNS[".ts"] = _TS_DEPRECATED; DEPRECATED_PATTERNS[".tsx"] = _TS_DEPRECATED
+PLAN_LAYER_ROOTS += ["src"]
+LAYER_FORBIDDEN_IMPORTS += [
+    ("src/lib/", re.compile(r"""from\s+['"][^'"]*newtab[^'"]*['"]"""),
+     "src/lib は src/newtab を import してはいけない（依存は newtab → lib の一方向のみ）"),
+]
+REQUIRED_PATHS += ["src", "src/lib", "src/newtab", "e2e"]
+SINGLE_TEST_COMMAND = ["npx", "vitest", "run", "{file}"]   # 単一スロット
+# BINDING-SOURCE: ts-react-crx@1
+# <<< GUARDRAILS BINDING <<<

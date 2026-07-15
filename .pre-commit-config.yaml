@@ -82,6 +82,7 @@ repos:
 
       # ============ BINDING: 言語別 push 段ゲート（GUARDRAILS.md §4・§11 Step 0 表A）============
       # ts-react-crx@1（bindings/catalog.md）— Step 6 で充填。
+      # >>> GUARDRAILS BINDING: pre-push >>>
       - id: tsc
         name: "tsc --noEmit (pre-push — §4)"
         entry: bash -c 'npx tsc --noEmit'
@@ -103,3 +104,4 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # <<< GUARDRAILS BINDING: pre-push <<<

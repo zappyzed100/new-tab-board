@@ -23,6 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+# >>> GUARDRAILS BINDING >>>
 # 拡張子 → 整形コマンド（argv のリストのリスト・順に実行）。空 = キット出荷時の既定。
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "format", "{file}"]]
 DISPATCH: dict[str, list[list[str]]] = {}
@@ -32,6 +33,8 @@ DISPATCH: dict[str, list[list[str]]] = {}
 DISPATCH[".ts"] = DISPATCH[".tsx"] = [
     ["node", "node_modules/prettier/bin/prettier.cjs", "--write", "{file}"]
 ]
+# BINDING-SOURCE: ts-react-crx@1
+# <<< GUARDRAILS BINDING <<<
 
 
 def main() -> int:

@@ -6,10 +6,14 @@ __pycache__/
 .STRUCTURE.md.*.tmp
 # Stop ゲート等のセッション状態（§2b。追跡すると porcelain が恒常非空＝ゲート誤発火）
 .claude/session/
+# Codex フックのセッション状態（baseline / Stop 再試行カウンタ）
+.codex/session/
 # red-first 証明の一時 worktree（§5。中断で残骸が出ても dirty 扱いにしない — v2.7）
 .red-first-*/
 # commit-msg段CI再生の一時 worktree（§3.4・§5・v2.25。中断で残骸が出ても dirty 扱いにしない）
 .commit-msg-history-*/
+# 違反ログ（§3.6。v2.34。ローカル telemetry——追跡するとコミットノイズ＆機械記録の改変面）
+.guardrails/violations.jsonl
 # <<< guardrails-kit <<<
 
 # --- new-tab-board 固有(プロジェクト自由領域) ---

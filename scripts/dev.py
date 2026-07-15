@@ -48,6 +48,23 @@ COMMANDS: dict[str, list[list[str]] | None] = {
     "db":    [["node", "scripts/dump-storage.mjs"]],   # chrome.storage.local の読み取りダンプ
 }
 
+# >>> GUARDRAILS BINDING >>>
+# v2.42移行用: 既存充填(bindings/catalog.md 列 ts-react-crx@1)をこの区画に複製した。
+# 上の COMMANDS リテラルは install_kit.py の UPGRADED で新版に置き換わり、この区画の
+# COMMANDS.update(...) だけが引き継がれる（Phase 44。check/probe は新版の既定配線を使う）。
+COMMANDS.update({
+    "up":    [["npm", "run", "build", "--", "--watch"]],
+    "reset": [["node", "scripts/reset-e2e-profile.mjs"]],
+    "seed":  [["node", "scripts/seed-board.mjs"]],
+    "time":  [["node", "scripts/set-time-freeze.mjs", "{args}"]],
+    "test":  [["npx", "vitest", "run"]],
+    "e2e":   [["npx", "playwright", "test"]],
+    "fmt":   [["npx", "prettier", "--write", "."]],
+    "db":    [["node", "scripts/dump-storage.mjs"]],
+})
+# BINDING-SOURCE: ts-react-crx@1
+# <<< GUARDRAILS BINDING <<<
+
 VERB_HELP: dict[str, str] = {
     "up": "ローカル環境を起動する（冪等）",
     "reset": "環境を既知状態へ戻す（seed込み・決定性の供給 — §12.2）",

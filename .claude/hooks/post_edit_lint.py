@@ -36,6 +36,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+# >>> GUARDRAILS BINDING >>>
 # 拡張子 → lint コマンド（argv のリストのリスト・順に実行）。空 = キット出荷時の既定。
 # 例（python-uv 列・直接バイナリ呼び出し）: ".py": [["ruff", "check", "{file}"]]
 DISPATCH: dict[str, list[list[str]]] = {}
@@ -43,6 +44,8 @@ DISPATCH: dict[str, list[list[str]]] = {}
 # （bindings/catalog.md — 2026-07-08）。
 _ESLINT = [["node", "node_modules/eslint/bin/eslint.js", "--max-warnings=0", "{file}"]]
 DISPATCH[".ts"] = DISPATCH[".tsx"] = DISPATCH[".js"] = DISPATCH[".jsx"] = _ESLINT
+# BINDING-SOURCE: ts-react-crx@1
+# <<< GUARDRAILS BINDING <<<
 
 
 def main() -> int:

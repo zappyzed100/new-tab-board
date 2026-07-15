@@ -58,9 +58,11 @@ jobs:
         with:
           fetch-depth: 0   # PR 範囲・親コミット・worktree 復元に全履歴が必要（§5）
       - uses: astral-sh/setup-uv@v5
+      # >>> GUARDRAILS BINDING: red-first-setup >>>
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # <<< GUARDRAILS BINDING: red-first-setup <<<
       - run: uv run scripts/check_red_first.py --base "${{ github.event.pull_request.base.sha }}"
 
   # commit-msg段の再生（§3.4・§5・v2.25）: check-commit-msg は pre-commit install した
@@ -78,6 +80,7 @@ jobs:
       - run: uv run scripts/check_commit_msg_history.py --base "${{ github.event.pull_request.base.sha }}"
 
   # ============ BINDING: 言語別テスト・解析・E2E ジョブ（ts-react-crx@1 — §5・§12.4）============
+  # >>> GUARDRAILS BINDING: language-jobs >>>
   ts-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -101,3 +104,4 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: xvfb-run --auto-servernum npx playwright test
+  # <<< GUARDRAILS BINDING: language-jobs <<<
