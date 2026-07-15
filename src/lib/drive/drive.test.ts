@@ -68,6 +68,21 @@ describe("uploadNote", () => {
     expect(fetchImpl.mock.calls[0][1].body).toContain('"trashed":false');
   });
 
+  it("上書き(PATCH)でopts.folderIdがあればaddParents/removeParents=rootを送り、正しいフォルダへ入れ直す(実機でactiveファイルがマイドライブ直下に迷い込んだまま直らなかった不具合の回帰)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+    await uploadNote(note, "token-abc", "file-1", fetchImpl, { folderId: "folder-active" });
+    const url = fetchImpl.mock.calls[0][0] as string;
+    expect(url).toContain("addParents=folder-active");
+    expect(url).toContain("removeParents=root");
+  });
+
+  it("上書き(PATCH)でもopts.folderIdが無ければaddParents/removeParentsを送らない", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+    await uploadNote(note, "token-abc", "file-1", fetchImpl);
+    const url = fetchImpl.mock.calls[0][0] as string;
+    expect(url).not.toContain("addParents");
+  });
+
   it("更新(PATCH)でもファイル名を送り直す(タイトルベースのactiveファイル名がリネームに追従するため)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
     await uploadNote(note, "token-abc", "file-1", fetchImpl, { filename: "新しいタイトル.md" });

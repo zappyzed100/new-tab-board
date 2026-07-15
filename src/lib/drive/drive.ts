@@ -274,8 +274,15 @@ export async function uploadNote(
     `Content-Type: text/markdown; charset=UTF-8\r\n\r\n${note.content}\r\n` +
     `--${boundary}--`;
 
+  // 既存ファイルへの上書き時、opts.folderIdが指定されていれば毎回addParents/removeParentsを
+  // 送り、正しいフォルダへ入れ直す(実機確認: ノートのactiveファイルがマイドライブ直下に
+  // 迷い込んだまま、既知のdriveFileIdでPATCHし続けても場所が直らなかった不具合の自己修復。
+  // 2026-07-16)。既にfolderIdの配下にあれば実質no-op、root以外の場所にあってもfolderIdは
+  // 追加されるため最低限そちらでも見えるようになる。
+  const reparentQuery =
+    existingFileId && opts.folderId ? `&addParents=${opts.folderId}&removeParents=root` : "";
   const url = existingFileId
-    ? `${UPLOAD_URL}/${existingFileId}?uploadType=multipart`
+    ? `${UPLOAD_URL}/${existingFileId}?uploadType=multipart${reparentQuery}`
     : `${UPLOAD_URL}?uploadType=multipart`;
   const res = await fetchImpl(url, {
     method: existingFileId ? "PATCH" : "POST",
