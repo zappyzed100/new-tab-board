@@ -40,10 +40,8 @@ import {
   updateNote,
 } from "../lib/entities/notes";
 import {
-  addSpecialFolder,
   freezeNoteToSpecial,
   removeSpecialItem,
-  setSpecialItemFolder,
   specialEntries,
   specialSyncSignature,
   toggleNoteSpecial,
@@ -572,10 +570,6 @@ export function App() {
     setSpecialItems(next);
     void saveLocalData(buildLocalData({ specialItems: next }));
   }
-  function updateSpecialFolders(next: string[]) {
-    setSpecialFolders(next);
-    void saveLocalData(buildLocalData({ specialFolders: next }));
-  }
   // ⭐トグル(ノートのspecialを反転)。
   function toggleSpecial(noteId: string) {
     updateNotes((prev) => toggleNoteSpecial(prev, noteId));
@@ -587,18 +581,10 @@ export function App() {
     if (frozen) updateSpecialItems(upsertSpecialItem(specialItems, frozen));
     updateNotes((prev) => removeNote(prev, noteId));
   }
-  // スペシャルのフォルダ移動(live=ノートのspecialFolder / frozen=凍結項目のfolder)。
-  function moveSpecialToFolder(id: string, source: "live" | "frozen", folder: string) {
-    if (source === "live") updateNotes((prev) => updateNote(prev, id, { specialFolder: folder }));
-    else updateSpecialItems(setSpecialItemFolder(specialItems, id, folder));
-  }
   // スペシャルから外す(live=スター解除 / frozen=凍結項目を削除)。
   function removeSpecial(id: string, source: "live" | "frozen") {
     if (source === "live") updateNotes((prev) => updateNote(prev, id, { special: false }));
     else updateSpecialItems(removeSpecialItem(specialItems, id));
-  }
-  function createSpecialFolder(path: string) {
-    updateSpecialFolders(addSpecialFolder(specialFolders, path));
   }
 
   // ノートボードの並べ替え/ピン(すべてlinear order=sortedNotes上の操作。列固定masonryの
@@ -894,11 +880,8 @@ export function App() {
                 <SpecialPanel
                   notes={notes}
                   specialItems={specialItems}
-                  folders={specialFolders}
                   onSelectNote={selectNote}
-                  onMoveToFolder={moveSpecialToFolder}
                   onRemove={removeSpecial}
-                  onCreateFolder={createSpecialFolder}
                 />
                 <TagCandidatesPanel
                   candidates={tagCandidates}
