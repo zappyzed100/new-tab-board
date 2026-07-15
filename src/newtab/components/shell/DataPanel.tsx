@@ -15,6 +15,7 @@ import {
   FileText,
   FolderOpen,
   KeyRound,
+  RefreshCw,
   Settings as SettingsIcon,
   Upload,
 } from "lucide-react";
@@ -41,6 +42,9 @@ type Props = {
   onMessage: (message: string) => void;
   /** 現在の全データを今すぐGoogle Driveへ退避(バックアップ)する(自動同期の即時版)。 */
   onBackupToDrive: () => void;
+  /** 今アクティブなノートだけを、通常の変更検知(保存フィンガープリント)を無視して
+   * NAS/Driveへ強制的に再送信する(ユーザー指示: 保管先を外部で空にした後の作り直し用)。 */
+  onForceResyncActive: () => Promise<{ nasWritten: number; nasConfigured: boolean }>;
 };
 
 export function DataPanel({
@@ -49,6 +53,7 @@ export function DataPanel({
   onOpenFileAsNote,
   onMessage,
   onBackupToDrive,
+  onForceResyncActive,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -162,6 +167,16 @@ export function DataPanel({
     onMessage(`NASへ${flushed}件書き出しました(失敗${failed}件)`);
   }
 
+  async function handleForceResync() {
+    onMessage("アクティブノートをNAS/Driveへ再送信中…");
+    const { nasWritten, nasConfigured } = await onForceResyncActive();
+    onMessage(
+      nasConfigured
+        ? `NASへ${nasWritten}件書き直しました。Driveへも再送信を開始しました`
+        : "NAS未設定のためNASはスキップしました。Driveへの再送信は開始しました",
+    );
+  }
+
   return (
     <Flex asChild wrap="wrap" gap="2">
       <div data-testid="data-panel">
@@ -206,6 +221,16 @@ export function DataPanel({
         >
           <CloudDownload size={14} aria-hidden="true" />
           Driveから復元
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-force-resync-active"
+          title="今アクティブなノートだけを、変更の有無を無視してNAS/Driveへ強制的に再送信する(保管先を外部で空にした後の作り直し用)"
+          onClick={() => void handleForceResync()}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          アクティブノートを再送信
         </Button>
         <Button
           type="button"
