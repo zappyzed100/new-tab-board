@@ -635,6 +635,7 @@
 ### `src/lib/drive/driveSync.ts`
 - const ACTIVE_FOLDER_PATH
 - const ACTIVE_KIND
+- function activeFilenameFor
 - type SyncResult
 - type SyncDeps
 - function syncNoteToDrive

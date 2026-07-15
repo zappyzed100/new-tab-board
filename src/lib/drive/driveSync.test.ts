@@ -1,13 +1,42 @@
 // driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
 import { describe, expect, it, vi } from "vitest";
-import { syncNoteToDrive } from "./driveSync";
+import { activeFilenameFor, syncNoteToDrive } from "./driveSync";
 import { noteToMarkdown } from "../externalIO/nasArchive";
 import type { Note } from "../../types";
 
 const note: Note = { id: "n1", title: "会議メモ", content: "本文", pinned: false, order: 0 };
 // active/<id>.md へは Markdown+front matter で書く(uploadNoteのcontentへmdを渡す)。
 const mdNote = { id: note.id, title: note.title, content: noteToMarkdown(note) };
-const ACTIVE_OPTS = { folderId: "active-folder", kind: "active", filename: "n1.md" };
+// Driveのactiveフォルダのファイル名はタイトルベース(ユーザー指示。中身のidは変わらない)。
+const ACTIVE_OPTS = {
+  folderId: "active-folder",
+  kind: "active",
+  filename: activeFilenameFor(note),
+};
+
+describe("activeFilenameFor", () => {
+  it("<タイトル> (idの先頭8桁).md にする(ユーザー指示: Driveで見て分かる名前にしたい)", () => {
+    expect(
+      activeFilenameFor({ id: "3040f49a-50c5-4439-bd10-0c29e6db1333", title: "会議メモ" }),
+    ).toBe("会議メモ (3040f49a).md");
+  });
+
+  it("空タイトルは(無題)にする", () => {
+    expect(activeFilenameFor({ id: "abcdefgh-0000", title: "  " })).toBe("(無題) (abcdefgh).md");
+  });
+
+  it("改行・スラッシュを含むタイトルは一行の見苦しくない形にする", () => {
+    expect(activeFilenameFor({ id: "12345678-0000", title: "会議\nメモ/議事録" })).toBe(
+      "会議 メモ-議事録 (12345678).md",
+    );
+  });
+
+  it("同じタイトルでもidが違えばファイル名は衝突しない", () => {
+    const a = activeFilenameFor({ id: "aaaaaaaa-0000", title: "無題" });
+    const b = activeFilenameFor({ id: "bbbbbbbb-0000", title: "無題" });
+    expect(a).not.toBe(b);
+  });
+});
 
 describe("syncNoteToDrive", () => {
   it("未認証(token無し)ならunauthenticatedを返し、アップロードは呼ばない", async () => {

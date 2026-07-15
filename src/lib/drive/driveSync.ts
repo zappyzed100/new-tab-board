@@ -11,6 +11,20 @@ export const ACTIVE_FOLDER_PATH = ["app", "New Tab Board", "active"];
 /** active フォルダのファイルを区別する appProperties の種別(日付フォルダのファイルと分けるため)。 */
 export const ACTIVE_KIND = "active";
 
+/** Driveのファイル名として見苦しくない一行にする(改行除去・パス区切りに見える文字を置換)。 */
+function sanitizeDriveFilenamePart(title: string): string {
+  const oneLine = title.replace(/[\r\n]+/g, " ").trim();
+  const noSlash = oneLine.replace(/[/\\]/g, "-");
+  return noSlash === "" ? "(無題)" : noSlash;
+}
+
+/** activeフォルダのファイル名(ユーザー指示: <タイトル>.mdにする。ただし同じタイトルの
+ * ノートが複数あってもDrive上で衝突・見分けがつかなくならないよう、末尾にnoteIdの短い
+ * 断片を付ける)。 */
+export function activeFilenameFor(note: { id: string; title: string }): string {
+  return `${sanitizeDriveFilenamePart(note.title)} (${note.id.slice(0, 8)}).md`;
+}
+
 export type SyncResult =
   | { status: "synced"; driveFileId: string; lastSyncedAt: number }
   | { status: "skipped-empty" }
@@ -47,13 +61,15 @@ export async function syncNoteToDrive(
     const folderId = await _resolveFolderPath(ACTIVE_FOLDER_PATH, token);
     const existingId =
       note.driveFileId ?? (await _findFileForNote(note.id, token, undefined, ACTIVE_KIND));
-    // NASと同一構造: active/<id>.md へ Markdown+front matter で書く(uploadNoteのcontentへmdを渡す)。
+    // ファイル内容(front matter付きmd)はNASのactive/<id>.mdと同一構造だが、Driveのファイル名
+    // だけは<タイトル> (短いid).md にする(ユーザー指示: Drive上で見て分かる名前にしたい)。
+    // 中身のidは今までどおり保つのでfindFileForNote等の検索・突合には影響しない。
     const fileId = await _uploadNote(
       { id: note.id, title: note.title, content: noteToMarkdown(note) },
       token,
       existingId,
       undefined,
-      { folderId, kind: ACTIVE_KIND, filename: `${note.id}.md` },
+      { folderId, kind: ACTIVE_KIND, filename: activeFilenameFor(note) },
     );
     return { status: "synced", driveFileId: fileId, lastSyncedAt: now };
   } catch (err) {

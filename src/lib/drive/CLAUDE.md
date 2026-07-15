@@ -4,8 +4,13 @@
 
 1. **per-note active ミラー**(`driveSync.ts` + `useDriveSync.ts` + `drive.ts`)
    各ペインが自分のノートを debounce して Drive の **`app/New Tab Board/active/`** フォルダへ
-   1ノート=1ファイル(**`<id>.md`**・Markdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
-   ファイル名とファイル内容(front matter付き md)は NAS の `active/<id>.md` と完全一致(2026-07-13)。
+   1ノート=1ファイル(Markdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
+   ファイル内容は NAS の `active/<id>.md` と完全一致(2026-07-13)。**ファイル名だけはDriveの
+   activeフォルダに限り `<タイトル> (idの先頭8桁).md`**(`activeFilenameFor`。ユーザー指示:
+   Drive上で見て分かる名前にしたい・2026-07-16)——NAS/日付フォルダ/specialは今までどおり
+   `<id>.md` 固定(ファイル探索・突合はappProperties.noteIdで行うため、表示名を変えても
+   壊れない)。タイトルが変わるたびDrive上のファイル名も追従する(`uploadNote`は既存ファイル
+   の更新でも毎回nameを送り直す)。同名タイトルが複数あってもidの断片で衝突しない。
 2. **全データJSONバックアップ**(`jsonBackup*.ts` + `useJsonBackupSync.ts`)
    ブックマーク/ノート/設定/TODO を1つのJSONにして上げる(データ管理の「☁️ Driveへ退避/復元」)。
 

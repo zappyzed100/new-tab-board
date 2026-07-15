@@ -61,6 +61,13 @@ describe("uploadNote", () => {
     expect(url).toContain("file-1");
   });
 
+  it("更新(PATCH)でもファイル名を送り直す(タイトルベースのactiveファイル名がリネームに追従するため)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+    await uploadNote(note, "token-abc", "file-1", fetchImpl, { filename: "新しいタイトル.md" });
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(init.body).toContain("新しいタイトル.md");
+  });
+
   it("HTTPエラーは例外を投げる", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({}, false, 500));
     await expect(uploadNote(note, "token-abc", null, fetchImpl)).rejects.toThrow("HTTP 500");

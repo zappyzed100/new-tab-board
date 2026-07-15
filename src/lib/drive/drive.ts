@@ -157,7 +157,10 @@ export async function findFileForNote(
 
 /** ノート現行内容をDriveへアップロード(新規=POST/既存=PATCH)する。アップロード先ファイルIDを返す。
  * opts.folderId を渡すと新規作成時にそのフォルダ配下へ置く。opts.kind は appProperties へ
- * 付与し、同じ noteId でも「active」用と「日付」用のファイルを区別できるようにする。 */
+ * 付与し、同じ noteId でも「active」用と「日付」用のファイルを区別できるようにする。
+ * ファイル名(opts.filename)は新規/既存どちらでも毎回送る——タイトルベースの名前
+ * (driveSyncのactive/)はノートのリネームのたびにDrive上のファイル名も追従させる必要が
+ * あるため(ユーザー指示)。id固定の名前(日付フォルダ・special)は値が変わらないので実質no-op。 */
 export async function uploadNote(
   note: { id: string; title: string; content: string },
   token: string,
@@ -168,9 +171,9 @@ export async function uploadNote(
   const boundary = `newtabboard-${note.id}`;
   const metadata: Record<string, unknown> = {
     appProperties: { noteId: note.id, ...(opts.kind ? { ntbKind: opts.kind } : {}) },
+    name: opts.filename ?? `${note.title}.md`,
   };
   if (!existingFileId) {
-    metadata.name = opts.filename ?? `${note.title}.md`;
     metadata.mimeType = "text/markdown";
     if (opts.folderId) metadata.parents = [opts.folderId];
   }
