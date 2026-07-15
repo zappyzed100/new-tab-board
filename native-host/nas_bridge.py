@@ -144,7 +144,8 @@ def handle_bump_generation(message: dict) -> dict:
 
 def handle_read_active(message: dict) -> dict:
     """active/ 直下の .md を全部(ファイル名+内容)返す(pull用: タブをNAS activeで上書きする)。
-    active/ が無ければ空リスト。サブフォルダは対象外(active は <id>.md の平置き)。"""
+    active/ が無ければ空リスト。サブフォルダは対象外。ファイル名は表示用(<タイトル> (id8桁).md)で
+    実際のidはcontent側のYAML front matterから読む(呼び出し側のmarkdownToNoteが担当)。"""
     try:
         base = message["path"]
         active_dir = _safe_target(base, "active")

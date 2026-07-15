@@ -165,8 +165,22 @@ function dateFolder(ms: number): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** ノート1件を統一構造でNASへ書く: active/<id>.md と <YYYY/M/D>/<id>.md(md + front matter)。
- * 非空ノートのみ(空はactiveへ入れない——ユーザー指示)。NAS未設定/到達不可は静かにfalse。 */
+/** NASのファイルシステムで使えない文字(Windows基準: \/:*?"<>|)を除去する。 */
+function sanitizeNasFilenamePart(title: string): string {
+  const oneLine = title.replace(/[\r\n]+/g, " ").trim();
+  const safe = oneLine.replace(/[\\/:*?"<>|]/g, "-");
+  return safe === "" ? "(無題)" : safe;
+}
+
+/** activeフォルダのファイル名(ユーザー指示: Drive側のactiveFilenameForと同じ<タイトル> (id8桁).md
+ * にする。同じタイトルのノートが複数あってもファイル名が衝突しないようidの短い断片を付ける)。 */
+export function activeNasFilenameFor(note: { id: string; title: string }): string {
+  return `${sanitizeNasFilenamePart(note.title)} (${note.id.slice(0, 8)}).md`;
+}
+
+/** ノート1件を統一構造でNASへ書く: active/<タイトル> (id8桁).md と <YYYY/M/D>/<id>.md
+ * (md + front matter)。非空ノートのみ(空はactiveへ入れない——ユーザー指示)。
+ * NAS未設定/到達不可は静かにfalse。 */
 export async function writeNoteToNasStructure(
   note: Note,
   now: number,
@@ -178,13 +192,21 @@ export async function writeNoteToNasStructure(
   const path = await _getNasFolderPath();
   if (!path) return false;
   const md = noteToMarkdown(note);
-  const okActive = await _writeFileToNas(path, `active/${note.id}.md`, md);
+  const okActive = await _writeFileToNas(path, `active/${activeNasFilenameFor(note)}`, md);
   const okDate = await _writeFileToNas(path, `${dateFolder(now)}/${note.id}.md`, md);
   return okActive && okDate;
 }
 
-/** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になった/ゴミ判定のノートの
- * active/<id>.md を削除する(ブラウザで消えたらNASからも消す——ユーザー指示)。削除件数を返す。 */
+/** ファイル名末尾の「(xxxxxxxx).md」からid断片を取り出す(旧形式<id>.mdは括弧が無く一致しない
+ * ——移行時は自然に「保持対象なし」判定され、後続の削除で片付く)。 */
+function idFragmentFromActiveFilename(filename: string): string | null {
+  return /\(([^()]+)\)\.md$/.exec(filename)?.[1] ?? null;
+}
+
+/** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になった/ゴミ判定のノートのactiveファイルを
+ * 削除する(ブラウザで消えたらNASからも消す——ユーザー指示)。ファイル名がタイトルを含むため
+ * (activeNasFilenameFor)、id完全一致ではなくファイル名末尾のid断片(8桁)で突き合わせる。
+ * 削除件数を返す。 */
 export async function reconcileActiveNotesOnNas(
   notes: Note[],
   deps: NasDeps = {},
@@ -194,15 +216,16 @@ export async function reconcileActiveNotesOnNas(
   const _deleteFileFromNas = deps.deleteFileFromNas ?? deleteFileFromNas;
   const path = await _getNasFolderPath();
   if (!path) return 0;
-  const keep = new Set(
-    notes.filter((n) => n.content.trim() !== "" && !n.junk).map((n) => `${n.id}.md`),
+  const keepIdFragments = new Set(
+    notes.filter((n) => n.content.trim() !== "" && !n.junk).map((n) => n.id.slice(0, 8)),
   );
   const files = await _listNasTree(path, "active");
   if (files === null) return 0;
   let deleted = 0;
   for (const f of files) {
     // active/ 直下のファイルのみ対象(サブフォルダは想定しない)。現在の非空ノートに無ければ削除。
-    if (!f.includes("/") && !keep.has(f)) {
+    const idFragment = idFragmentFromActiveFilename(f);
+    if (!f.includes("/") && (idFragment === null || !keepIdFragments.has(idFragment))) {
       if (await _deleteFileFromNas(path, `active/${f}`)) deleted += 1;
     }
   }

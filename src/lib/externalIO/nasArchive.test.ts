@@ -348,7 +348,7 @@ describe("writeNoteToNasStructure(統一構造)", () => {
     ...over,
   });
 
-  it("非空ノートを active/<id>.md と <YYYY/M/D>/<id>.md へ書く", async () => {
+  it("非空ノートを active/<タイトル> (id8桁).md と <YYYY/M/D>/<id>.md へ書く", async () => {
     const files = new Map<string, string>();
     const ok = await writeNoteToNasStructure(note(), TS_2026_07_12, {
       getNasFolderPath: async () => NAS_PATH,
@@ -358,9 +358,9 @@ describe("writeNoteToNasStructure(統一構造)", () => {
       },
     });
     expect(ok).toBe(true);
-    expect(files.has("active/n1.md")).toBe(true);
+    expect(files.has("active/会議 (n1).md")).toBe(true);
     expect(files.has("2026/7/12/n1.md")).toBe(true);
-    expect(files.get("active/n1.md")).toContain("title: 会議");
+    expect(files.get("active/会議 (n1).md")).toContain("title: 会議");
   });
 
   it("空ノートは書かない(false)", async () => {
@@ -378,24 +378,50 @@ describe("writeNoteToNasStructure(統一構造)", () => {
 });
 
 describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
-  it("現在の非空ノートに無い/空/ゴミの active ファイルを削除する", async () => {
+  it("現在の非空ノートに無い/空/ゴミの active ファイルを削除する(ファイル名末尾のid8桁で突き合わせる)", async () => {
     const deleted: string[] = [];
     const notes: Note[] = [
-      { id: "keep", title: "a", content: "本文", pinned: false, order: 0 },
-      { id: "empty", title: "b", content: "", pinned: false, order: 1 },
-      { id: "junky", title: "c", content: "x", pinned: false, order: 2, junk: true },
+      { id: "keep1234", title: "a", content: "本文", pinned: false, order: 0 },
+      { id: "empty123", title: "b", content: "", pinned: false, order: 1 },
+      { id: "junky123", title: "c", content: "x", pinned: false, order: 2, junk: true },
     ];
     const n = await reconcileActiveNotesOnNas(notes, {
       getNasFolderPath: async () => NAS_PATH,
-      listNasTree: async () => ["keep.md", "gone.md", "empty.md", "junky.md"],
+      listNasTree: async () => [
+        "a (keep1234).md",
+        "b (gone1234).md",
+        "b (empty123).md",
+        "c (junky123).md",
+      ],
       deleteFileFromNas: async (_p, f) => {
         deleted.push(f);
         return true;
       },
     });
-    // keep(非空) は残す。gone(存在しない)/empty(空)/junky(ゴミ) は削除。
-    expect(deleted.sort()).toEqual(["active/empty.md", "active/gone.md", "active/junky.md"]);
+    // keep1234(非空) は残す。gone(存在しない)/empty(空)/junky(ゴミ) は削除。
+    expect(deleted.sort()).toEqual([
+      "active/b (empty123).md",
+      "active/b (gone1234).md",
+      "active/c (junky123).md",
+    ]);
     expect(n).toBe(3);
+  });
+
+  it("旧形式(<id>.md・括弧無し)のファイルはid断片が取れず保持対象なし扱いで削除される(移行)", async () => {
+    const deleted: string[] = [];
+    const notes: Note[] = [
+      { id: "keep1234", title: "a", content: "本文", pinned: false, order: 0 },
+    ];
+    const n = await reconcileActiveNotesOnNas(notes, {
+      getNasFolderPath: async () => NAS_PATH,
+      listNasTree: async () => ["keep1234.md"],
+      deleteFileFromNas: async (_p, f) => {
+        deleted.push(f);
+        return true;
+      },
+    });
+    expect(deleted).toEqual(["active/keep1234.md"]);
+    expect(n).toBe(1);
   });
 
   it("NAS未設定なら0(削除しない)", async () => {

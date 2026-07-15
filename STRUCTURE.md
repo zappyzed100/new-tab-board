@@ -767,6 +767,7 @@
 - function noteToMarkdown
 - function markdownToNote
 - function writeNoteMarkdownToNas
+- function activeNasFilenameFor
 - function writeNoteToNasStructure
 - function reconcileActiveNotesOnNas
 - function flushSnapshotToNas
