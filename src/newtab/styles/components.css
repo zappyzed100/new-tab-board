@@ -1,326 +1,4 @@
-/* styles.css — 新しいタブページの見た目(デザイントークン+レイアウト+汎用部品スタイル)。
-   既存のdata-testid/セマンティック要素をセレクタに使い、コンポーネント側の構造は変えない。
-   テーマはApp.tsxが document.documentElement.dataset.theme へ書く"light"/"dark"で切替。 */
-
-:root {
-  --bg: #f2f1fb;
-  --bg-accent: #eef2ff;
-  --surface: #ffffff;
-  --surface-2: #eef0f4;
-  --border: #e2e4ea;
-  --text: #1c1d22;
-  --text-muted: #6b6f7b;
-  --accent: #4f46e5;
-  --accent-strong: #4338ca;
-  --accent-fg: #ffffff;
-  --accent-soft: #e0e7ff;
-  --success: #16a34a;
-  --warning: #d97706;
-  --danger: #dc2626;
-  /* 層状シャドウ(単色黒でなく暗い藍色を薄く重ねる — Josh Comeau方式で「浮いて見える」深みを出す) */
-  --shadow: 0 1px 1px rgba(30, 27, 75, 0.04), 0 2px 2px rgba(30, 27, 75, 0.04),
-    0 4px 4px rgba(30, 27, 75, 0.04), 0 8px 8px rgba(30, 27, 75, 0.03);
-  --shadow-lg: 0 2px 2px rgba(30, 27, 75, 0.08), 0 6px 6px rgba(30, 27, 75, 0.07),
-    0 14px 14px rgba(30, 27, 75, 0.06), 0 28px 28px rgba(30, 27, 75, 0.05);
-  --shadow-btn: 0 1px 0 rgba(30, 27, 75, 0.06), 0 2px 1px rgba(30, 27, 75, 0.05),
-    0 4px 3px rgba(30, 27, 75, 0.04);
-  --shadow-btn-hover: 0 2px 0 rgba(30, 27, 75, 0.07), 0 4px 4px rgba(30, 27, 75, 0.06),
-    0 8px 8px rgba(30, 27, 75, 0.05);
-  --radius: 14px;
-  --radius-sm: 8px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 16px;
-  --space-4: 24px;
-  --space-5: 32px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
-    "Noto Sans JP", Roboto, sans-serif;
-}
-
-:root[data-theme="dark"] {
-  --bg: #14141c;
-  --bg-accent: #1a1930;
-  --surface: #1b1c22;
-  --surface-2: #24262e;
-  --border: #33343e;
-  --text: #f1f1f4;
-  --text-muted: #9a9ca8;
-  --accent: #818cf8;
-  --accent-strong: #a5b4fc;
-  --accent-fg: #141520;
-  --accent-soft: #2b2a52;
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --danger: #f87171;
-  --shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 2px 2px rgba(0, 0, 0, 0.25),
-    0 4px 4px rgba(0, 0, 0, 0.2), 0 8px 8px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 2px 2px rgba(0, 0, 0, 0.35), 0 6px 6px rgba(0, 0, 0, 0.3),
-    0 14px 14px rgba(0, 0, 0, 0.25), 0 28px 28px rgba(0, 0, 0, 0.2);
-  --shadow-btn: 0 1px 0 rgba(0, 0, 0, 0.3), 0 2px 1px rgba(0, 0, 0, 0.25),
-    0 4px 3px rgba(0, 0, 0, 0.2);
-  --shadow-btn-hover: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 4px rgba(0, 0, 0, 0.28),
-    0 8px 8px rgba(0, 0, 0, 0.22);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-
-/* body自体の背景・文字色はRadixの<Theme>コンポーネント(.radix-themesクラス)が
-   var(--color-background)/var(--gray-12)相当を適用するため、ここでは最小限
-   (フォント継承)のみ指定する。旧来の自前グラデーション背景・色トークンは撤去。 */
-body {
-  font-family: var(--font);
-}
-
-.hint {
-  color: var(--gray-a10);
-  font-size: 12px;
-}
-
-/* --- ルートレイアウト --- */
-[data-testid="app-loading"] {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  color: var(--gray-a10);
-  font-size: 15px;
-}
-
-.app-main {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: var(--space-3);
-  flex: 1;
-  min-height: 0;
-  align-items: start;
-}
-
-.app-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.app-notes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-/* データ操作ツールバー(開く/NASへ書き出し/Drive等)と下のノート域の区切り線(ユーザー指示)。
-   全幅の細い横線。色はテーマ追従の --border。上下に少し余白を取る。 */
-.toolbar-divider {
-  width: 100%;
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: var(--space-2) 0;
-}
-
-/* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
-   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて `.note-column` ごとに
-   縦積みする。各列は独立した縦スタック(align-items:flex-startで上端揃え・縦の高さは列でバラバラ)。
-   実測で最短列へ詰めるため列高さがほぼ揃い、長いノートがあっても凸凹が最小化される。 */
-.note-board {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-}
-
-.note-column {
-  flex: 1 1 0;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列内で横幅いっぱい・高さは中身なり。 */
-.note-cell {
-  min-width: 0;
-}
-
-/* ノート位置入れ替え用のドラッグつまみ(ヘッダ左端)。エディタ本文ではなくここを掴む
-   (本文をdraggableにするとテキスト選択と衝突するため)。 */
-.note-drag-handle {
-  cursor: grab;
-  user-select: none;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 var(--space-1);
-  color: var(--text-muted, var(--text));
-  opacity: 0.6;
-}
-
-.note-drag-handle:hover,
-.note-drag-handle:focus-visible {
-  opacity: 1;
-}
-
-.note-drag-handle:active {
-  cursor: grabbing;
-}
-
-/* ノート名(ペインの一番左上)。入力欄の枠・背景を消して「見出し」に見せる——ユーザー指示。
-   クリックでそのまま編集でき、ホバー/フォーカス時だけ淡い下地で編集可能なことを示す。 */
-.note-pane-title-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-weight: 700;
-  font-size: 1.15rem;
-  line-height: 1.4;
-  color: var(--gray-12);
-  padding: 2px 6px;
-  border-radius: var(--radius-2, 4px);
-}
-
-.note-pane-title-input::placeholder {
-  color: var(--gray-a8);
-  font-weight: 500;
-}
-
-.note-pane-title-input:hover {
-  background: var(--gray-a3);
-}
-
-.note-pane-title-input:focus {
-  outline: none;
-  background: var(--gray-a3);
-}
-
-/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。
-   上ボタンは画面の上端寄り、下ボタンは下端寄りへそれぞれ配置する(ユーザー指示)。
-   容器は上下に張り、space-betweenで両端へ寄せる。中央の空きはクリックを透過させる。 */
-.scroll-jump {
-  position: fixed;
-  right: 8px;
-  top: 12px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  z-index: 20;
-  pointer-events: none;
-}
-
-.scroll-jump-btn {
-  pointer-events: auto;
-}
-
-.scroll-jump-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.4;
-  box-shadow: var(--shadow);
-  transition: opacity 0.15s ease;
-}
-
-.scroll-jump-btn:hover,
-.scroll-jump-btn:focus-visible {
-  opacity: 1;
-}
-
-/* 全文検索の結果一覧。各結果はタイトル+スニペットの2行を持つ可変高ボタンで、縦に間隔を空けて
-   積む(Radix Buttonの固定高で2行がはみ出し重なる不具合の対処——ユーザー指摘)。 */
-.search-results {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.search-result-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  padding: var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.search-result-btn:hover,
-.search-result-btn:focus-visible {
-  border-color: var(--accent);
-}
-
-.search-result-title {
-  font-weight: 600;
-}
-
-.search-result-snippet {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* ノート類と「貼り付けた画像」一覧の間の区切り線(ユーザー指示: ノートの下に一つ線を引く)。 */
-.notes-images-divider {
-  border: none;
-  border-top: 2px solid var(--border);
-  margin: var(--space-3) 0 0;
-}
-
-/* 貼り付け画像の一覧: サムネイル(上限サイズ)+コピー/削除ボタン。 */
-.pasted-image-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2);
-  background: var(--surface-2);
-}
-
-/* 貼り付け画像は原本(フル解像度)を保存している。表示を大きめにして細部まで見えるようにする
-   (ユーザー指示)。画質を保つため拡大時のスムージングは効かせつつ、原寸より大きくは引き伸ばさない。 */
-.pasted-image-thumb {
-  max-width: 360px;
-  max-height: 360px;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-/* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
-   スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
-   下の本文が透けないよう背景を敷き、他要素より前面に出す。 */
-.note-sticky-head {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--bg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding-bottom: var(--space-2);
-}
+/* components.css — 個別パネル・要素のスタイル(tokens.cssのトークンを参照)。 */
 
 /* --- 時計 --- */
 [data-testid="clock"] {
@@ -361,15 +39,13 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 34px;
-  box-shadow: var(--shadow-btn);
   transition:
-    transform 0.1s ease,
-    box-shadow 0.15s ease;
+    transform var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
 }
 
 [data-testid^="bookmark-open-"]:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-btn-hover);
   border-color: var(--accent);
 }
 
@@ -394,7 +70,7 @@ body {
   display: flex;
   gap: 2px;
   opacity: 0.5;
-  transition: opacity 0.1s ease;
+  transition: opacity var(--duration-fast) var(--ease);
 }
 
 [data-testid^="bookmark-cell-"]:hover .bookmark-actions {
@@ -411,8 +87,6 @@ body {
   height: 28px;
   padding: 0;
   border-radius: 999px;
-  font-size: 14px;
-  line-height: 1;
   box-shadow: none;
   border-color: transparent;
   background: transparent;
@@ -443,8 +117,6 @@ body {
   width: 56px;
   height: 56px;
   padding: 0;
-  font-size: 22px;
-  line-height: 1;
 }
 
 [data-testid="bookmark-add"]:hover {
@@ -514,12 +186,12 @@ body {
    テーマごとに濃さを与え、選択中でも文字が読めるようにする。CM6ベーステーマに勝つため!important。 */
 [data-testid="notepad-editor"] .cm-selectionBackground,
 [data-testid="notepad-editor"] .cm-focused .cm-selectionBackground {
-  background: rgba(60, 110, 220, 0.3) !important;
+  background: rgba(37, 99, 235, 0.28) !important;
 }
 
 :root[data-theme="dark"] [data-testid="notepad-editor"] .cm-selectionBackground,
 :root[data-theme="dark"] [data-testid="notepad-editor"] .cm-focused .cm-selectionBackground {
-  background: rgba(96, 125, 205, 0.55) !important;
+  background: rgba(96, 165, 250, 0.5) !important;
 }
 
 /* Windowsメモ帳風のステータスバー(行/列・文字数) */
@@ -580,6 +252,27 @@ body {
   white-space: pre-wrap;
 }
 
+/* --- 貼り付け画像の一覧: サムネイル(上限サイズ)+コピー/削除ボタン。 --- */
+.pasted-image-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--surface-2);
+}
+
+/* 貼り付け画像は原本(フル解像度)を保存している。表示を大きめにして細部まで見えるようにする
+   (ユーザー指示)。画質を保つため拡大時のスムージングは効かせつつ、原寸より大きくは引き伸ばさない。 */
+.pasted-image-thumb {
+  max-width: 360px;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
 /* --- トグルパネル(検索/データ管理) ---
    外枠はCard(SearchPanel.tsx/DataPanel.tsx)に任せる。 */
 [data-testid="search-input"] {
@@ -635,7 +328,7 @@ body {
 }
 
 /* --- TODOリスト(TodoMVC参考: 入力欄+チェックボックス行+hover時のみ×) --- */
-/* 外枠はCard(TodoList.tsx)に任せる。小型カレンダーと横幅を揃える。 */
+/* 外枠はCard(TodoList.tsx→PanelCard.tsx)に任せる。小型カレンダーと横幅を揃える。 */
 [data-testid="todo-list"] {
   font-size: 12px;
   max-width: 240px;
@@ -693,9 +386,10 @@ body {
   width: 26px;
   height: 26px;
   padding: 0;
-  font-size: 22px;
-  line-height: 1;
-  opacity: 0.4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
 }
 
 [data-testid^="todo-item-"]:hover .todo-remove {
@@ -720,62 +414,7 @@ body {
   color: var(--text-muted);
 }
 
-/* --- モーダル背景(外側クリックで閉じる用の透明タップ領域) --- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 40;
-}
-
-/* --- モーダル(ショートカット一覧) --- */
-[data-testid="shortcuts-modal"] {
-  position: fixed;
-  top: 12%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(560px, 92vw);
-  max-height: 70vh;
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-lg);
-  z-index: 50;
-}
-
-.modal-close-circle {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 999px;
-  line-height: 1;
-  font-size: 16px;
-  background: var(--surface-2);
-}
-
-[data-testid="shortcuts-modal"] ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 /* --- その他ステータス表示 --- */
-[data-testid="next-event-countdown"] {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-3);
-  font-weight: 500;
-}
-
 [data-testid="drive-sync-status"] {
   font-size: 11px;
   color: var(--text-muted);

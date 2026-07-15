@@ -25,7 +25,7 @@ test("スペシャルカードはTODOの下・タグ候補の上に置かれる"
   expect(special.y).toBeLessThan(tags.y);
 });
 
-test("⭐でスペシャルに入り、削除すると凍結して一覧に残る", async ({ context, newTabUrl }) => {
+test("スターでスペシャルに入り、削除すると凍結して一覧に残る", async ({ context, newTabUrl }) => {
   const page = await context.newPage();
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.goto(newTabUrl);

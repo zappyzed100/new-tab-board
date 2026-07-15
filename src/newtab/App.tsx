@@ -472,7 +472,7 @@ export function App() {
     ),
   });
 
-  // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles.cssの.cm-editorが参照)。
+  // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles/components.cssの.cm-editorが参照)。
   // ノート以外のUI文字には影響しない(ユーザー指示)。未設定なら既定値。
   const noteFontSize = clampNoteFontSize(sync?.settings.noteFontSize ?? NOTE_FONT_DEFAULT);
   useEffect(() => {

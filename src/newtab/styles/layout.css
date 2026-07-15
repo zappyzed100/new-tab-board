@@ -1,0 +1,333 @@
+/* layout.css — ルートシェル・masonryノートボード・モーダル等の構造レイアウト。
+   見た目の値(色/影/角丸)はtokens.cssのトークンを参照する。data-testid/セマンティック
+   要素をセレクタに使い、コンポーネント側の構造は変えない(既存方針を踏襲)。 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* body自体の背景・文字色はRadixの<Theme>コンポーネント(.radix-themesクラス)が
+   var(--color-background)/var(--gray-12)相当を適用するため、ここでは最小限
+   (フォント継承)のみ指定する。 */
+body {
+  font-family: var(--font);
+}
+
+.hint {
+  color: var(--gray-a10);
+  font-size: 12px;
+}
+
+/* フェーズ0/1で導入したローディングスピナー(Loader2)の回転アニメーション。
+   prefers-reduced-motionを尊重し、削減指定時は回転させない(ui-ux-pro-max skillの
+   チェックリスト「prefers-reduced-motion respected」)。 */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- ルートレイアウト --- */
+[data-testid="app-loading"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--gray-a10);
+  font-size: 15px;
+}
+
+/* 通知バナー類(Gemini使用量警告・次の予定カウントダウン)の共通スタイル(フラットデザイン:
+   影を使わず、左端のアクセントバーと背景差だけで種別を示す)。 */
+.callout {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.callout-warning {
+  border-left-color: var(--warning);
+  background: var(--bg-accent);
+}
+
+.callout-info {
+  border-left-color: var(--accent);
+  background: var(--bg-accent);
+}
+
+/* サイドバーパネルの共通ラッパー(PanelCard.tsx)。既存Cardの上に見出しサイズの統一のみ足す
+   ため、追加のCSSは不要(Radix Cardの既定スタイルをそのまま使う)。 */
+.panel-card {
+  min-width: 0;
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 240px) 1fr;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+  align-items: start;
+}
+
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.app-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* データ操作ツールバー(開く/NASへ書き出し/Drive等)と下のノート域の区切り線(ユーザー指示)。
+   全幅の細い横線。色はテーマ追従の --border。上下に少し余白を取る。 */
+.toolbar-divider {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-2) 0;
+}
+
+/* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
+   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて `.note-column` ごとに
+   縦積みする。各列は独立した縦スタック(align-items:flex-startで上端揃え・縦の高さは列でバラバラ)。
+   実測で最短列へ詰めるため列高さがほぼ揃い、長いノートがあっても凸凹が最小化される。
+   ※masonry配置アルゴリズム自体(App.tsx)はリデザインで変更していない——ここは見た目のみ。 */
+.note-board {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.note-column {
+  flex: 1 1 0;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列内で横幅いっぱい・高さは中身なり。 */
+.note-cell {
+  min-width: 0;
+}
+
+/* ノート位置入れ替え用のドラッグつまみ(ヘッダ左端)。エディタ本文ではなくここを掴む
+   (本文をdraggableにするとテキスト選択と衝突するため)。 */
+.note-drag-handle {
+  cursor: grab;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-1);
+  color: var(--text-muted, var(--text));
+  opacity: 0.6;
+}
+
+.note-drag-handle:hover,
+.note-drag-handle:focus-visible {
+  opacity: 1;
+}
+
+.note-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ノート名(ペインの一番左上)。入力欄の枠・背景を消して「見出し」に見せる——ユーザー指示。
+   クリックでそのまま編集でき、ホバー/フォーカス時だけ淡い下地で編集可能なことを示す。 */
+.note-pane-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.4;
+  color: var(--gray-12);
+  padding: 2px 6px;
+  border-radius: var(--radius-2, 4px);
+}
+
+.note-pane-title-input::placeholder {
+  color: var(--gray-a8);
+  font-weight: 500;
+}
+
+.note-pane-title-input:hover {
+  background: var(--gray-a3);
+}
+
+.note-pane-title-input:focus {
+  outline: none;
+  background: var(--gray-a3);
+}
+
+/* 右端に半透明で常駐する「一番上へ/一番下へ」ジャンプボタン(ユーザー指示。少し大きめ)。
+   上ボタンは画面の上端寄り、下ボタンは下端寄りへそれぞれ配置する(ユーザー指示)。
+   容器は上下に張り、space-betweenで両端へ寄せる。中央の空きはクリックを透過させる。 */
+.scroll-jump {
+  position: fixed;
+  right: 8px;
+  top: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.scroll-jump-btn {
+  pointer-events: auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.5;
+  box-shadow: var(--shadow-flat);
+  transition: opacity var(--duration-fast) var(--ease);
+}
+
+.scroll-jump-btn:hover,
+.scroll-jump-btn:focus-visible {
+  opacity: 1;
+}
+
+/* 全文検索の結果一覧。各結果はタイトル+スニペットの2行を持つ可変高ボタンで、縦に間隔を空けて
+   積む(Radix Buttonの固定高で2行がはみ出し重なる不具合の対処——ユーザー指摘)。 */
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.search-result-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.search-result-btn:hover,
+.search-result-btn:focus-visible {
+  border-color: var(--accent);
+}
+
+.search-result-title {
+  font-weight: 600;
+}
+
+.search-result-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ノート類と「貼り付けた画像」一覧の間の区切り線(ユーザー指示: ノートの下に一つ線を引く)。 */
+.notes-images-divider {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: var(--space-3) 0 0;
+}
+
+/* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
+   スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
+   下の本文が透けないよう背景を敷き、他要素より前面に出す。 */
+.note-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+/* --- モーダル背景(外側クリックで閉じる用の透明タップ領域) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 40;
+}
+
+/* --- モーダル(ショートカット一覧) --- */
+[data-testid="shortcuts-modal"] {
+  position: fixed;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 92vw);
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-flat);
+  z-index: 50;
+}
+
+.modal-close-circle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+[data-testid="shortcuts-modal"] ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
