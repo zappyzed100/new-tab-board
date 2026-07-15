@@ -1,13 +1,13 @@
-# BOOTSTRAP.md — ブートストラップ進捗台帳（機械監査の対象 — GUARDRAILS.md §3.5・§11）
+# .guardrails/BOOTSTRAP.md — ブートストラップ進捗台帳（機械監査の対象 — .guardrails/GUARDRAILS.md §3.5・§11）
 
-> **この表がブートストラップ進捗の唯一の正本**。各 Step の内容・DoD は GUARDRAILS.md §11。
+> **この表がブートストラップ進捗の唯一の正本**。各 Step の内容・DoD は .guardrails/GUARDRAILS.md §11。
 > 行の書式は機械解析される——列構造・Step 番号・状態記号を崩さない（§3.5）。
 > 状態 ∈ `🚧`（未着手/作業中）・`✅`（DoD 完了——**✅ 化コミットで監査器が再実行検証する**）・
 > `—`（対象外——備考に理由必須）。
 > ✅ 化は **1コミット1Step・番号順**のみ（`check-bootstrap` が機械強制 — 実行規律1〜4）。
 > ✅ → 🚧 の差し戻しは正規経路（監査で虚偽 ✅ が見つかった時）。✅ → — は禁止。
 > 完了後も削除しない（監査証跡。全行 ✅/— になった時点でブートストラップ完了——
-> 完了したら `CUSTOMIZE.md` で導入後にカスタムできる項目を一読する）。
+> 完了したら `.guardrails/CUSTOMIZE.md` で導入後にカスタムできる項目を一読する）。
 
 | Step | 内容 | 状態 | 備考 |
 |---|---|---|---|
@@ -21,8 +21,8 @@
 | 7 | ログ単一出口 | ✅ | `src/lib/log.ts`の`logOp(tag, op, detail, {error, elapsedMs})`を実装し`src/lib/storage.ts`のNO-LOGコメントを実際の呼び出しに置換。単体テスト3件(形式・elapsedMs付与・error付与)で`[タグ] 操作名: 詳細 (+Xms)`形式の出力を実測。log.ts以外でのconsole.log直呼びを注入し`HARD:log-direct-call`で検出→除去を実測。FFI境界(missing-catch-unwind)は該当なし(表B: Chrome拡張にFFI境界は無い) |
 | 8 | テスト決定性 | ✅ | 確率的コンポーネントは無い(表B)ため`solve_for_test`相当のラッパーは該当なし。`test-sleep`(setTimeout)・`test-nondeterminism`(Date.now/new Date/Math.random)・`test-network`(fetch)の3パターンを1テストファイルへ一括注入し、全て規則ID付きで検出→削除後にcheck-structureがexit0に戻ることを実測(パターン自体はStep2でrepo_scan.pyへ充填済み) |
 | 8b | ランタイムレール（動詞・供給・操作/観察） | ✅ | `scripts/{reset-e2e-profile,seed-board,set-time-freeze,dump-storage}.mjs`を実装し`dev.py`の全10動詞が実コマンドに配線済み(未配線ゼロ)。`src/lib/clock.ts`(時刻シーム)を実装しCardに`createdAt`を追加。`e2e/fixtures.ts`+`board.spec.ts`でビルド済み拡張機能を実際にpersistent contextへロードして検証するE2Eを1本実装。実測: ①`reset`→`seed`→`db`を2回実行し出力が完全一致(G1決定性) ②`dev.py e2e`が正常系で緑・アサーションを壊すと赤・戻すと緑(違反注入) ③`test-network`/`ui-missing-testid`はStep2/Step8で規則ID付き検出済み。CIに`ts-test`/`e2e`ジョブを追加(Step9のリモート作成後に実働確認)。E2Eのservice worker発見のため最小限のbackground service worker(`src/background/background.ts`)を追加し、根拠をplan.mdに記録 |
-| 9 | CI（最終防衛線） | ✅ | `gh repo create --public`でリモート作成しmainへpush(GitHub: zappyzed100/new-tab-board)。①正常pushでchecks/ts-test/e2e全ジョブ緑を実測(初回はcheck-bootstrapのStep3再検証がCI環境を考慮しておらずHARDで落ちるバグを発見、`os.environ.get("CI")`除外を追加し是正) ②GitHub Contents API(ローカルフックを一切通さない経路)でlog-direct-call違反を検証ブランチへ直接コミットしPRを作成→checks/ts-testが正しく赤くなることを実測→PRクローズ・ブランチ削除で後片付け済み。**申し送り**: ブランチ保護のrequired checks登録はリポジトリ管理者設定の変更にあたり自動分類器にブロックされたため未実施——ユーザーが必要に応じてGitHub設定画面から行う |
-| 10 | 総合セルフ監査と引き継ぎ | ✅ | ①台帳全行(Step0〜9)が実装と同一コミットで✅化済みであることをgit logで確認 ②`git grep TODO`・`★`は自己参照(BOOTSTRAP.md/GUARDRAILS.md/check_bootstrap.py自身のパターン定義)のみで実残置0件 ③追加で違反注入実測: binding-drift・hook-type-missing・missing-log-coverage・commit-too-large(soft)・test-shrink(soft)・context-doc-too-large(soft)・binding-dead-pattern・NONDETERMINISM-EXEMPT免除・所有権ガード(guard_human_wip)ブロック/自動解除・Stop条件B(clean+HARD)/BLOCKED免除・bootstrap-multi-flip・bootstrap-demote・red-first-green(検証PR)——いずれも規則ID付きで検出→復元を実測。未実測(`guard-corpus-mismatch`の実弱体化・`hooks-path-overridden`の直接検証)は実行ハーネスの安全分類器がガード自己改変とみなしブロックしたため断念し、GUARDRAILS.md §10 Phase 32へ🚧登録した |
+| 9 | CI（最終防衛線） | 🚧 | `gh repo create --public`でリモート作成しmainへpush(GitHub: zappyzed100/new-tab-board)。①正常pushでchecks/ts-test/e2e全ジョブ緑を実測(初回はcheck-bootstrapのStep3再検証がCI環境を考慮しておらずHARDで落ちるバグを発見、`os.environ.get("CI")`除外を追加し是正) ②GitHub Contents API(ローカルフックを一切通さない経路)でlog-direct-call違反を検証ブランチへ直接コミットしPRを作成→checks/ts-testが正しく赤くなることを実測→PRクローズ・ブランチ削除で後片付け済み。**キット更新（Phase 40・v2.35）で追加された `verify_required_checks` の実測検証により✅から差し戻し**: `checks`/`red-first`/`commit-msg-history` の3コアジョブが GitHub 側のブランチ保護/ルールセットに required として未登録であることを実際の `gh api` 照会で検出（旧版にはこの検証自体が無かった）。ブランチ保護の登録はリポジトリ管理者設定の変更にあたり、GitHub 設定画面（Settings → Branches → Rulesets）からユーザー本人が行う必要がある——CLIでの自動化はスコープ外（§11 Step 9 ④） |
+| 10 | 総合セルフ監査と引き継ぎ | 🚧 | ①台帳全行(Step0〜9)が実装と同一コミットで✅化済みであることをgit logで確認 ②追加で違反注入実測: binding-drift・hook-type-missing・missing-log-coverage・commit-too-large(soft)・test-shrink(soft)・context-doc-too-large(soft)・binding-dead-pattern・NONDETERMINISM-EXEMPT免除・所有権ガード(guard_human_wip)ブロック/自動解除・Stop条件B(clean+HARD)/BLOCKED免除・bootstrap-multi-flip・bootstrap-demote・red-first-green(検証PR)——いずれも規則ID付きで検出→復元を実測。未実測(`guard-corpus-mismatch`の実弱体化・`hooks-path-overridden`の直接検証)は実行ハーネスの安全分類器がガード自己改変とみなしブロックしたため断念し、.guardrails/GUARDRAILS.md §10 Phase 32へ🚧登録した。**キット更新（Phase 47・v2.45）で `assert_step_10` の TODO 語検査が全追跡ファイル走査へ強化され✅から差し戻し**: `\bTODO\b` の単語境界一致が、本アプリの機能名そのもの（「TODOリスト」機能・`src/newtab/App.tsx`・`src/lib/gemini/noteAi.ts`・`src/newtab/components/shell/DataPanel.tsx`・`e2e/specs/special.spec.ts` 内のコメント/UI文言）に4件一致した——いずれも未着手作業のマーカーではなく製品機能名としての「TODO」で、実装漏れは無い（該当箇所を目視確認済み）。この検査は存在検査のみで語の用途を判定しないため（G9の設計どおり）機械的には解消不能——製品の機能名を変える対応は本キット更新の範囲外のため見送り、恒久的な既知差分として記録する |
 
 ## 固有名詞リストC（Step 0 で確定——Step 1・10 の残置 grep の機械入力）
 

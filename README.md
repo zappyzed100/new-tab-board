@@ -71,6 +71,6 @@ uv run scripts/dev.py verbs   # 動詞一覧と配線状態
 - `docs/stack.md` — 技術選定理由
 - `docs/native-messaging-protocol.md` — Flow Launcher連携の通信規約(host側実装の契約)
 - `docs/manual-verification.md` — 自動テストで検証できない実機確認チェックリスト
-- `docs/guardrails/` — `GUARDRAILS.md` / `GOALS.md` / `BOOTSTRAP.md` / `CUSTOMIZE.md`。
+- `.guardrails/` — `GUARDRAILS.md` / `GOALS.md` / `BOOTSTRAP.md` / `CUSTOMIZE.md`。
   `bindings/catalog.md` / `AGENTS.md`（ルート）とあわせて、このリポジトリの出戻り防止機構
   （LLMエージェントとの協業ガードレール）の正本。作業前に読むこと。

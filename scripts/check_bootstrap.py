@@ -1,8 +1,8 @@
-# check_bootstrap.py — ブートストラップ監査: BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: GUARDRAILS.md §3.5）
+# check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
 #
 # 呼び出し（§7.1: 必ず uv 経由）: uv run scripts/check_bootstrap.py
 #   exit 0 = 台帳と実体が整合 / exit 1 = 違反あり / exit 2 = 内部エラー
-#   発火: pre-commit の files: ^BOOTSTRAP\.md$（台帳に触れたコミット＝✅ 化の瞬間）
+#   発火: pre-commit の files: ^\.guardrails/BOOTSTRAP\.md$（台帳に触れたコミット＝✅ 化の瞬間）
 #         ＋ CI の --all-files（常時再監査——guard-corpus と同じ二重の網）。
 #
 # 何を機械化するか（§10 実行規律1〜4の門化 — v2.12・Phase 24）:
@@ -21,8 +21,8 @@
 
 from __future__ import annotations
 
-import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_scan as rs  # noqa: E402
 
-LEDGER = "docs/guardrails/BOOTSTRAP.md"
+LEDGER = ".guardrails/BOOTSTRAP.md"
 STEP_ORDER = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "8b", "9", "10"]
 ROW_RE = re.compile(r"^\|\s*(0|1|2|3|4|5|6|7|8|8b|9|10)\s*\|[^|]*\|\s*(✅|🚧|—)\s*\|([^|]*)\|")
 DONE, WIP, NA = "✅", "🚧", "—"
@@ -120,10 +120,6 @@ def assert_step_2(root: Path, ctx: dict) -> list[str]:
 
 
 def assert_step_3(root: Path, ctx: dict) -> list[str]:
-    if os.environ.get("CI"):
-        # CI のチェックアウトは pre-commit install を実行しないため .git/hooks/ に
-        # シムが無いのが正常（check_structure.py の check_hooks_installed と同じ整理）。
-        return []
     cfg = rs.read_text(root, ".pre-commit-config.yaml") if ".pre-commit-config.yaml" in ctx["tracked"] else ""
     m = re.search(r"default_install_hook_types:\s*\[([^\]]*)\]", cfg)
     types = [t.strip() for t in (m.group(1).split(",") if m else []) if t.strip()]
@@ -191,13 +187,184 @@ def assert_step_8b(root: Path, ctx: dict) -> list[str]:
     return []
 
 
+_GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
+
+# Step 9 ④ の強制最低線（v2.37——3コアジョブ）。red-first だけでは、ローカルフックが
+# 動かない経路（Web 編集・フック未導入マシン——§5 が CI を最終防衛線とする理由そのもの）で
+# checks / commit-msg-history の赤をマージから止められない。列固有のテスト/E2E ジョブは
+# 名前が列依存のため最低線に含めない（required 化は推奨・§11 Step 9）。
+REQUIRED_CHECK_CONTEXTS = ("checks", "red-first", "commit-msg-history")
+
+
+def _gh_api(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
+    """gh api を1回呼ぶ。戻り値は (判定, 出力行)。判定 ∈ ok / absent(HTTP 404) / unverifiable。
+    404 は「対象が無いことの確定回答」（例: 旧来ブランチ保護が未設定）で、照会不能
+    （オフライン・未認証・権限不足）とは意味が違う——ここで区別しないと fail の向きを誤る。"""
+    try:
+        proc = subprocess.run([gh, "api", endpoint, "--jq", jq], cwd=root,
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return "unverifiable", []
+    if proc.returncode == 0:
+        return "ok", [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    if "404" in proc.stderr:
+        return "absent", []
+    return "unverifiable", []
+
+
+def verify_required_checks(root: Path) -> list[str]:
+    """Step 9 ④ の外部設定（required checks への `red-first` 登録）を実測検証する（v2.35）。
+
+    ローカルの門もリポジトリ内の CI 定義も、この設定だけは代替できない——required checks は
+    リポジトリ設定側にしか存在せず（§5・Phase 21「required の完成はリポジトリ設定まで」）、
+    従来の assert_step_9 はリポジトリ内のファイルしか見ないため、④ だけが監査の空白だった。
+
+    fail の向きは2段:
+    - **検証できて不在** → 失敗（✅ の主張と実体の不一致＝虚偽✅ — fail-closed）。
+    - **検証そのものが不能**（GitHub 以外のリモート・gh 不在・オフライン・未認証・権限不足）
+      → 表示して素通し（fail-open＋表示 — Stop ゲート §2b と同じ契約。検証不能の日に
+      ブートストラップを止めない。CI の再監査は checks ジョブの GH_TOKEN で認証される）。
+    照会はルールセット（/rules/branches——読み取り権限で可）と旧来ブランチ保護
+    （admin 権限が要る——403 は照会不能・404 は「保護なし」の確定回答）の両系統を見る。
+    """
+    url = rs.git_config_get(root, "remote.origin.url") or ""
+    m = _GITHUB_REMOTE_RE.search(url)
+    if not m:
+        print("[bootstrap] Step 9 ④: GitHub リモートが無いため required checks は検証対象外"
+              "（ホスティング側の同等設定を手動確認 — §3.5）", file=sys.stderr)
+        return []
+    gh = shutil.which("gh")
+    if gh is None:
+        print("[bootstrap] Step 9 ④: gh CLI 不在のため required checks を検証できない"
+              "（表示して素通し——gh を導入して再実行すれば検証が効く — §3.5）", file=sys.stderr)
+        return []
+    owner, repo = m.group(1), m.group(2)
+    status, lines = _gh_api(gh, root, f"repos/{owner}/{repo}", ".default_branch")
+    if status != "ok" or not lines:
+        print("[bootstrap] Step 9 ④: GitHub API に到達できず required checks を検証できない"
+              "（オフライン/未認証/権限不足——表示して素通し — §3.5）", file=sys.stderr)
+        return []
+    branch = lines[0]
+    contexts: set[str] = set()
+    st, ls = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/rules/branches/{branch}",
+        '.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context')
+    rules_definitive = st == "ok"
+    if rules_definitive:
+        contexts |= set(ls)
+    st2, ls2 = _gh_api(
+        gh, root, f"repos/{owner}/{repo}/branches/{branch}/protection/required_status_checks",
+        ".contexts[]")
+    # 404 = 旧来保護が「無い」ことの確定回答（403/オフライン=照会不能とは意味が違う）
+    classic_definitive = st2 in ("ok", "absent")
+    if st2 == "ok":
+        contexts |= set(ls2)
+    # 最低線は3コアジョブ（v2.37）。「checks / commit-msg-history はローカルでも走るから
+    # 重複」はローカルフックが動く経路にしか成立しない——CI を最終防衛線とする主張
+    # （§5・README）の対象経路（Web 編集・フック未導入マシン）では、この2ジョブが唯一の
+    # 強制点で、required でなければ赤のままマージできる。
+    missing = [j for j in REQUIRED_CHECK_CONTEXTS if j not in contexts]
+    if not missing:
+        return []  # 各ジョブはどちらか一方の系統で確認できれば存在証明として十分
+    if rules_definitive and classic_definitive:
+        # 不在の断定は両系統の確定回答が揃った時だけ（v2.36 是正——片系統が照会不能のまま
+        # 「検証できて不在」と誤断定すると、旧来保護だけに登録した採用先が CI で必ず偽赤になる:
+        # CI の GITHUB_TOKEN は旧来保護の照会が常に 403＝admin 必須のため）
+        listed = ", ".join(sorted(contexts)) if contexts else "なし"
+        return [f"required checks にコアジョブが不足: {', '.join(missing)}"
+                f"（{branch} の必須チェック実測: {listed}。リポジトリ設定で登録する——"
+                "required の完成はリポジトリ設定まで — §5・§11 Step 9 ④）"]
+    unchecked = [name for name, d in (("ルールセット", rules_definitive),
+                                      ("旧来ブランチ保護", classic_definitive)) if not d]
+    print(f"[bootstrap] Step 9 ④: {'・'.join(unchecked)}を照会できず、コアジョブ"
+          f"（{', '.join(missing)}）の不在を断定できない（照会できた範囲には無い——表示して"
+          "素通し。CI の GITHUB_TOKEN は旧来ブランチ保護を照会できない（admin 必須）ため、"
+          "CI 再監査で確定判定を得るには rulesets 側で登録する — §3.5）", file=sys.stderr)
+    return []
+
+
 def assert_step_9(root: Path, ctx: dict) -> list[str]:
     ci = ".github/workflows/guardrails-ci.yml"
     text = rs.read_text(root, ci) if ci in ctx["tracked"] else ""
     jobs = set(re.findall(r"^  ([A-Za-z][\w-]*):\s*(?:#.*)?$", text, re.M))
+    fails = []
     if not jobs - {"checks", "red-first"}:
-        return ["CI に列のテスト/解析ジョブが無い（checks/red-first 以外ゼロ——近似判定 §7.4）"]
-    return []
+        fails.append("CI に列のテスト/解析ジョブが無い（checks/red-first 以外ゼロ——近似判定 §7.4）")
+    fails += verify_required_checks(root)  # ④ 外部設定の実測（v2.35）
+    return fails
+
+
+def run_verify_scenarios() -> int:
+    """`--verify-scenarios`: verify_required_checks の回帰シナリオ再生（v2.36・§3.5）。
+
+    ネットワークに一切出ない（gh api・which・remote 照会を全部モックする）——
+    check_ownership_guard.py と同じ「門番自身の回帰」の型。発火は pre-commit の
+    `files: ^scripts/check_bootstrap\\.py$`（本体に触れた時だけ）＋ CI の --all-files。
+    シナリオ4は v2.36 で是正した偽陽性（rulesets 確定・空＋旧来保護 403 →
+    誤って「検証できて不在」）の再発防止が目的。
+    """
+    RULES = "rules/branches"
+    CLASSIC = "protection/required_status_checks"
+
+    def fake_api(responses: dict[str, tuple[str, list[str]]]):
+        def _fake(gh: str, root: Path, endpoint: str, jq: str) -> tuple[str, list[str]]:
+            for key, resp in responses.items():
+                if key in endpoint:
+                    return resp
+            return responses.get("", ("ok", ["main"]))  # 既定: default_branch 照会は成功
+        return _fake
+
+    ALL3 = list(REQUIRED_CHECK_CONTEXTS)
+    # (名前, 期待fail件数, remote, gh有無, _gh_api の応答表)
+    scenarios = [
+        ("rulesetsのみに3コアジョブ登録（旧来保護は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("ok", ALL3), CLASSIC: ("unverifiable", [])}),
+        ("旧来保護のみに3コアジョブ登録（rulesets は照会不能）", 0, "git@github.com:o/r.git", True,
+         {RULES: ("unverifiable", []), CLASSIC: ("ok", ALL3)}),
+        ("両系統とも確定回答で全部不在 → 失敗", 1, "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("absent", [])}),
+        ("rulesets確定・空＋旧来保護は照会不能 → 断定せず素通し（v2.36 是正の回帰）", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("unverifiable", [])}),
+        ("両系統確定・red-first と checks のみ → 最低線3ジョブに不足で失敗（v2.37 の回帰）", 1,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", []), CLASSIC: ("ok", ["red-first", "checks"])}),
+        ("2系統に分かれて合計3コアジョブ（存在証明は系統横断の和集合）", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", ["red-first"]), CLASSIC: ("ok", ["checks", "commit-msg-history"])}),
+        ("red-first のみ確認・旧来保護は照会不能 → 残り2つの不在を断定せず素通し", 0,
+         "git@github.com:o/r.git", True,
+         {RULES: ("ok", ["red-first"]), CLASSIC: ("unverifiable", [])}),
+        ("gh 不在 → 表示して素通し", 0, "git@github.com:o/r.git", False, {}),
+        ("GitHub 以外のリモート → 検証対象外", 0, "https://gitlab.com/o/r.git", True, {}),
+        ("API 到達不能（default_branch 照会失敗）→ 表示して素通し", 0,
+         "git@github.com:o/r.git", True, {"": ("unverifiable", [])}),
+    ]
+
+    this = sys.modules[__name__]
+    orig = (this._gh_api, shutil.which, rs.git_config_get)
+    mismatches = 0
+    t0 = time.monotonic()
+    try:
+        for name, want, remote, has_gh, responses in scenarios:
+            rs.git_config_get = lambda root, key, _u=remote: _u  # noqa: B023
+            shutil.which = (lambda n: "gh") if has_gh else (lambda n: None)
+            this._gh_api = fake_api(responses)
+            got = len(verify_required_checks(Path(".")))
+            if got != want:
+                mismatches += 1
+                print(f"HARD:step9-scenario-mismatch {name}: 期待fail {want} 件・実際 {got} 件"
+                      "（§3.5——本体とシナリオ期待値を同一コミットで揃える）", file=sys.stderr)
+    finally:
+        this._gh_api, shutil.which, rs.git_config_get = orig
+    if mismatches:
+        print(f"\ncheck-bootstrap --verify-scenarios: 不一致 {mismatches} 件/{len(scenarios)} 本",
+              file=sys.stderr)
+        return 1
+    print(f"[bootstrap] verify シナリオ 全{len(scenarios)}本 PASS "
+          f"(+{int((time.monotonic() - t0) * 1000)}ms)")
+    return 0
 
 
 def assert_step_10(root: Path, ctx: dict) -> list[str]:
@@ -285,7 +452,7 @@ def main() -> int:
         print(line, file=sys.stderr)
     if violations:
         print(f"\ncheck-bootstrap: 違反 {len(violations)} 件（コミット停止）。"
-              "GUARDRAILS.md §3.5 を参照。", file=sys.stderr)
+              ".guardrails/GUARDRAILS.md §3.5 を参照。", file=sys.stderr)
         return 1
     done = sum(1 for s in rows.values() if s[0] == DONE)
     na = sum(1 for s in rows.values() if s[0] == NA)
@@ -296,6 +463,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        if "--verify-scenarios" in sys.argv[1:]:
+            rs.reconfigure_stdio()
+            sys.exit(run_verify_scenarios())
         sys.exit(main())
     except subprocess.TimeoutExpired as exc:
         print(f"check-bootstrap: 内部エラー: サブプロセスがタイムアウト: {exc.cmd}", file=sys.stderr)

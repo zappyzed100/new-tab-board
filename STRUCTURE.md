@@ -11,7 +11,9 @@
 - `.prettierrc.json`
 - `.python-version`
 - `AGENTS.md`
+- `AGENTS.md.template`
 - `CLAUDE.md`
+- `CLAUDE.md.template`
 - `README.md`
 - `SPEC.md`
 - `eslint.config.js`
@@ -28,17 +30,18 @@
 
 ## `.claude/`
 
-- `.claude/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: GUARDRAILS.md §2）
-- `.claude/hooks/guard_human_wip.py` — guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: GUARDRAILS.md §2c）
-- `.claude/hooks/post_edit_format.py` — post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: GUARDRAILS.md §1）
-- `.claude/hooks/post_edit_lint.py` — post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: GUARDRAILS.md §1）
-- `.claude/hooks/session_baseline.py` — session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: GUARDRAILS.md §2c）
-- `.claude/hooks/stop_incomplete_guard.py` — stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: GUARDRAILS.md §2b）
+- `.claude/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回・.git/hooks/ シムの改変除去、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
+- `.claude/hooks/guard_human_wip.py` — guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: .guardrails/GUARDRAILS.md §2c）
+- `.claude/hooks/post_edit_format.py` — post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: .guardrails/GUARDRAILS.md §1）
+- `.claude/hooks/post_edit_lint.py` — post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: .guardrails/GUARDRAILS.md §1）
+- `.claude/hooks/session_baseline.py` — session_baseline.py — セッション開始時点の未コミット変更（人間のWIP）のパス集合を保存する（正本: .guardrails/GUARDRAILS.md §2c）
+- `.claude/hooks/stop_incomplete_guard.py` — stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: .guardrails/GUARDRAILS.md §2b）
 - `.claude/settings.json`
 
 ## `.codex/`
 
 - `.codex/hooks.json`
+- `.codex/hooks/codex_hook_adapter.py` — codex_hook_adapter.py — Codex フックの入力を既存 guardrails フック契約へ正規化するアダプタ
 - `.codex/hooks/guard_git_bypass.py` — guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: GUARDRAILS.md §2）
 - `.codex/hooks/guard_human_wip.py` — guard_human_wip.py — 人間の未コミット変更（セッション開始時点で dirty だったファイル）への AI の Edit/Write を exit 2 でブロックする（正本: GUARDRAILS.md §2c）
 - `.codex/hooks/post_edit_format.py` — post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: GUARDRAILS.md §1）
@@ -50,16 +53,19 @@
 
 - `.github/workflows/guardrails-ci.yml`
 
+## `.guardrails/`
+
+- `.guardrails/BOOTSTRAP.md`
+- `.guardrails/CUSTOMIZE.md`
+- `.guardrails/GOALS.md`
+- `.guardrails/GUARDRAILS.md`
+
 ## `bindings/`
 
 - `bindings/catalog.md`
 
 ## `docs/`
 
-- `docs/guardrails/BOOTSTRAP.md`
-- `docs/guardrails/CUSTOMIZE.md`
-- `docs/guardrails/GOALS.md`
-- `docs/guardrails/GUARDRAILS.md`
 - `docs/manual-verification.md`
 - `docs/nas-native-messaging-protocol.md`
 - `docs/native-messaging-protocol.md`
@@ -100,18 +106,23 @@
 
 ## `scripts/`
 
-- `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: GUARDRAILS.md §3.5）
-- `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: GUARDRAILS.md §3.4）
+- `scripts/check_bootstrap.py` — check_bootstrap.py — ブートストラップ監査: .guardrails/BOOTSTRAP.md の ✅ を再実行検証し、虚偽✅・順序違反を機械検出（契約: .guardrails/GUARDRAILS.md §3.5）
+- `scripts/check_codex_hooks.py` — check_codex_hooks.py — Codex フック設定とアダプタの回帰検査（契約: .guardrails/GUARDRAILS.md §2）
+- `scripts/check_commit_msg.py` — check_commit_msg.py — コミットメッセージ検査: 形式 + fix⇔テスト + G引用 + 依存宣言 + feat⇔plan（契約: .guardrails/GUARDRAILS.md §3.4）
 - `scripts/check_commit_msg_history.py` — check_commit_msg_history.py — commit-msg段のHARD検査をCIでPR範囲に対して再生する
-- `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: GUARDRAILS.md §2）
-- `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: GUARDRAILS.md §5）
-- `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: GUARDRAILS.md §7.5・§3.3）
-- `scripts/dev.py` — dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: GUARDRAILS.md §12.1）
+- `scripts/check_fill_bindings.py` — check_fill_bindings.py — fill_bindings の失敗時無変更・正常充填を回帰検査する
+- `scripts/check_guard_corpus.py` — check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
+- `scripts/check_ownership_guard.py` — check_ownership_guard.py — 所有権ガード(§2c)の回帰シナリオ再生（契約: .guardrails/GUARDRAILS.md §2c）
+- `scripts/check_red_first.py` — check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: .guardrails/GUARDRAILS.md §5）
+- `scripts/check_rule_dod.py` — check_rule_dod.py — 列の違反注入コーパスを再生し、各規則が実際に発火することを機械証明する（契約: .guardrails/GUARDRAILS.md §11 Step 2・Phase 47）
+- `scripts/check_structure.py` — check_structure.py — 構造検査: hard違反=exit 1・softは警告のみ exit 0（契約: .guardrails/GUARDRAILS.md §7.5・§3.3）
+- `scripts/dev.py` — dev.py — ランタイム共通動詞のルーター: 全プロジェクト同名の動詞で環境を操作する（契約: .guardrails/GUARDRAILS.md §12.1）
 - `scripts/dump-storage.mjs`
-- `scripts/generate_structure.py` — generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: GUARDRAILS.md §7.4）
+- `scripts/fill_bindings.py` — fill_bindings.py — 採用列の paste-block を管理区画へ機械充填する（契約: .guardrails/GUARDRAILS.md §11 前段・Phase 47）
+- `scripts/generate_structure.py` — generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: .guardrails/GUARDRAILS.md §7.4）
 - `scripts/install_kit.py` — install_kit.py — キットの機械的配置（詳細は直下の docstring と README_SETUP.md §1）
 - `scripts/playwright-extension.mjs`
-- `scripts/repo_scan.py` — repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: GUARDRAILS.md §7.3）
+- `scripts/repo_scan.py` — repo_scan.py — 共通走査モジュール: ファイル列挙・読み込み・シンボル/import抽出（契約: .guardrails/GUARDRAILS.md §7.3）
 - `scripts/reset-e2e-profile.mjs`
 - `scripts/seed-board.mjs`
 - `scripts/set-time-freeze.mjs`
@@ -247,6 +258,11 @@
 ## `tests/`
 
 - `tests/guard_corpus.tsv`
+- `tests/injections/common.json`
+- `tests/injections/dart-flutter.json`
+- `tests/injections/python-uv.json`
+- `tests/injections/rust.json`
+- `tests/injections/ts-react-web.json`
 - `tests/test_check_commit_msg.py` — test_check_commit_msg.py — check_commit_msg.pyの検査2(fix-without-test)回帰テスト
 - `tests/test_check_commit_msg_history.py` — test_check_commit_msg_history.py — check_commit_msg_history.pyの回帰テスト
 - `tests/test_check_structure_path_bindings.py` — test_check_structure_path_bindings.py — パス型バインディングの死活検査(path-binding-dead)の回帰テスト
@@ -262,11 +278,14 @@
 - def block_loss
 - def worktree_dirty_or_unknown
 - def check
+- def record_block
 - def main
 
 ### `.claude/hooks/guard_human_wip.py`
 - def warn_and_pass
+- def local_rel_candidate
 - def resolve_root
+- def session_dir
 - def main
 
 ### `.claude/hooks/post_edit_format.py`
@@ -278,10 +297,17 @@
 ### `.claude/hooks/session_baseline.py`
 - def warn_and_pass
 - def resolve_root
+- def session_dir
 - def main
 
 ### `.claude/hooks/stop_incomplete_guard.py`
 - def resolve_root
+- def session_dir
+- def main
+
+### `.codex/hooks/codex_hook_adapter.py`
+- def project_root
+- def edited_paths
 - def main
 
 ### `.codex/hooks/guard_git_bypass.py`
@@ -391,19 +417,32 @@
 - def assert_step_7
 - def assert_step_8
 - def assert_step_8b
+- def verify_required_checks
 - def assert_step_9
+- def run_verify_scenarios
 - def assert_step_10
+- def main
+
+### `scripts/check_codex_hooks.py`
 - def main
 
 ### `scripts/check_commit_msg.py`
 - def read_message
 - def read_subject
 - def staged_files
+- def staged_has_test
 - def check_dependencies
 - def check_feat_plan
 - def check_feat_test
 - def check_test_shrink
 - def check_commit_size
+- def main_single
+- def resolve_rev
+- def commits_in_range
+- def commit_message_text
+- class CommitWorktree
+- def check_commit
+- def main_history
 - def main
 
 ### `scripts/check_commit_msg_history.py`
@@ -414,6 +453,10 @@
 - def check_one
 - def main
 
+### `scripts/check_fill_bindings.py`
+- def run
+- def main
+
 ### `scripts/check_guard_corpus.py`
 - def resolve_tool
 - def run_guard
@@ -421,6 +464,16 @@
 - def make_fixture
 - def replay
 - def probe
+- def main
+
+### `scripts/check_ownership_guard.py`
+- class Repo
+- def scenario_clean_start_allows_new_file
+- def scenario_human_wip_blocks_edit
+- def scenario_human_wip_commit_lifts_block
+- def scenario_compact_skips_rebaseline
+- def scenario_compact_preserves_existing_human_baseline
+- def scenario_unknown_source_falls_back_to_rebaseline
 - def main
 
 ### `scripts/check_red_first.py`
@@ -436,11 +489,25 @@
 - def check_commit
 - def main
 
+### `scripts/check_rule_dod.py`
+- def run_check
+- def run_commit_msg
+- def git
+- def resolve_column
+- def case_files
+- def requires_met
+- def write_files
+- def remove_files
+- def token_of
+- def main
+
 ### `scripts/check_structure.py`
 - def check_required
 - def check_layers
 - def check_required_content
 - def check_tests
+- def check_gates_registry
+- def check_property_tests
 - def check_deprecated
 - def check_log_calls
 - def check_ffi_boundary
@@ -451,7 +518,8 @@
 - def check_context_doc_size
 - def check_hooks_installed
 - def check_binding_dead_patterns
-- def check_path_binding_dead_patterns
+- def check_binding_dead_paths
+- def check_installer_tokens
 - def check_binding_source
 - def check_soft_limits
 - def check_orphans
@@ -460,17 +528,32 @@
 ### `scripts/dev.py`
 - def main
 
+### `scripts/fill_bindings.py`
+- def column_section
+- def split_target
+- def region_inner
+- def fill_one
+- def validate_target
+- def stamp_primary
+- def main
+
 ### `scripts/generate_structure.py`
 - def build_content
 - def main
 
 ### `scripts/install_kit.py`
 - def is_meta
+- def managed_inner
+- def named_managed_inner
+- def splice_managed
+- def diff_stat
+- def detect
 - def read_text
 - def kit_lines
 - def lines_present
 - def precommit_ok
 - def settings_ok
+- def codex_hooks_ok
 - def git
 - def git_tracked_clean
 - def copy_file
@@ -483,6 +566,7 @@
 - def repo_root
 - def list_tracked_files
 - def read_text
+- def append_violations
 - def git_config_get
 - def git_hooks_dir
 - def ext_of

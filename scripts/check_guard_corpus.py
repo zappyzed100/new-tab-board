@@ -1,4 +1,4 @@
-# check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: GUARDRAILS.md §2）
+# check_guard_corpus.py — guard迂回コーパスの再生チェッカ + probe事前照会（契約: .guardrails/GUARDRAILS.md §2）
 #
 # 呼び出し（§7.1: 必ず uv 経由）:
 #   uv run scripts/check_guard_corpus.py                  … コーパス再生（門番の回帰テスト）
@@ -89,10 +89,15 @@ def run_guard(guard: Path, command: str, cwd: Path | None = None) -> tuple[str, 
     見つからず誤判定になる）。
     """
     payload = json.dumps({"tool_input": {"command": command}}, ensure_ascii=False)
-    env = None
+    # 違反ログ（§3.6）は常に抑止する——コーパス再生の DENY 期待行（約40行）と probe の
+    # 事前照会は「実際に門が止めた事象」ではない。抑止しないと再生のたびに偽の迂回試行が
+    # ledger へ積もり、頻度データ（soft→hard 昇格の実測）が計測不能になる。
     if cwd is not None:
         env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         env["CLAUDE_PROJECT_DIR"] = str(cwd)
+    else:
+        env = dict(os.environ)
+    env["GUARDRAILS_LEDGER_SUPPRESS"] = "1"
     try:
         proc = subprocess.run(
             [sys.executable, str(guard)],
@@ -220,7 +225,7 @@ def replay(guard: Path, rows: list[tuple[int, str, str | None, str]]) -> int:
     if mismatches:
         print(f"\ncheck-guard-corpus: 不一致 {mismatches} 件/{len(rows)} 行。門番の改修が"
               "過去に塞いだ迂回を開け直していないか、コーパスの期待値と guard 本体"
-              "（GUARDRAILS.md §2）を同一コミットで揃える。", file=sys.stderr)
+              "（.guardrails/GUARDRAILS.md §2）を同一コミットで揃える。", file=sys.stderr)
         return 1
     print(f"[guard-corpus] 全{len(rows)}行 PASS (+{elapsed}ms)")
     return 0
@@ -241,7 +246,7 @@ def probe(guard: Path, command: str) -> int:
 def main(argv: list[str]) -> int:
     rs.reconfigure_stdio()
     ap = argparse.ArgumentParser(
-        description="guard迂回コーパスの再生チェッカ + probe事前照会（GUARDRAILS.md §2）")
+        description="guard迂回コーパスの再生チェッカ + probe事前照会（.guardrails/GUARDRAILS.md §2）")
     ap.add_argument("--probe", metavar="CMD",
                     help="コーパスを再生せず、このコマンド1つを事前照会する")
     args = ap.parse_args(argv)

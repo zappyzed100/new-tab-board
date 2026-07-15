@@ -1,4 +1,4 @@
-# check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: GUARDRAILS.md §5）
+# check_red_first.py — red-first 証明: fix の同梱テストが親コミットで赤だったことの機械証明（契約: .guardrails/GUARDRAILS.md §5）
 #
 # 呼び出し（§7.1: 必ず uv 経由。CI の red-first ジョブとローカルで同じ）:
 #   uv run scripts/check_red_first.py [--soft] [--base <rev>] [--head <rev>]
@@ -155,7 +155,7 @@ def append_step_summary(lines: list[str], headline: str) -> None:
         return
     try:
         with open(path, "a", encoding="utf-8", newline="\n") as f:
-            f.write(f"### red-first 証明（GUARDRAILS.md §5）\n\n{headline}\n\n")
+            f.write(f"### red-first 証明（.guardrails/GUARDRAILS.md §5）\n\n{headline}\n\n")
             f.write("```\n" + "\n".join(lines) + "\n```\n")
     except OSError as exc:
         print(f"check_red_first: 警告: ジョブサマリへ書けない（{exc}）——判定には影響しない",
@@ -226,7 +226,7 @@ def check_commit(root: Path, sha: str, resolved0: str, log: list[str]) -> str:
 def main(argv: list[str]) -> int:
     rs.reconfigure_stdio()
     ap = argparse.ArgumentParser(
-        description="red-first 証明: fix の同梱テストが親コミットで赤だったか（GUARDRAILS.md §5）")
+        description="red-first 証明: fix の同梱テストが親コミットで赤だったか（.guardrails/GUARDRAILS.md §5）")
     ap.add_argument("--base", default="origin/main",
                     help="比較の起点リビジョン（既定: origin/main。CI は PR の base SHA を渡す）")
     ap.add_argument("--head", default="HEAD", help="対象範囲の終点（既定: HEAD）")
@@ -269,7 +269,7 @@ def main(argv: list[str]) -> int:
             line = (f"{prefix}:red-first-green ({sha[:7]}) fix の同梱テストが親コミットでも"
                     "全部緑——バグを再現していない。親で赤になるテストに直すか、CI 上で"
                     f"赤にできない修正なら本文に `{EXEMPT_PREFIX} 理由` を書く"
-                    "（GUARDRAILS.md §5）")
+                    "（.guardrails/GUARDRAILS.md §5）")
             print(line, file=sys.stderr)
             violations.append(line)
             log.append(line)

@@ -1,11 +1,12 @@
-# post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: GUARDRAILS.md §1）
+# post_edit_lint.py — Edit/Write/MultiEdit 直後の編集ファイルへ単一ファイル lint を当てる第2段（正本: .guardrails/GUARDRAILS.md §1）
 #
 # 整形（post_edit_format.py・自動修正系）と責務を分けた**判定系**の第2段（v2.5・Phase 12）。
 # lint の初出地点が push 段（§4）から編集直後へ2段前倒しになり、「push で落ちて再試行」の
 # ループ1周が消える。違反は exit 2 —— stderr が Claude に渡り、コンテキストを保持した
 # まま即修正ループに入れる。
 #
-# 実行順の保証: Claude Code の公式仕様では同一 matcher の複数フックは**並列・順序不定**。
+# 実行順の保証: Claude Code の公式仕様では同一 matcher の複数フックは**並列・順序不定**
+# （HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）。
 # そのため本フックは settings.json 側で post_edit_format.py と**1コマンドの直列**として
 # 配線される（整形→lint の順を実行環境の仕様に依存させない —— §1）。
 #
@@ -15,7 +16,7 @@
 # 防ぎ、編集フローは止めない。表示＋素通しの型は §2b/§2c 系の fail-open 側の整理）。
 # --fix 系（自動修正）はここに置かない —— それは整形フック（第1段）の責務。
 #
-# BINDING-SOURCE: ts-react-crx@1
+# BINDING-SOURCE の刻印は下の管理区画内に書く（§12.7。未刻印は SOFT:binding-unstamped）
 #
 # ===== BINDING: 対象拡張子 × lint コマンド（bindings/catalog.md 表A「編集直後 lint」）=====
 # v2キットは言語なしで出荷される（下の DISPATCH は空）。Step 0 で採用列の paste-block を

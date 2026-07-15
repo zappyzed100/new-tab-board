@@ -1,8 +1,9 @@
-# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: GUARDRAILS.md §2）
+# guard_git_bypass.py — git の --no-verify/-n・SKIP=・--force/-f push・core.hooksPath 迂回・.git/hooks/ シムの改変除去、および非可逆な作業消失（rm -rf .git／dirty での reset --hard 等）を exit 2 でブロック（正本: .guardrails/GUARDRAILS.md §2）
 #
 # 呼び出し（PreToolUse: Bash。settings.json 側で `uv run python` 経由——§7.1）。
 # PreToolUse(Bash) の仕様: ブロックできるのは exit 2 **だけ**（exit 1 含む他の非0は素通し）。
-# したがって本フック内の想定外エラーもすべて exit 2 に倒す（fail-closed）——これが契約。
+# したがって本フック内の想定外エラーもすべて exit 2 に倒す（fail-closed）——これが契約
+# （HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）。
 # 引用符の中身（コミットメッセージ等）は判定前に取り除くため、メッセージ文面に
 # --no-verify という文字列が入っていても誤検知しない。
 #
@@ -27,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 
 def _word(w: str) -> re.Pattern[str]:
@@ -49,6 +51,22 @@ WORD_CHECKOUT = _word("checkout")
 WORD_RESTORE = _word("restore")
 
 RE_HOOKSPATH = re.compile("hookspath", re.IGNORECASE)
+RE_GIT_CONFIG_GET = re.compile(r"--get(-all|-regexp)?\b")
+# フックシムの改変/除去（v2.46 — §2）: `.git/hooks/` 配下のシムを rm/mv/chmod/ln/tee で
+# 消す・無効化する、または `>`（切り詰め）で潰す操作。`pre-commit uninstall` と同じ全ゲート
+# 迂回だが「uninstall」の語を使わない経路（`rm .git/hooks/pre-commit` 等）が素通しだった。
+# 参照だけ（cat / ls）は素通し——変異動詞か切り詰めリダイレクトを伴う時のみブロック。
+RE_HOOKS_SHIM = re.compile(
+    r"(?:^|[\s=\"'])(?:\./)?\.git/hooks(?:/|(?=[\s\"']|$))", re.IGNORECASE
+)
+RE_HOOK_MUTATE = re.compile(
+    r"\b(?:rm|mv|cp|chmod|ln|tee|truncate|install|del|erase|copy|move|"
+    r"remove-item|move-item|copy-item|rename-item|set-content|clear-content|out-file|new-item)\b",
+    re.IGNORECASE,
+)
+RE_SHELL_LAUNCH = re.compile(r"\b(?:powershell|pwsh|cmd)\b", re.IGNORECASE)
+RE_HOOK_REDIRECT = re.compile(r">+\s*(?:\./)?\.git/hooks(?:/|(?=\s|$))", re.IGNORECASE)
+CMD_SPLIT = re.compile(r"&&|\|\||;|\|")
 RE_SKIP = re.compile(r"(^|[;&|\s])SKIP=")
 RE_NFLAG = re.compile(r"(^|\s)-[a-mo-zA-Z]*n[a-zA-Z]*(\s|$)")
 RE_FFLAG = re.compile(r"(^|\s)-[a-eg-zA-Z]*f[a-zA-Z]*(\s|$)")
@@ -94,13 +112,29 @@ def worktree_dirty_or_unknown(project_dir: str) -> bool:
 def check(cmd: str) -> None:
     no_newlines = cmd.replace("\n", " ")
     stripped = QUOTE_STRIP.sub("", no_newlines)
+    # Windows の `\` と重複 `/` を正規化してからパスを判定する。シェルが異なっても
+    # `.git/hooks` は同じ実体であり、表記差を迂回路にしない（§2・G7）。
+    normalized = re.sub(r"/+", "/", stripped.replace("\\", "/"))
+    raw_normalized = re.sub(r"/+", "/", no_newlines.replace("\\", "/"))
+    # v2.28: 全フック迂回とcommit/push系はセグメント（&&/||/;/|区切り）単位で判定する。
+    # 全文字列を1本の対象として見ると、無関係なセグメントに散らばった部分文字列同士が
+    # 組み合わさって誤検知する（実測2件: `git config --get core.hooksPath` が
+    # `--get` を見ずに即ブロックされていた／`find . -newer X` の `-newer` が
+    # 「-n(--no-verify)」に誤検知され、同一コマンド内の無関係な "pre-commit" という
+    # 文字列が `\bcommit\b` に一致してしまい発火していた）。セグメント単位にしても
+    # 実コマンドは1セグメント内で完結する（`git commit -n` を `&&` 等で分割して書く
+    # ことに実用上の意味は無い）ため、本来の検知力は落ちない——過剰ブロックの緩和のみ。
+    segments = CMD_SPLIT.split(normalized)
 
     # 全フック迂回: core.hooksPath の付け替え（`git config core.hooksPath …`・
     # `git -c core.hooksPath=…`）。フック本体ごと差し替えれば --no-verify 検査は
     # 無意味になるため、git を含むコマンドでの言及自体をブロックする
     # （キー名は git 仕様どおり大文字小文字非区別で判定・過剰ブロック側に倒す）。
-    if WORD_GIT.search(stripped) and RE_HOOKSPATH.search(stripped):
-        block("core.hooksPath の変更（フック本体の付け替え）")
+    # `--get`/`--get-all`/`--get-regexp` を伴う読み取り専用の照会は除外する
+    # （同一セグメント内に限定——無関係なセグメントの `--get` では免除しない）。
+    for seg in segments:
+        if WORD_GIT.search(seg) and RE_HOOKSPATH.search(seg) and not RE_GIT_CONFIG_GET.search(seg):
+            block("core.hooksPath の変更（フック本体の付け替え）")
 
     # 全フック迂回: pre-commit uninstall（シムの取り外し）。settings.json の deny は
     # 前方一致のみで `cd x && pre-commit uninstall`・`uvx pre-commit uninstall`・
@@ -109,22 +143,38 @@ def check(cmd: str) -> None:
     if WORD_PRECOMMIT.search(stripped) and WORD_UNINSTALL.search(stripped):
         block("pre-commit uninstall（フックシムの取り外し）")
 
-    if WORD_GIT.search(stripped) and WORD_COMMIT_PUSH.search(stripped):
-        if "--no-verify" in stripped:
-            block("--no-verify")
-        if RE_SKIP.search(stripped):
-            block("SKIP=")
-        # git commit の -n / 結合短フラグ内の n も --no-verify の別名
-        if WORD_COMMIT.search(stripped) and RE_NFLAG.search(stripped):
-            block("-n (--no-verify の別名)")
-        # force push（--force / --force-with-lease / -f / 結合短フラグ内の f）。
-        # settings.json の deny は前方一致のみで、引数順を変えた `git push origin -f` を
-        # 通してしまう——引数順の迂回を塞ぐのは主防壁であるこのフックの責務。
-        if WORD_PUSH.search(stripped):
-            if "--force" in stripped:
-                block("--force push（--force-with-lease 含む。履歴を書き換えない）")
-            if RE_FFLAG.search(stripped):
-                block("-f (--force の別名)")
+    # 全フック迂回: シムの直接改変/除去（v2.46）。`pre-commit uninstall` を使わずに
+    # `.git/hooks/` 配下のシムを消す・上書きする・無効化する経路を塞ぐ。参照（cat/ls）は
+    # 通し、変異動詞（rm/mv/chmod/ln/tee/truncate）か切り詰めリダイレクト（`> .git/hooks/…`）
+    # を伴う時だけブロックする。`pre-commit install`（語に .git/hooks/ を含まない正規の
+    # 再導入）は素通し。
+    for raw_seg in CMD_SPLIT.split(raw_normalized):
+        code_seg = QUOTE_STRIP.sub("", raw_seg)
+        if RE_HOOK_REDIRECT.search(code_seg) or (
+            RE_HOOKS_SHIM.search(raw_seg) and RE_HOOK_MUTATE.search(code_seg)
+        ) or (
+            RE_SHELL_LAUNCH.search(code_seg) and RE_HOOKS_SHIM.search(raw_seg)
+            and RE_HOOK_MUTATE.search(raw_seg)
+        ):
+            block(".git/hooks/ 配下のフックシムの改変/除去（pre-commit uninstall と同じ全ゲート迂回）")
+
+    for seg in segments:
+        if WORD_GIT.search(seg) and WORD_COMMIT_PUSH.search(seg):
+            if "--no-verify" in seg:
+                block("--no-verify")
+            if RE_SKIP.search(seg):
+                block("SKIP=")
+            # git commit の -n / 結合短フラグ内の n も --no-verify の別名
+            if WORD_COMMIT.search(seg) and RE_NFLAG.search(seg):
+                block("-n (--no-verify の別名)")
+            # force push（--force / --force-with-lease / -f / 結合短フラグ内の f）。
+            # settings.json の deny は前方一致のみで、引数順を変えた `git push origin -f` を
+            # 通してしまう——引数順の迂回を塞ぐのは主防壁であるこのフックの責務。
+            if WORD_PUSH.search(seg):
+                if "--force" in seg:
+                    block("--force push（--force-with-lease 含む。履歴を書き換えない）")
+                if RE_FFLAG.search(seg):
+                    block("-f (--force の別名)")
 
     # --- 作業消失ガード（§2・Phase 14 — v2.5）: 非可逆な作業消失だけを塞ぐ ---
     # ① `.git` を含む rm -rf は**常時**ブロック（履歴＝全作業の非可逆な破壊。履歴ごと
@@ -159,6 +209,30 @@ def check(cmd: str) -> None:
                        "クリーンなツリーなら素通しになる）")
 
 
+def record_block(rule_id: str, command: str) -> None:
+    """違反ログ（.guardrails/GUARDRAILS.md §3.6 — v2.34）への追記。
+
+    フックは依存ゼロ（標準ライブラリのみ・repo_scan を import しない）が前提のため、
+    repo_scan.append_violations と独立の最小実装を持つ（スキーマは同一——変えるときは
+    両方を同一コミットで揃える）。コーパス再生・probe（check_guard_corpus.py）は
+    GUARDRAILS_LEDGER_SUPPRESS=1 で抑止する——再生のたびに約40行の DENY 期待行が
+    「実際の迂回試行」として偽計上されるのを防ぐ。記録失敗は stderr 1行で素通し
+    （ブロック判定そのものには影響させない——fail-closed の契約は exit 2 側が担う）。
+    """
+    if os.environ.get("GUARDRAILS_LEDGER_SUPPRESS"):
+        return
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or "."
+    ts = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    try:
+        with open(os.path.join(root, ".guardrails", "violations.jsonl"),
+                  "a", encoding="utf-8", newline="\n") as f:
+            f.write(json.dumps(
+                {"ts": ts, "stage": "guard", "severity": "DENY", "rule_id": rule_id,
+                 "location": command[:200]}, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"[violation-ledger] 記録失敗（ブロック判定には影響しない）: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
@@ -175,12 +249,13 @@ def main() -> int:
     try:
         check(cmd)
     except Block as b:
+        record_block("work-loss" if b.loss else "git-bypass", cmd)
         prefix = (
-            f"ブロック: {b.reason}（GUARDRAILS.md §2 作業消失ガード）。消してよい変更なら"
+            f"ブロック: {b.reason}（.guardrails/GUARDRAILS.md §2 作業消失ガード）。消してよい変更なら"
             "先に commit / stash で退避するのが正規経路。人間の指示によるものなら、その旨を"
             "人間に確認してから人間側の端末で実行する。"
             if b.loss else
-            f"ブロック: {b.reason} によるフック迂回は禁止（GUARDRAILS.md §2）。フックが"
+            f"ブロック: {b.reason} によるフック迂回は禁止（.guardrails/GUARDRAILS.md §2）。フックが"
             "落ちるなら迂回せず違反そのものを直すこと。2回連続で同じフックが落ちるなら"
             "原因調査に切り替える（ルート AGENTS.md §10-4）。"
         )
@@ -196,5 +271,5 @@ if __name__ == "__main__":
         raise
     except BaseException as exc:  # fail-closed（§2の契約——想定外エラーも exit 2）
         print(f"guard_git_bypass: フック内部エラーのため fail-closed でブロック"
-              f"（GUARDRAILS.md §2）: {exc!r}", file=sys.stderr)
+              f"（.guardrails/GUARDRAILS.md §2）: {exc!r}", file=sys.stderr)
         sys.exit(2)

@@ -1,4 +1,4 @@
-# .pre-commit-config.yaml — コミット/プッシュ時ゲートの正本（GUARDRAILS.md §3・§4・§7.6）
+# .pre-commit-config.yaml — コミット/プッシュ時ゲートの正本（.guardrails/GUARDRAILS.md §3・§4・§7.6）
 #
 # 前工程に行くほど検査が軽く・速く、後工程に行くほど重く・広くなる設計:
 #   commit 時 = 衛生・秘密検出・STRUCTURE.md鮮度・構造検査・メッセージ検査（数秒）
@@ -64,14 +64,53 @@ repos:
         pass_filenames: false
         files: ^(\.claude/hooks/guard_git_bypass\.py|tests/guard_corpus\.tsv|scripts/check_guard_corpus\.py)$
 
-      # ---- §3.5 ブートストラップ監査（台帳 BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
+      - id: rule-dod
+        name: "rule-dod (規則違反注入コーパス再生 — §11)"
+        entry: uv run scripts/check_rule_dod.py
+        language: system
+        pass_filenames: false
+        files: ^(scripts/check_rule_dod\.py|tests/injections/|scripts/repo_scan\.py)$
+
+      - id: fill-bindings-corpus
+        name: "fill-bindings-corpus (充填器の失敗時無変更 — §11)"
+        entry: uv run scripts/check_fill_bindings.py
+        language: system
+        pass_filenames: false
+        files: ^(scripts/fill_bindings\.py|scripts/check_fill_bindings\.py|scripts/install_kit\.py|bindings/catalog\.md)$
+
+      # ---- §2c 所有権ガードの回帰シナリオ再生（files: で門番3点に限定。CI の
+      #      --all-files では常時回る — v2.29・G10「§10保留」の解消）----
+      - id: ownership-guard
+        name: "ownership-guard (所有権ガード回帰シナリオ — §2c)"
+        entry: uv run scripts/check_ownership_guard.py
+        language: system
+        pass_filenames: false
+        files: ^(\.claude/hooks/session_baseline\.py|\.claude/hooks/guard_human_wip\.py|scripts/check_ownership_guard\.py)$
+
+      - id: codex-hooks
+        name: "codex-hooks (Codex フック設定・アダプタ回帰 — §2)"
+        entry: uv run scripts/check_codex_hooks.py
+        language: system
+        pass_filenames: false
+        files: ^(\.codex/hooks\.json|\.codex/hooks/|scripts/check_codex_hooks\.py)$
+
+      # ---- §3.5 ブートストラップ監査（台帳 .guardrails/BOOTSTRAP.md に触れたコミット＝✅ 化の瞬間だけ
       #      発火し、✅ の主張を再実行検証する。CI の --all-files では常時回る——二重の網）----
       - id: check-bootstrap
         name: "check-bootstrap (✅ の再実行検証 — §3.5)"
         entry: uv run scripts/check_bootstrap.py
         language: system
         pass_filenames: false
-        files: ^docs/guardrails/BOOTSTRAP\.md$
+        files: ^\.guardrails/BOOTSTRAP\.md$
+
+      # ---- §3.5 Step 9 ④ 検証の回帰シナリオ（全モック・ネットワーク不要。監査器本体に
+      #      触れた時だけ発火＝guard-corpus / ownership-guard と同じ「門番自身の回帰」の型 — v2.36）----
+      - id: bootstrap-verify-scenarios
+        name: "bootstrap-verify-scenarios (Step 9 ④ 検証の回帰 — §3.5)"
+        entry: uv run scripts/check_bootstrap.py --verify-scenarios
+        language: system
+        pass_filenames: false
+        files: ^scripts/check_bootstrap\.py$
 
       # ---- §3.4 コミットメッセージ検査（pass_filenames は既定 true のまま — §7.6 の注意）----
       - id: check-commit-msg
@@ -80,8 +119,10 @@ repos:
         language: system
         stages: [commit-msg]
 
-      # ============ BINDING: 言語別 push 段ゲート（GUARDRAILS.md §4・§11 Step 0 表A）============
-      # ts-react-crx@1（bindings/catalog.md）— Step 6 で充填。
+      # ============ BINDING: 言語別 push 段ゲート（.guardrails/GUARDRAILS.md §4・§11 Step 0 表A）============
+      # v2キットは言語なしで出荷される。Step 0 で bindings/catalog.md の採用列の
+      # paste-block（テスト・静的解析の pre-push フック群）をここへ貼る
+      # （stages: [pre-push] は維持。コードよりゲートが先 — §11 Step 6）。
       # >>> GUARDRAILS BINDING: pre-push >>>
       - id: tsc
         name: "tsc --noEmit (pre-push — §4)"

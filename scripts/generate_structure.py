@@ -1,4 +1,4 @@
-# generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: GUARDRAILS.md §7.4）
+# generate_structure.py — STRUCTURE.md を実ツリー・実シンボルから再生成する唯一の主体（契約: .guardrails/GUARDRAILS.md §7.4）
 #
 # 呼び出し（§7.1: 必ず uv 経由）:
 #   uv run scripts/generate_structure.py           … 再生成して上書き。成功すれば差分の有無に関わらず exit 0
@@ -76,7 +76,7 @@ def build_content(root: Path, files: list[str]) -> str:
 def main(argv: list[str]) -> int:
     rs.reconfigure_stdio()
     parser = argparse.ArgumentParser(
-        description="STRUCTURE.md の再生成（引数なし）/ 鮮度確認（--check）。契約: GUARDRAILS.md §7.4"
+        description="STRUCTURE.md の再生成（引数なし）/ 鮮度確認（--check）。契約: .guardrails/GUARDRAILS.md §7.4"
     )
     parser.add_argument("--check", action="store_true", help="書き込まず、古ければ diff を出して exit 1")
     args = parser.parse_args(argv)

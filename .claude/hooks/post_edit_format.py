@@ -1,12 +1,13 @@
-# post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: GUARDRAILS.md §1）
+# post_edit_format.py — Edit/Write/MultiEdit 直後に編集ファイルへ整形を当てる（正本: .guardrails/GUARDRAILS.md §1）
 #
 # 狙い: フォーマット崩れの検出地点を「コミット時」から「編集した瞬間」へ前倒しする。
 # PostToolUse の仕様: 編集自体は取り消せない。exit 2 のとき stderr が Claude に渡り
-# 自己修正の材料になる（整形が失敗する = 構文エラーの可能性が高いので exit 2 を使う）。
+# 自己修正の材料になる（整形が失敗する = 構文エラーの可能性が高いので exit 2 を使う）
+# （HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md 2026-07-08 — §2d）。
 # フォーマッタ未導入・対象外拡張子は exit 0（この層は利便であってゲートではない。
 # ゲートは §3〜§5 が担う）。どの整形も冪等。
 #
-# BINDING-SOURCE: ts-react-crx@1
+# BINDING-SOURCE の刻印は下の管理区画内に書く（§12.7。未刻印は SOFT:binding-unstamped）
 #
 # ===== BINDING: 対象拡張子 × 整形コマンド（bindings/catalog.md の採用列から充填）=====
 # v2キットは言語なしで出荷される（下の DISPATCH は空）。Step 0 で採用列の paste-block を

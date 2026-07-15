@@ -1,8 +1,13 @@
-# stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: GUARDRAILS.md §2b）
+# stop_incomplete_guard.py — ターン終了ゲート: 未完了（未コミット作業/構造検査が赤）の終了を exit 2 で差し戻す（正本: .guardrails/GUARDRAILS.md §2b）
 #
 # Stop フックの仕様: 応答終了時に発火し、exit 2 で終了を差し戻せる（stderr が Claude に渡る）。
-# 入力 JSON: session_id / transcript_path / stop_hook_active。stop_hook_active=true は
-# 「既に差し戻しで継続中」を意味する（無限ループ防止に必読 — §2b）。
+# 入力 JSON: session_id / transcript_path（HARNESS-VERIFIED: code.claude.com/docs/en/hooks.md
+# 2026-07-08 — §2d。exit 2 の効果・session_id・transcript_path はここで確認済み）。
+# stop_hook_active はこの確認時点の公式ドキュメントに**記載が無い**（未文書化フィールドの
+# 可能性——実機のペイロードには存在し、本フックの無限ループ防止（無読）はそれに依存して
+# 動いている。ドキュメントと実機が食い違う具体例——次にこのフックへ手を入れる時に
+# 実機で再確認すること。stop_hook_active=true は「既に差し戻しで継続中」を意味する
+# という理解は Phase 11（v2.4）導入時の実機確認に基づく、ドキュメント未確認の前提のまま）。
 #
 # 差し戻し条件（いずれかの理由が成立 ∧ 免除なし の時のみ exit 2）:
 #   条件A（v2.4）: `git status --porcelain` が非空（未コミットの作業がある）
@@ -47,6 +52,7 @@ MAX_REDIRECTS = 3
 TAIL_LINES = 50
 SESSION_ID_ALLOWED = re.compile(r"[^A-Za-z0-9._-]")
 HARD_LINE = re.compile(r"^HARD:", re.MULTILINE)
+CHECK_SCRIPTS = ("check_structure.py", "check_codex_hooks.py")
 
 
 def resolve_root() -> str | None:
@@ -61,6 +67,12 @@ def resolve_root() -> str | None:
     if proc.returncode != 0:
         return None
     return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def session_dir(root: str) -> Path:
+    """ランタイム別の状態を置く。既定はClaude、Codexアダプタは .codex を明示する。"""
+    name = os.environ.get("GUARDRAILS_SESSION_DIR", ".claude")
+    return Path(root) / name / "session"
 
 
 def main() -> int:
@@ -95,7 +107,7 @@ def main() -> int:
     transcript_path = payload.get("transcript_path") or ""
     active = bool(payload.get("stop_hook_active", False))
     session_id = SESSION_ID_ALLOWED.sub("", session_id_raw) or "unknown"
-    counter_dir = Path(root) / ".claude" / "session"
+    counter_dir = session_dir(root)
     counter_file = counter_dir / f"{session_id}.stopcount"
 
     # ---- 差し戻し理由の確定（出口1を含む） ----
@@ -104,22 +116,24 @@ def main() -> int:
     if porcelain.strip():
         reason = "dirty"
     else:
-        check_script = Path(root) / "scripts" / "check_structure.py"
-        if check_script.is_file():
+        check_scripts = [Path(root) / "scripts" / name for name in CHECK_SCRIPTS]
+        if all(path.is_file() for path in check_scripts):
             try:
-                check_proc = subprocess.run([sys.executable, str(check_script)],
-                                            capture_output=True, cwd=root, timeout=60)
-                check_out = (check_proc.stdout + check_proc.stderr).decode("utf-8", "replace")
-                if check_proc.returncode == 1 and HARD_LINE.search(check_out):
-                    reason = "check"
-                    hard_lines = [ln for ln in check_out.splitlines() if ln.startswith("HARD:")]
-                    check_head = "\n".join(hard_lines[:5])
+                for check_script in check_scripts:
+                    check_proc = subprocess.run([sys.executable, str(check_script)],
+                                                capture_output=True, cwd=root, timeout=60)
+                    check_out = (check_proc.stdout + check_proc.stderr).decode("utf-8", "replace")
+                    if check_proc.returncode == 1 and HARD_LINE.search(check_out):
+                        reason = "check"
+                        hard_lines = [ln for ln in check_out.splitlines() if ln.startswith("HARD:")]
+                        check_head = "\n".join(hard_lines[:5])
+                        break
                 # exit 0=緑 / exit 2=内部エラー / HARD 無しの非0 → いずれも差し戻さない
             except (OSError, subprocess.TimeoutExpired):
                 pass  # fail-open
         else:
-            print("[stop-gate] 条件B スキップ（scripts/check_structure.py が無い）——"
-                  "静かな不発の禁止は本表示で満たす（GUARDRAILS.md §2b）", file=sys.stderr)
+            print("[stop-gate] 条件B スキップ（必須のキット検査スクリプトが無い）——"
+                  "静かな不発の禁止は本表示で満たす（.guardrails/GUARDRAILS.md §2b）", file=sys.stderr)
         if not reason:
             try:
                 counter_file.unlink(missing_ok=True)
@@ -154,7 +168,7 @@ def main() -> int:
             count = 0
         if count >= MAX_REDIRECTS:
             print(f"[stop-gate] 差し戻し上限（{MAX_REDIRECTS}回）到達のため終了を許可"
-                  "（GUARDRAILS.md §2b）", file=sys.stderr)
+                  "（.guardrails/GUARDRAILS.md §2b）", file=sys.stderr)
             return 0
     try:
         counter_dir.mkdir(parents=True, exist_ok=True)
@@ -165,7 +179,7 @@ def main() -> int:
     if reason == "check":
         print("作業ツリーはクリーンだが、構造検査（dev.py check）が赤のままターンを終えようと"
               "している（§2b 条件B — v2.9）。終えてよい出口は2つだけ: (a) 規則IDで "
-              "GUARDRAILS.md §3.3 を引いて違反を解消し、規約どおりコミットする。 (b) 物理的に"
+              ".guardrails/GUARDRAILS.md §3.3 を引いて違反を解消し、規約どおりコミットする。 (b) 物理的に"
               "解消不能なら、応答の先頭を `BLOCKED:` で始めて具体的に報告する。検出された違反"
               f"（先頭5行）:\n{check_head}", file=sys.stderr)
     else:
@@ -174,7 +188,7 @@ def main() -> int:
               "終えてよい出口は2つだけ: (a) DoD を満たし規約どおりコミットして作業ツリーを"
               "クリーンにする（§3・§10 実行規律7）。 (b) 本当に手が止まる物理的ブロッカー"
               "なら、応答の先頭を `BLOCKED:` で始めて具体的に報告する。「続けますか?」で"
-              "止まるのはサボりの一形態（GUARDRAILS.md §2b）。", file=sys.stderr)
+              "止まるのはサボりの一形態（.guardrails/GUARDRAILS.md §2b）。", file=sys.stderr)
     return 2
 
 
