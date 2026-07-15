@@ -262,6 +262,7 @@
 - `tests/injections/dart-flutter.json`
 - `tests/injections/python-uv.json`
 - `tests/injections/rust.json`
+- `tests/injections/ts-react-crx.json`
 - `tests/injections/ts-react-web.json`
 - `tests/test_check_commit_msg.py` — test_check_commit_msg.py — check_commit_msg.pyの検査2(fix-without-test)回帰テスト
 - `tests/test_check_commit_msg_history.py` — test_check_commit_msg_history.py — check_commit_msg_history.pyの回帰テスト
