@@ -3,7 +3,8 @@
 // 引け、まだ履歴に刻まれていない書きかけの本文も対象になる(ユーザー指摘「全文検索が空」への対応)。
 // 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fはこの検索欄へフォーカスを移す。
 import { forwardRef, useMemo, useState } from "react";
-import { Card, Heading, Text, TextField } from "@radix-ui/themes";
+import { Card, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { Search } from "lucide-react";
 import { searchNotesByText } from "../../../lib/search/noteSearch";
 import type { Note } from "../../../types";
 
@@ -23,7 +24,10 @@ export const SearchPanel = forwardRef<HTMLInputElement, Props>(function SearchPa
   return (
     <Card data-testid="search-panel">
       <Heading as="h2" size="3" mb="3">
-        🔍 全文検索(全ノートの本文を横断・部分一致)
+        <Flex align="center" gap="1" as="span">
+          <Search size={16} aria-hidden="true" />
+          全文検索(全ノートの本文を横断・部分一致)
+        </Flex>
       </Heading>
       <TextField.Root
         ref={ref}

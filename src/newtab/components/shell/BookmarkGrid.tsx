@@ -3,6 +3,7 @@
 // D&D並べ替えは自前のHTML5 native drag-and-dropロジック(Radixに代替が無いため温存)。
 import { useState, type FormEvent } from "react";
 import { Button, Card, Flex, Grid, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   addBookmark,
   createBookmark,
@@ -95,7 +96,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
                     title="このブックマークを編集する"
                     onClick={() => setEditingId(bookmark.id)}
                   >
-                    ✏️
+                    <Pencil size={13} aria-hidden="true" />
                   </IconButton>
                   <IconButton
                     type="button"
@@ -106,7 +107,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
                     title="このブックマークを削除する"
                     onClick={() => onChange(removeBookmark(bookmarks, bookmark.id))}
                   >
-                    🗑️
+                    <Trash2 size={13} aria-hidden="true" />
                   </IconButton>
                 </Flex>
               </Flex>
@@ -134,7 +135,7 @@ export function BookmarkGrid({ bookmarks, openIn, onBookmarksChange: onChange }:
               title="新しいブックマークを追加する"
               onClick={() => setAdding(true)}
             >
-              +
+              <Plus size={16} aria-hidden="true" />
             </IconButton>
             <Text as="span" size="1">
               サイトを追加

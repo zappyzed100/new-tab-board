@@ -10,6 +10,15 @@
 import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
 import {
+  CloudDownload,
+  CloudUpload,
+  FileText,
+  FolderOpen,
+  KeyRound,
+  Settings as SettingsIcon,
+  Upload,
+} from "lucide-react";
+import {
   getGeminiApiKey,
   getNasFolderPath,
   setGeminiApiKey,
@@ -165,7 +174,8 @@ export function DataPanel({
           title="ローカルの.txtファイルを選んで新規ノートとして読み込む"
           onClick={() => void handleOpenFile()}
         >
-          📄 ファイルを開く
+          <FileText size={14} aria-hidden="true" />
+          ファイルを開く
         </Button>
         <Button
           type="button"
@@ -174,7 +184,8 @@ export function DataPanel({
           title="未保管の履歴を今すぐNASフォルダへ書き出す"
           onClick={() => void handleFlushNow()}
         >
-          📤 今すぐNASへ書き出し
+          <Upload size={14} aria-hidden="true" />
+          今すぐNASへ書き出し
         </Button>
         <Button
           type="button"
@@ -183,7 +194,8 @@ export function DataPanel({
           title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへ退避する"
           onClick={onBackupToDrive}
         >
-          ☁️ Driveへ退避
+          <CloudUpload size={14} aria-hidden="true" />
+          Driveへ退避
         </Button>
         <Button
           type="button"
@@ -192,7 +204,8 @@ export function DataPanel({
           title="Google Drive上の自動バックアップから全データを復元する"
           onClick={() => void handleRestoreFromDrive()}
         >
-          ☁️ Driveから復元
+          <CloudDownload size={14} aria-hidden="true" />
+          Driveから復元
         </Button>
         <Button
           type="button"
@@ -201,7 +214,8 @@ export function DataPanel({
           title="履歴の長期保管先(NASの共有フォルダ等)のパスを設定する"
           onClick={() => setShowNasInput((v) => !v)}
         >
-          📁 NASフォルダを設定
+          <FolderOpen size={14} aria-hidden="true" />
+          NASフォルダを設定
         </Button>
         {showNasInput ? (
           <>
@@ -235,7 +249,8 @@ export function DataPanel({
           title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
           onClick={() => void handleConnectDrive()}
         >
-          ⚙️ GDrive設定
+          <SettingsIcon size={14} aria-hidden="true" />
+          GDrive設定
         </Button>
         <Button
           type="button"
@@ -244,7 +259,8 @@ export function DataPanel({
           title="Gemini APIキーを設定する(タグ付け/要約/TODO抽出で使用。AI Studioで発行)"
           onClick={() => setShowGeminiInput((v) => !v)}
         >
-          🔑 Gemini APIキー{geminiKeySet ? "(設定済み)" : ""}
+          <KeyRound size={14} aria-hidden="true" />
+          Gemini APIキー{geminiKeySet ? "(設定済み)" : ""}
         </Button>
         {showGeminiInput ? (
           <>

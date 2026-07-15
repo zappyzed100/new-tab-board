@@ -2,6 +2,7 @@
 // 一覧表示/クリップボードへコピー/削除(ユーザー指示)。ノート類の下に線を引いて置く。
 import { useEffect, useRef, useState } from "react";
 import { Button, Card, Flex, Heading, IconButton, Text } from "@radix-ui/themes";
+import { Copy, Images, Trash2 } from "lucide-react";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import {
   deletePastedImage,
@@ -110,7 +111,10 @@ export function PastedImagesPanel() {
     <Card data-testid="pasted-images-panel" className="pasted-images-panel">
       <Flex align="center" gap="3" mb="2" wrap="wrap">
         <Heading as="h2" size="3">
-          📋 貼り付けた画像
+          <Flex align="center" gap="1" as="span">
+            <Images size={16} aria-hidden="true" />
+            貼り付けた画像
+          </Flex>
         </Heading>
         <Text size="1" color="gray">
           Ctrl+Vで貼り付けた画像がここに一次保存されます(NASには保存しません)
@@ -138,7 +142,8 @@ export function PastedImagesPanel() {
                   data-testid={`pasted-image-copy-${v.id}`}
                   onClick={() => void copy(v)}
                 >
-                  📋 コピー
+                  <Copy size={14} aria-hidden="true" />
+                  コピー
                 </Button>
                 <IconButton
                   type="button"
@@ -147,9 +152,10 @@ export function PastedImagesPanel() {
                   color="red"
                   data-testid={`pasted-image-delete-${v.id}`}
                   title="この画像を削除する"
+                  aria-label="この画像を削除する"
                   onClick={() => remove(v)}
                 >
-                  🗑
+                  <Trash2 size={14} aria-hidden="true" />
                 </IconButton>
               </Flex>
             </div>

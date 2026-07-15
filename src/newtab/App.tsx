@@ -2,6 +2,16 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp as ArrowUpIcon,
+  BellOff,
+  CalendarClock,
+  Keyboard,
+  StickyNote,
+  Tag,
+} from "lucide-react";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
@@ -609,7 +619,7 @@ export function App() {
   async function handleTagAll() {
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
-      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の🔑ボタン)");
+      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)");
       return;
     }
     const all = notes ?? [];
@@ -665,7 +675,7 @@ export function App() {
       setDataPanelMessage("Google Driveへ退避しました(以後の変更は自動でも同期されます)");
     } else if (result.status === "unauthenticated") {
       setDataPanelMessage(
-        "Googleアカウントにログインできませんでした(⚙️ GDrive設定から接続してください)",
+        "Googleアカウントにログインできませんでした(「GDrive設定」から接続してください)",
       );
     } else {
       setDataPanelMessage("Driveへの退避に失敗しました");
@@ -727,7 +737,7 @@ export function App() {
     return (
       <Theme
         appearance={resolvedTheme}
-        accentColor="indigo"
+        accentColor="blue"
         grayColor="slate"
         radius="large"
         panelBackground="solid"
@@ -747,7 +757,7 @@ export function App() {
   return (
     <Theme
       appearance={resolvedTheme}
-      accentColor="indigo"
+      accentColor="blue"
       grayColor="slate"
       radius="large"
       panelBackground="solid"
@@ -756,25 +766,38 @@ export function App() {
         <Flex asChild direction="column" gap="4">
           <main data-testid="app-root">
             {geminiUsageToday >= GEMINI_DAILY_WARN_THRESHOLD ? (
-              <Card data-testid="gemini-usage-warning">
+              <Card data-testid="gemini-usage-warning" className="callout callout-warning">
                 <Text size="3" weight="medium" color="orange">
-                  ⚠️ 本日のGemini使用が{geminiUsageToday}回に達しました(しきい値
-                  {GEMINI_DAILY_WARN_THRESHOLD})。無料枠を使い切る前に、GPT-OSS 120Bへの乗り換えを
-                  検討してください。
+                  <Flex align="center" gap="2" as="span">
+                    <AlertTriangle size={16} aria-hidden="true" />
+                    本日のGemini使用が{geminiUsageToday}回に達しました(しきい値
+                    {GEMINI_DAILY_WARN_THRESHOLD})。無料枠を使い切る前に、GPT-OSS 120Bへの乗り換えを
+                    検討してください。
+                  </Flex>
                 </Text>
               </Card>
             ) : null}
             {countdown.kind === "upcoming" ? (
-              <Card data-testid="next-event-countdown" title="Googleカレンダーの次の予定まで">
+              <Card
+                data-testid="next-event-countdown"
+                className="callout callout-info"
+                title="Googleカレンダーの次の予定まで"
+              >
                 <Text size="3" weight="medium">
-                  📆 次の予定まで {formatCountdown(countdown)}({countdown.title})
+                  <Flex align="center" gap="2" as="span">
+                    <CalendarClock size={16} aria-hidden="true" />
+                    次の予定まで {formatCountdown(countdown)}({countdown.title})
+                  </Flex>
                 </Text>
               </Card>
             ) : null}
             {countdown.kind === "in-progress" ? (
-              <Card data-testid="next-event-countdown">
+              <Card data-testid="next-event-countdown" className="callout callout-info">
                 <Text size="3" weight="medium">
-                  📆 予定は進行中です
+                  <Flex align="center" gap="2" as="span">
+                    <CalendarClock size={16} aria-hidden="true" />
+                    予定は進行中です
+                  </Flex>
                 </Text>
               </Card>
             ) : null}
@@ -786,7 +809,8 @@ export function App() {
                 title="予定10分前アラームの音を止める"
                 onClick={stopPreEventAlarm}
               >
-                🔔 アラーム停止
+                <BellOff size={14} aria-hidden="true" />
+                アラーム停止
               </Button>
             ) : null}
 
@@ -824,7 +848,8 @@ export function App() {
                   title="使えるキーボードショートカットの一覧を表示する"
                   onClick={() => setShowShortcutsModal(true)}
                 >
-                  ⌨️ ショートカット一覧(?)
+                  <Keyboard size={14} aria-hidden="true" />
+                  ショートカット一覧(?)
                 </Button>
               </nav>
             </Flex>
@@ -909,7 +934,8 @@ export function App() {
                       disabled={tagging}
                       onClick={() => void handleTagAll()}
                     >
-                      {tagging ? "タグ付け中…" : "🏷️ まとめてタグをふる"}
+                      <Tag size={14} aria-hidden="true" />
+                      {tagging ? "タグ付け中…" : "まとめてタグをふる"}
                     </Button>
                   </Flex>
                   <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
@@ -970,8 +996,11 @@ export function App() {
                   </div>
                 ) : (
                   <Card data-testid="no-notes">
-                    <Text size="3" weight="medium" color="indigo">
-                      📝 ノートがありません。上の「+ ノート」ボタンを押すと書き始められます
+                    <Text size="3" weight="medium" color="blue">
+                      <Flex align="center" gap="2" as="span">
+                        <StickyNote size={16} aria-hidden="true" />
+                        ノートがありません。上の「+ ノート」ボタンを押すと書き始められます
+                      </Flex>
                     </Text>
                   </Card>
                 )}
@@ -993,7 +1022,7 @@ export function App() {
           aria-label="一番上へスクロール"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         >
-          ↑
+          <ArrowUpIcon size={20} aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -1005,7 +1034,7 @@ export function App() {
             window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })
           }
         >
-          ↓
+          <ArrowDown size={20} aria-hidden="true" />
         </button>
       </div>
     </Theme>

@@ -1,8 +1,10 @@
 // TagCandidatesPanel.tsx — タグ候補(ユーザーが手で並べる語彙)の管理UI。TODOリストの下に置く。
 // 単純に候補を並べるだけ。LLMのタグ推定時に「優先的に選ぶ候補」として参照される(ユーザー指示)。
 import { useState, type KeyboardEvent } from "react";
-import { Badge, Card, Flex, Heading, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Badge, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Tags, X } from "lucide-react";
 import { addTagCandidate, removeTagCandidate } from "../../../lib/entities/tagCandidates";
+import { PanelCard } from "./PanelCard";
 
 type Props = {
   candidates: string[];
@@ -19,10 +21,11 @@ export function TagCandidatesPanel({ candidates, onCandidatesChange }: Props) {
   }
 
   return (
-    <Card data-testid="tag-candidates-panel">
-      <Heading as="h2" size="4" mb="1">
-        タグ候補
-      </Heading>
+    <PanelCard
+      data-testid="tag-candidates-panel"
+      title="タグ候補"
+      icon={<Tags size={15} aria-hidden="true" />}
+    >
       <Text as="p" size="1" color="gray" mb="2">
         AIがタグを付けるとき、ここの候補から優先的に選びます
       </Text>
@@ -36,7 +39,7 @@ export function TagCandidatesPanel({ candidates, onCandidatesChange }: Props) {
       />
       <Flex gap="1" wrap="wrap" mt="2" data-testid="tag-candidate-list">
         {candidates.map((tag) => (
-          <Badge key={tag} color="indigo" variant="soft" data-testid={`tag-candidate-${tag}`}>
+          <Badge key={tag} color="blue" variant="soft" data-testid={`tag-candidate-${tag}`}>
             {tag}
             <IconButton
               type="button"
@@ -47,11 +50,11 @@ export function TagCandidatesPanel({ candidates, onCandidatesChange }: Props) {
               title={`「${tag}」を候補から外す`}
               onClick={() => onCandidatesChange(removeTagCandidate(candidates, tag))}
             >
-              ×
+              <X size={12} aria-hidden="true" />
             </IconButton>
           </Badge>
         ))}
       </Flex>
-    </Card>
+    </PanelCard>
   );
 }

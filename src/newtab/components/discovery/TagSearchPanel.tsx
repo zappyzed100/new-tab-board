@@ -3,6 +3,7 @@
 // タグチップはNASの上位タグ(頻度順)。NAS未設定時はメモリ内タグへフォールバックする。
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, Checkbox, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { ListChecks, RefreshCw, Search, Tag, X } from "lucide-react";
 import { tagCounts } from "../../../lib/search/tagSearch";
 import { getNasFolderPath } from "../../../lib/storage/db";
 import {
@@ -150,7 +151,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
     setBusy(null);
     if (rows === null) {
       setResults(null);
-      setMsg("検索できませんでした。先に「🔄 索引を更新」を実行してください");
+      setMsg("検索できませんでした。先に「索引を更新」を実行してください");
       return;
     }
     setResults(rows);
@@ -188,7 +189,10 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
     <Card data-testid="tag-search-panel">
       <Flex align="center" gap="3" wrap="wrap" mb="2">
         <Heading as="h2" size="3">
-          🏷️ タグ・本文・期間でNASから検索
+          <Flex align="center" gap="1" as="span">
+            <Tag size={16} aria-hidden="true" />
+            タグ・本文・期間でNASから検索
+          </Flex>
         </Heading>
         <Button
           type="button"
@@ -200,7 +204,8 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
           disabled={busy !== null}
           onClick={() => void handleRebuild()}
         >
-          {busy === "rebuild" ? "更新中…" : "🔄 索引を更新"}
+          <RefreshCw size={14} aria-hidden="true" />
+          {busy === "rebuild" ? "更新中…" : "索引を更新"}
         </Button>
         {selected.length >= 2 ? (
           <Button
@@ -220,7 +225,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
         {chips.map(({ tag, count }) => {
           const on = selected.includes(tag);
           return (
-            <Badge key={tag} asChild color={on ? "indigo" : "gray"} variant={on ? "solid" : "soft"}>
+            <Badge key={tag} asChild color={on ? "blue" : "gray"} variant={on ? "solid" : "soft"}>
               <button
                 type="button"
                 data-testid="tag-chip"
@@ -249,7 +254,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
           }}
         />
         {selected.map((tag) => (
-          <Badge key={tag} asChild color="indigo" variant="solid">
+          <Badge key={tag} asChild color="blue" variant="solid">
             <button
               type="button"
               data-testid={`selected-tag-${tag}`}
@@ -257,7 +262,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
               style={{ cursor: "pointer" }}
               onClick={() => toggle(tag)}
             >
-              {tag} ×
+              {tag} <X size={11} aria-hidden="true" style={{ display: "inline" }} />
             </button>
           </Badge>
         ))}
@@ -282,7 +287,8 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
           disabled={busy !== null}
           onClick={() => void handleSearch()}
         >
-          {busy === "search" ? "検索中…" : "🔍 検索"}
+          <Search size={14} aria-hidden="true" />
+          {busy === "search" ? "検索中…" : "検索"}
         </Button>
       </Flex>
 
@@ -342,7 +348,8 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
               disabled={checkedIds.size === 0}
               onClick={pasteChecked}
             >
-              ☑ チェックを貼り付け({checkedIds.size})
+              <ListChecks size={14} aria-hidden="true" />
+              チェックを貼り付け({checkedIds.size})
             </Button>
             <Button
               type="button"

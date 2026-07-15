@@ -4,6 +4,22 @@
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
+import {
+  ArrowUp,
+  BookOpen,
+  CheckSquare,
+  Copy,
+  Eraser,
+  GripVertical,
+  History,
+  Loader2,
+  Pencil,
+  Pin,
+  Sparkles,
+  Star,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import type { DragEvent as ReactDragEvent } from "react";
@@ -18,7 +34,7 @@ import { buildTagVocabulary } from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
-const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の🔑ボタン)";
+const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)";
 
 // 保存時の自動タグ付けを全ペイン横断で1件ずつに直列化するガード。blurでは複数ペインの
 // スナップショットが同時に発火し、Geminiが429を返す前に複数fetchが飛んでクールダウンが
@@ -28,7 +44,7 @@ let autoTagInFlight = false;
 const DRIVE_SYNC_LABEL: Record<string, string> = {
   idle: "",
   syncing: "同期中…",
-  synced: "☁同期済",
+  synced: "同期済",
   unauthenticated: "Drive未認証",
   error: "同期エラー",
 };
@@ -329,7 +345,7 @@ export function NoteEditorPane({
               }
             }}
           >
-            ⠿
+            <GripVertical size={16} aria-hidden="true" />
           </span>
           {/* 同期状態はボタンではないので、ノート名の最右端(ピンの左)に控えめに置く(ユーザー指示)。 */}
           {DRIVE_SYNC_LABEL[driveSyncStatus] ? (
@@ -354,7 +370,7 @@ export function NoteEditorPane({
             }
             onClick={() => onToggleSpecial(note.id)}
           >
-            {note.special ? "⭐" : "☆"}
+            <Star size={14} aria-hidden="true" fill={note.special ? "currentColor" : "none"} />
           </IconButton>
           {/* ピンは説明なしのアイコンだけ・右端に(ユーザー指示)。ピン中は塗りつぶしで示す。 */}
           <IconButton
@@ -366,7 +382,7 @@ export function NoteEditorPane({
             }
             onClick={() => onTogglePin(note.id)}
           >
-            📌
+            <Pin size={14} aria-hidden="true" fill={note.pinned ? "currentColor" : "none"} />
           </IconButton>
         </Flex>
         {/* 2行目: 操作ボタンを全て「アイコン＋説明」で統一・順序も統一(移動→表示→AI→編集操作)。
@@ -382,7 +398,7 @@ export function NoteEditorPane({
             disabled={isFirst}
             onClick={() => onMoveUp(note.id)}
           >
-            ⬆️
+            <ArrowUp size={14} aria-hidden="true" />
           </IconButton>
           <IconButton
             type="button"
@@ -392,7 +408,11 @@ export function NoteEditorPane({
             title={showPreview ? "編集に戻す" : "Markdownを清書してプレビュー表示する"}
             onClick={() => setShowPreview((v) => !v)}
           >
-            {showPreview ? "✏️" : "📖"}
+            {showPreview ? (
+              <Pencil size={14} aria-hidden="true" />
+            ) : (
+              <BookOpen size={14} aria-hidden="true" />
+            )}
           </IconButton>
           <IconButton
             type="button"
@@ -402,7 +422,7 @@ export function NoteEditorPane({
             title="過去のスナップショット一覧・差分表示・復元"
             onClick={() => setShowHistory((v) => !v)}
           >
-            🕑
+            <History size={14} aria-hidden="true" />
           </IconButton>
           <IconButton
             type="button"
@@ -413,7 +433,11 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleSummarize()}
           >
-            {aiBusy === "summary" ? "⏳" : "✨"}
+            {aiBusy === "summary" ? (
+              <Loader2 size={14} aria-hidden="true" className="spin" />
+            ) : (
+              <Sparkles size={14} aria-hidden="true" />
+            )}
           </IconButton>
           <IconButton
             type="button"
@@ -424,7 +448,11 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleExtractTodos()}
           >
-            {aiBusy === "todo" ? "⏳" : "✅"}
+            {aiBusy === "todo" ? (
+              <Loader2 size={14} aria-hidden="true" className="spin" />
+            ) : (
+              <CheckSquare size={14} aria-hidden="true" />
+            )}
           </IconButton>
           <IconButton
             type="button"
@@ -435,7 +463,11 @@ export function NoteEditorPane({
             disabled={aiBusy !== null}
             onClick={() => void handleTagThisNote()}
           >
-            {aiBusy === "tag" ? "⏳" : "🏷️"}
+            {aiBusy === "tag" ? (
+              <Loader2 size={14} aria-hidden="true" className="spin" />
+            ) : (
+              <Tag size={14} aria-hidden="true" />
+            )}
           </IconButton>
           <IconButton
             type="button"
@@ -445,7 +477,7 @@ export function NoteEditorPane({
             title="このノートの本文をクリップボードにコピーする"
             onClick={() => void handleCopy()}
           >
-            📋
+            <Copy size={14} aria-hidden="true" />
           </IconButton>
           {/* 初期化: ノートは残したまま中身(本文/タグ/対応済み)を空へ戻す。削除とは別物。 */}
           <IconButton
@@ -470,7 +502,7 @@ export function NoteEditorPane({
               setRestoreCounter((c) => c + 1);
             }}
           >
-            🧹
+            <Eraser size={14} aria-hidden="true" />
           </IconButton>
           <IconButton
             type="button"
@@ -481,7 +513,7 @@ export function NoteEditorPane({
             title="このノートを削除する(スター済みならスペシャルへ凍結して残す)"
             onClick={() => onDeleteNote(note.id)}
           >
-            🗑️
+            <Trash2 size={14} aria-hidden="true" />
           </IconButton>
         </Flex>
         {showHistory ? (
@@ -516,7 +548,7 @@ export function NoteEditorPane({
         {note.tags && note.tags.length > 0 ? (
           <Flex gap="1" wrap="wrap" data-testid={`note-tags-${note.id}`}>
             {note.tags.map((tag) => (
-              <Badge key={tag} color="indigo" variant="soft">
+              <Badge key={tag} color="blue" variant="soft">
                 #{tag}
               </Badge>
             ))}

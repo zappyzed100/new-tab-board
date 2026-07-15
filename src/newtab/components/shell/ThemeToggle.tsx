@@ -3,6 +3,7 @@
 // ないため、E2Eの操作もselectOption()からクリックベースへ変更が必要(既知の副作用。
 // shortcuts-theme-calendar.spec.ts側で対応済み)。
 import { Flex, Select } from "@radix-ui/themes";
+import { SunMoon } from "lucide-react";
 import type { Settings } from "../../../types";
 
 type Props = {
@@ -14,7 +15,7 @@ export function ThemeToggle({ theme, onThemeChange }: Props) {
   return (
     <Flex title="配色テーマ(ライト/ダーク/自動)を切り替える" gap="2" align="center" asChild>
       <label>
-        🌗
+        <SunMoon size={16} aria-hidden="true" />
         <Select.Root
           value={theme}
           onValueChange={(value) => onThemeChange(value as Settings["theme"])}

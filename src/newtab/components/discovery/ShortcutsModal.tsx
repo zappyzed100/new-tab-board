@@ -8,6 +8,7 @@
 // エディタ内操作)を1つの見出し+フラットなリストへ詰め込んでいると見づらい
 // (ユーザー指摘)——グループごとに独立したCardへ分けている。
 import { Card, Dialog, Flex, Heading, IconButton } from "@radix-ui/themes";
+import { Keyboard, X } from "lucide-react";
 import { comboLabel, EDITOR_SHORTCUTS, type ShortcutDef } from "../../../lib/shortcuts/shortcuts";
 
 type Props = {
@@ -45,16 +46,22 @@ export function ShortcutsModal({ registry, onClose }: Props) {
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Content data-testid="shortcuts-modal">
-        <Dialog.Title>⌨️ キーボードショートカット一覧</Dialog.Title>
+        <Dialog.Title>
+          <Flex align="center" gap="1" as="span">
+            <Keyboard size={18} aria-hidden="true" />
+            キーボードショートカット一覧
+          </Flex>
+        </Dialog.Title>
         <IconButton
           type="button"
           data-testid="shortcuts-modal-close"
           className="modal-close-circle"
           variant="ghost"
           title="閉じる"
+          aria-label="閉じる"
           onClick={onClose}
         >
-          ×
+          <X size={16} aria-hidden="true" />
         </IconButton>
         <Flex direction="column" gap="3">
           <ShortcutGroupCard

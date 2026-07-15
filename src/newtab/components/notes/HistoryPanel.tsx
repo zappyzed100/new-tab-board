@@ -1,6 +1,7 @@
 // HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 import { useEffect, useState } from "react";
 import { Button, Card, Checkbox, Flex, Heading, Text } from "@radix-ui/themes";
+import { History } from "lucide-react";
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { getSnapshotsByNote, putSnapshot } from "../../../lib/storage/db";
 import { summarizeSnapshot } from "../../../lib/history/history";
@@ -73,7 +74,10 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
   return (
     <Card data-testid="history-panel">
       <Heading as="h2" size="3" mb="1">
-        🕑 履歴(自動保存されたスナップショット)
+        <Flex align="center" gap="1" as="span">
+          <History size={15} aria-hidden="true" />
+          履歴(自動保存されたスナップショット)
+        </Flex>
       </Heading>
       <Text as="p" size="2" color="gray" className="hint">
         2件チェックすると差分(diff)を下に表示します

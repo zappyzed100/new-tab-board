@@ -1,5 +1,6 @@
 // BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
-import { Button, Heading } from "@radix-ui/themes";
+import { Button, Flex, Heading } from "@radix-ui/themes";
+import { Link2 } from "lucide-react";
 import { buildBacklinkIndex } from "../../../lib/linking/links";
 import type { Note } from "../../../types";
 
@@ -19,7 +20,10 @@ export function BacklinksPanel({ notes, activeNote, onSelectNote }: Props) {
   return (
     <>
       <Heading as="h2" size="3" className="panel-title">
-        🔗 バックリンク([[{activeNote.title}]]にリンクしているノート)
+        <Flex align="center" gap="1" as="span">
+          <Link2 size={15} aria-hidden="true" />
+          バックリンク([[{activeNote.title}]]にリンクしているノート)
+        </Flex>
       </Heading>
       <ul data-testid="backlinks-panel">
         {backlinks.map((link) => (

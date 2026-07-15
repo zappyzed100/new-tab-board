@@ -1,6 +1,7 @@
 // TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 import { useState, type KeyboardEvent } from "react";
-import { Card, Checkbox, Flex, Heading, IconButton, Text, TextField } from "@radix-ui/themes";
+import { Checkbox, Flex, IconButton, Text, TextField } from "@radix-ui/themes";
+import { ListTodo, X } from "lucide-react";
 import {
   addTodo,
   createTodo,
@@ -8,6 +9,7 @@ import {
   sortedTodos,
   toggleTodo,
 } from "../../../lib/entities/todos";
+import { PanelCard } from "./PanelCard";
 import type { Todo } from "../../../types";
 
 type Props = {
@@ -28,10 +30,11 @@ export function TodoList({ todos, onTodosChange }: Props) {
   }
 
   return (
-    <Card data-testid="todo-list">
-      <Heading as="h2" size="4" mb="2">
-        TODOリスト
-      </Heading>
+    <PanelCard
+      data-testid="todo-list"
+      title="TODOリスト"
+      icon={<ListTodo size={15} aria-hidden="true" />}
+    >
       <TextField.Root
         type="text"
         data-testid="todo-new-input"
@@ -66,12 +69,12 @@ export function TodoList({ todos, onTodosChange }: Props) {
                 title="このTODOを削除する"
                 onClick={() => onTodosChange(removeTodo(todos, todo.id))}
               >
-                ×
+                <X size={14} aria-hidden="true" />
               </IconButton>
             </Flex>
           </li>
         ))}
       </ul>
-    </Card>
+    </PanelCard>
   );
 }
