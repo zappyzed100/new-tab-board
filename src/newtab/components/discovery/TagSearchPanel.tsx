@@ -53,6 +53,15 @@ function presetRange(preset: Preset): { from?: string; to?: string } {
 }
 
 /** カスタム日付(YYYY-MM-DD)を半開区間へ。to は「その日を含む」ため翌日0時を上限にする。 */
+/** 結果行の一意キー。期間検索は日次アーカイブ(date_notes)も合流するため、同じnote_idが
+ * 現行行+複数の過去日付行として重複しうる——note_idだけをキーにするとReactのkey衝突や
+ * チェック状態の共有(片方をチェックすると同じnote_idの別行も一緒にチェック扱いになる)を
+ * 起こすため、archived_dateを含めた複合キーにする(現行行はarchived_dateがnullなので
+ * note_idのみと同じキーになり、既存の単一結果時の挙動は変わらない)。 */
+function resultRowKey(hit: NoteHit): string {
+  return hit.archived_date ? `${hit.note_id}@${hit.archived_date}` : hit.note_id;
+}
+
 function customRange(from: string, to: string): { from?: string; to?: string } {
   const r: { from?: string; to?: string } = {};
   if (from) r.from = new Date(`${from}T00:00:00`).toISOString();
@@ -160,18 +169,18 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
     setMsg(`${rows.length}件ヒット`);
   }
 
-  function toggleChecked(id: string) {
+  function toggleChecked(rowKey: string) {
     setCheckedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
       return next;
     });
   }
 
   function pasteChecked() {
     if (!results) return;
-    const rows = results.filter((r) => checkedIds.has(r.note_id));
+    const rows = results.filter((r) => checkedIds.has(resultRowKey(r)));
     onPasteResults(rows.map((r) => ({ title: r.title ?? "", content: r.content })));
     setMsg(`チェックした${rows.length}件をノートへ貼り付けました`);
   }
@@ -362,29 +371,45 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
             </Button>
           </Flex>
           <ul className="search-results" data-testid="notes-search-results">
-            {pageRows.map((hit) => (
-              <li key={hit.note_id} data-testid={`notes-search-item-${hit.note_id}`}>
-                <Flex align="center" gap="2">
-                  <Checkbox
-                    data-testid={`result-check-${hit.note_id}`}
-                    checked={checkedIds.has(hit.note_id)}
-                    onCheckedChange={() => toggleChecked(hit.note_id)}
-                  />
-                  <button
-                    type="button"
-                    className="search-result-btn"
-                    data-testid={`notes-search-open-${hit.note_id}`}
-                    onClick={() => onSelectNote(hit.note_id)}
-                  >
-                    <span className="search-result-title">
-                      {hit.title ?? "(無題)"}
-                      {hit.created_at ? ` — ${new Date(hit.created_at).toLocaleDateString()}` : ""}
-                    </span>
-                    <span className="search-result-snippet">{hit.snippet}</span>
-                  </button>
-                </Flex>
-              </li>
-            ))}
+            {pageRows.map((hit) => {
+              const rowKey = resultRowKey(hit);
+              return (
+                <li key={rowKey} data-testid={`notes-search-item-${rowKey}`}>
+                  <Flex align="center" gap="2">
+                    <Checkbox
+                      data-testid={`result-check-${rowKey}`}
+                      checked={checkedIds.has(rowKey)}
+                      onCheckedChange={() => toggleChecked(rowKey)}
+                    />
+                    <button
+                      type="button"
+                      className="search-result-btn"
+                      data-testid={`notes-search-open-${rowKey}`}
+                      onClick={() => onSelectNote(hit.note_id)}
+                    >
+                      <span className="search-result-title">
+                        {hit.title ?? "(無題)"}
+                        {hit.created_at
+                          ? ` — ${new Date(hit.created_at).toLocaleDateString()}`
+                          : ""}
+                        {hit.archived_date ? (
+                          <Badge
+                            color="gray"
+                            variant="soft"
+                            ml="1"
+                            data-testid={`archived-badge-${rowKey}`}
+                            title="現行ボードではなく、日次アーカイブ(過去の日付フォルダ)の内容"
+                          >
+                            アーカイブ {hit.archived_date}
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <span className="search-result-snippet">{hit.snippet}</span>
+                    </button>
+                  </Flex>
+                </li>
+              );
+            })}
           </ul>
           {pageCount > 1 ? (
             <Flex gap="1" wrap="wrap" mt="2" data-testid="page-selector">

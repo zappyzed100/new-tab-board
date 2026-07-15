@@ -24,13 +24,15 @@ export type HistoryHit = {
   snippet: string;
 };
 type SearchResult = { type: "search-result"; ok: boolean; rows?: HistoryHit[]; error?: string };
-/** search-notes の1件。検索結果をノートへ貼り付けるため content(全文)も返る。 */
+/** search-notes の1件。検索結果をノートへ貼り付けるため content(全文)も返る。
+ * archived_date は日次アーカイブ(YYYY/M/D)由来の行にだけ入る(現行notesはnull)。 */
 export type NoteHit = {
   note_id: string;
   title: string | null;
   created_at: string | null;
   content: string;
   snippet: string;
+  archived_date: string | null;
 };
 type SearchNotesResult = {
   type: "search-notes-result";
@@ -255,7 +257,9 @@ export async function topNasTags(
 }
 
 /** NASの“ノート”(現在の.md)を タグ(AND/OR)＋本文(部分一致)＋期間(半開区間 from<=..<to)で
- * SQL検索する(Python側)。貼り付け用に本文全文も返る。from/to は ISO8601 文字列(未指定は無制限)。失敗はnull。 */
+ * SQL検索する(Python側)。貼り付け用に本文全文も返る。from/to は ISO8601 文字列(未指定は無制限)。
+ * 期間を指定すると、現行ノートに加えて日次アーカイブ(過去の日付フォルダの内容)も対象になる
+ * (該当行は archived_date が入る)。失敗はnull。 */
 export async function searchNasNotes(
   path: string,
   query: {

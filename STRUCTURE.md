@@ -413,6 +413,8 @@
 - def test_top_tags_returns_by_frequency
 - def test_search_notes_by_tag_and_or
 - def test_search_notes_by_text_and_date_range
+- def test_search_notes_with_date_range_also_finds_date_archive
+- def test_search_notes_without_date_range_does_not_query_archive
 - def test_search_notes_without_index_returns_error
 - def test_list_tree_lists_md_recursively
 - def test_list_tree_missing_folder_is_empty

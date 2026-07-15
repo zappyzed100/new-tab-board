@@ -283,8 +283,53 @@ def handle_top_tags(message: dict) -> dict:
         return {"type": "top-tags-result", "ok": False, "error": str(exc)}
 
 
+def _build_note_search_where(
+    alias: str,
+    join_table: str,
+    join_id_col: str,
+    tags: list,
+    mode: str,
+    text: str,
+    date_from: str | None,
+    date_to: str | None,
+) -> tuple[list[str], list]:
+    """notes/date_notesどちらのテーブルにも使う共通WHERE組み立て(タグ結合テーブル名/結合列名だけ違う)。"""
+    where: list[str] = []
+    params: list = []
+    if tags:
+        placeholders = ",".join("?" * len(tags))
+        if mode == "or":
+            where.append(
+                f"{alias}.id IN (SELECT jt.{join_id_col} FROM {join_table} jt"
+                f" JOIN tags t ON t.id=jt.tag_id WHERE t.name IN ({placeholders}))"
+            )
+            params += tags
+        else:
+            where.append(
+                f"{alias}.id IN (SELECT jt.{join_id_col} FROM {join_table} jt"
+                f" JOIN tags t ON t.id=jt.tag_id WHERE t.name IN ({placeholders})"
+                f" GROUP BY jt.{join_id_col} HAVING COUNT(DISTINCT t.name)=?)"
+            )
+            params += [*tags, len(tags)]
+    if text:
+        where.append(f"{alias}.content LIKE ?")
+        params.append(f"%{text}%")
+    if date_from:
+        where.append(f"{alias}.created_at >= ?")
+        params.append(date_from)
+    if date_to:
+        where.append(f"{alias}.created_at < ?")  # 半開区間(< to)
+        params.append(date_to)
+    return where, params
+
+
 def handle_search_notes(message: dict) -> dict:
     """notes(現在の.md)を対象に タグ(AND/OR)＋本文LIKE＋created_at半開区間 で検索する。
+    期間(from/to)を指定した時は、日次アーカイブ(date_notes/date_note_tags。YYYY/M/D/<id>.md
+    の日次コピー)も同条件で検索し結果へ合流させる——notes.created_atは「ノートの作成時刻」
+    でしかなく、過去のある日に実在した内容を辿るには日次アーカイブのほうが正本のため
+    (2026-07-16に日次アーカイブの索引だけ追加してクエリを繋ぎ忘れていた欠落の是正・
+    2026-07-16再修正)。アーカイブ由来の行は archived_date(YYYY/M/D)を持つ(現行行はnull)。
     検索結果をノートへ貼り付けるため**本文(content)全文**も返す。index.db が無ければ ok:false。
     期間は半開区間(created_at >= from AND created_at < to)。from/to は ISO8601 文字列。"""
     try:
@@ -302,47 +347,60 @@ def handle_search_notes(message: dict) -> dict:
         date_from = message.get("from")
         date_to = message.get("to")
         limit = int(message.get("limit", 500))
-        where: list[str] = []
-        params: list = []
-        if tags:
-            placeholders = ",".join("?" * len(tags))
-            if mode == "or":
-                where.append(
-                    "d.id IN (SELECT nt.note_id FROM note_tags nt"
-                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders}))"
-                )
-                params += tags
-            else:
-                where.append(
-                    "d.id IN (SELECT nt.note_id FROM note_tags nt"
-                    f" JOIN tags t ON t.id=nt.tag_id WHERE t.name IN ({placeholders})"
-                    " GROUP BY nt.note_id HAVING COUNT(DISTINCT t.name)=?)"
-                )
-                params += [*tags, len(tags)]
-        if text:
-            where.append("d.content LIKE ?")
-            params.append(f"%{text}%")
-        if date_from:
-            where.append("d.created_at >= ?")
-            params.append(date_from)
-        if date_to:
-            where.append("d.created_at < ?")  # 半開区間(< to)
-            params.append(date_to)
-        clause = (" WHERE " + " AND ".join(where)) if where else ""
+
         conn = sqlite3.connect(db_path)
         try:
+            where, params = _build_note_search_where(
+                "d", "note_tags", "note_id", tags, mode, text, date_from, date_to
+            )
+            clause = (" WHERE " + " AND ".join(where)) if where else ""
             rows = conn.execute(
                 "SELECT d.id, d.title, d.created_at, d.content, substr(d.content, 1, 160)"
                 f" FROM notes d{clause}"
                 " ORDER BY d.created_at DESC LIMIT ?",
                 [*params, limit],
             ).fetchall()
+            result = [
+                {
+                    "note_id": r[0],
+                    "title": r[1],
+                    "created_at": r[2],
+                    "content": r[3],
+                    "snippet": r[4],
+                    "archived_date": None,
+                }
+                for r in rows
+            ]
+
+            if date_from or date_to:
+                awhere, aparams = _build_note_search_where(
+                    "d", "date_note_tags", "date_note_id", tags, mode, text, date_from, date_to
+                )
+                aclause = (" WHERE " + " AND ".join(awhere)) if awhere else ""
+                arows = conn.execute(
+                    "SELECT d.note_id, d.title, d.created_at, d.content,"
+                    " substr(d.content, 1, 160), d.date_path"
+                    f" FROM date_notes d{aclause}"
+                    " ORDER BY d.created_at DESC LIMIT ?",
+                    [*aparams, limit],
+                ).fetchall()
+                result += [
+                    {
+                        "note_id": r[0],
+                        "title": r[1],
+                        "created_at": r[2],
+                        "content": r[3],
+                        "snippet": r[4],
+                        "archived_date": r[5],
+                    }
+                    for r in arows
+                ]
+                # notes/date_notesの2クエリ分をマージしたので、作成日時降順で並べ直し
+                # limitで切り直す(片方だけの時のLIMIT順序を壊さないため元々の並びは維持)。
+                result.sort(key=lambda r: r["created_at"] or "", reverse=True)
+                result = result[:limit]
         finally:
             conn.close()
-        result = [
-            {"note_id": r[0], "title": r[1], "created_at": r[2], "content": r[3], "snippet": r[4]}
-            for r in rows
-        ]
         return {"type": "search-notes-result", "ok": True, "rows": result}
     except (OSError, sqlite3.Error, KeyError, ValueError) as exc:
         return {"type": "search-notes-result", "ok": False, "error": str(exc)}

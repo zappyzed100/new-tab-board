@@ -255,6 +255,74 @@ def test_search_notes_by_text_and_date_range(tmp_path) -> None:
         }
     )
     assert {r["title"] for r in res_date["rows"]} == {"登山計画", "買い物"}
+    # notes由来の行は archived_date が無い(None)。
+    assert all(r["archived_date"] is None for r in res_date["rows"])
+
+
+def _write_date_note(nas: str, date_path: str, nid: str, title: str, tags: list, created: str, body: str) -> None:
+    """統一構造の日付フォルダ(YYYY/M/D/<id>.md)へ1件書く。"""
+    date_dir = os.path.join(nas, *date_path.split("/"))
+    os.makedirs(date_dir, exist_ok=True)
+    tag_lines = "".join(f"  - {t}\n" for t in tags)
+    with open(os.path.join(date_dir, f"{nid}.md"), "w", encoding="utf-8") as f:
+        f.write(f"---\nid: {nid}\ntitle: {title}\ntags:\n{tag_lines}created_at: {created}\n---\n\n{body}")
+
+
+def test_search_notes_with_date_range_also_finds_date_archive(tmp_path) -> None:
+    # 期間を指定した検索は、現行notesだけでなく日次アーカイブ(date_notes。過去の日付
+    # フォルダのコピー)も対象にする——現行ボードから既に削除された/大きく編集された
+    # ノートでも、過去のある日に実在した内容を見つけられる(2026-07-16 欠落の是正:
+    # date_notesの索引は先に追加していたが、search-notesが一度もSELECTしていなかった)。
+    nas = str(tmp_path)
+    _seed_notes_for_search(nas)  # notes/*.md: 登山計画(07-01)・買い物(07-10)・登山メモ(08-05)
+    # 現行ボードには残っていない、過去にだけ実在したノート(アーカイブ限定)。
+    _write_date_note(
+        nas, "2026/7/15", "d" + "0" * 35, "廃止済みノート", ["登山"], "2026-07-15T00:00:00.000Z", "もう無いノート"
+    )
+    handle({"type": "rebuild-index", "path": nas})
+
+    res = handle(
+        {
+            "type": "search-notes",
+            "path": nas,
+            "from": "2026-07-01T00:00:00.000Z",
+            "to": "2026-08-01T00:00:00.000Z",
+        }
+    )
+    assert res["ok"] is True
+    titles = {r["title"] for r in res["rows"]}
+    # 現行notes分(登山計画・買い物)に加えて、アーカイブ限定の「廃止済みノート」も出る。
+    assert titles == {"登山計画", "買い物", "廃止済みノート"}
+    archived = next(r for r in res["rows"] if r["title"] == "廃止済みノート")
+    assert archived["archived_date"] == "2026/7/15"
+    assert archived["content"] == "もう無いノート"
+
+    # タグ絞り込みと組み合わせても、アーカイブ側のタグ結合(date_note_tags)で正しく引ける。
+    res_tag = handle(
+        {
+            "type": "search-notes",
+            "path": nas,
+            "tags": ["登山"],
+            "from": "2026-07-01T00:00:00.000Z",
+            "to": "2026-08-01T00:00:00.000Z",
+        }
+    )
+    assert {r["title"] for r in res_tag["rows"]} == {"登山計画", "廃止済みノート"}
+
+
+def test_search_notes_without_date_range_does_not_query_archive(tmp_path) -> None:
+    # 期間未指定なら従来どおりnotesだけを検索する(アーカイブは日毎に大量の行を持ちうるため、
+    # 期間を絞らない検索へ毎回合流させると同じノートが何件も重複して出てしまう)。
+    nas = str(tmp_path)
+    _seed_notes_for_search(nas)
+    _write_date_note(
+        nas, "2026/7/15", "d" + "0" * 35, "廃止済みノート", [], "2026-07-15T00:00:00.000Z", "もう無いノート"
+    )
+    handle({"type": "rebuild-index", "path": nas})
+
+    res = handle({"type": "search-notes", "path": nas, "text": "もう無い"})
+    assert res["ok"] is True
+    assert res["rows"] == []
 
 
 def test_search_notes_without_index_returns_error(tmp_path) -> None:

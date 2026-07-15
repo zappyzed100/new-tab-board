@@ -775,6 +775,11 @@ GATE_REGISTRY_ENFORCED = {"§3.3", "§3.4", "§8.2", "§8.4", "§9.6", "§12.4",
 CODE_EXTS |= {".ts", ".tsx"}
 HEADER_REQUIRED_EXTS |= {".ts", ".tsx"}
 TEST_PATH_PATTERNS += [re.compile(p) for p in (r"\.test\.tsx?$", r"^e2e/.*\.spec\.ts$")]
+# native-host/ はTS/React本体とは別のPythonランタイム(pytest。src/lib/externalIO/CLAUDE.md
+# 「native-host/(Pythonのnative messaging host本体)は別ディレクトリ」参照)で、ts-react-crx@1の
+# 既定バインディングはこのテスト命名規則(test_*.py)を知らず、native-host配下のfix:が
+# fix-without-testで誤ブロックされていた(2026-07-16 是正)。
+TEST_PATH_PATTERNS += [re.compile(r"^native-host/test_.*\.py$")]
 _TS_SLEEP = [(re.compile(r"\bsetTimeout\s*\(|\bsleep\s*\("), "setTimeout/sleep")]
 SLEEP_PATTERNS[".ts"] = _TS_SLEEP; SLEEP_PATTERNS[".tsx"] = _TS_SLEEP
 _TS_NONDET = [(re.compile(r"\bDate\.now\s*\("), "Date.now()（Clock抽象で注入する）"),
