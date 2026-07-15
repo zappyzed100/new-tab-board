@@ -258,6 +258,10 @@ export async function uploadNote(
   const metadata: Record<string, unknown> = {
     appProperties: { noteId: note.id, ...(opts.kind ? { ntbKind: opts.kind } : {}) },
     name: opts.filename ?? `${note.title}.md`,
+    // 保存済みdriveFileIdの指す先がゴミ箱にいてもPATCHは成功してしまい、ファイルは
+    // ゴミ箱に残り続ける(jsonBackup.tsのuploadBackupと同じ罠)。上書きのたびに
+    // trashed:falseを送って自動で復活させる(新規作成時は元々falseでno-op)。
+    trashed: false,
   };
   if (!existingFileId) {
     metadata.mimeType = "text/markdown";

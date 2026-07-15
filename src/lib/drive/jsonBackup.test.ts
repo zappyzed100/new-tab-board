@@ -60,6 +60,12 @@ describe("uploadBackup", () => {
     await expect(uploadBackup(json, "token-abc", null, fetchImpl)).rejects.toThrow("HTTP 500");
   });
 
+  it("上書き(PATCH)のmetadataにtrashed:falseを含める(ゴミ箱のファイルへ上書きし続けても復活せず、どこにも見えないままだった不具合の回帰)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+    await uploadBackup(json, "token-abc", "file-1", fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].body).toContain('"trashed":false');
+  });
+
   it("既存ファイルIDが消えている(404)なら、新規作成にフォールバックして新IDを返す", async () => {
     const fetchImpl = vi
       .fn()

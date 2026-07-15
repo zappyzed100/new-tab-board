@@ -62,6 +62,12 @@ describe("uploadNote", () => {
     expect(url).toContain("file-1");
   });
 
+  it("上書き(PATCH)のmetadataにtrashed:falseを含める(ゴミ箱のファイルを指すdriveFileIdへ上書きし続けても復活しない不具合の回帰。jsonBackupと同じ罠)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+    await uploadNote(note, "token-abc", "file-1", fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].body).toContain('"trashed":false');
+  });
+
   it("更新(PATCH)でもファイル名を送り直す(タイトルベースのactiveファイル名がリネームに追従するため)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
     await uploadNote(note, "token-abc", "file-1", fetchImpl, { filename: "新しいタイトル.md" });
