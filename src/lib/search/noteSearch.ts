@@ -35,3 +35,30 @@ export function searchNotesByText(notes: Note[], query: string): NoteSearchHit[]
   }
   return hits;
 }
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** 全文検索(searchNotesByText)を拡張した一括置換(ユーザー指示: 対象ノートを選んで置換)。
+ * targetIdsに含まれるノートの本文だけを対象に、queryの全出現(大文字小文字無視)をreplacementへ
+ * 置き換える。1件もヒットしなければ元配列をそのまま返す(冪等・無駄な保存を避ける)。 */
+export function replaceInNotes(
+  notes: Note[],
+  query: string,
+  replacement: string,
+  targetIds: ReadonlySet<string>,
+  now: number,
+): Note[] {
+  const q = query.trim();
+  if (q === "" || targetIds.size === 0) return notes;
+  const testPattern = new RegExp(escapeRegExp(q), "i");
+  const replacePattern = new RegExp(escapeRegExp(q), "gi");
+  let changed = false;
+  const next = notes.map((n) => {
+    if (!targetIds.has(n.id) || !testPattern.test(n.content)) return n;
+    changed = true;
+    return { ...n, content: n.content.replace(replacePattern, replacement), updatedAt: now };
+  });
+  return changed ? next : notes;
+}

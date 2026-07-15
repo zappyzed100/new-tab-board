@@ -1,6 +1,6 @@
-// noteSearch.test.ts — 現在の本文を対象にした部分一致検索の単体テスト
+// noteSearch.test.ts — 現在の本文を対象にした部分一致検索/置換の単体テスト
 import { describe, expect, it } from "vitest";
-import { searchNotesByText } from "./noteSearch";
+import { replaceInNotes, searchNotesByText } from "./noteSearch";
 import { createNote } from "../entities/notes";
 
 function note(title: string, content: string) {
@@ -44,5 +44,40 @@ describe("searchNotesByText", () => {
     const notes = [note("A", "りんご"), note("B", "みかん"), note("C", "りんごジュース")];
     const hits = searchNotesByText(notes, "りんご");
     expect(hits.map((h) => h.note.title)).toEqual(["A", "C"]);
+  });
+});
+
+describe("replaceInNotes", () => {
+  it("対象idに含まれるノートだけ、全出現を置換する(対象外は変更しない)", () => {
+    const a = note("A", "りんごとりんごジュース");
+    const b = note("B", "りんご狩り");
+    const after = replaceInNotes([a, b], "りんご", "みかん", new Set([a.id]), 1000);
+    expect(after.find((n) => n.id === a.id)?.content).toBe("みかんとみかんジュース");
+    expect(after.find((n) => n.id === b.id)?.content).toBe("りんご狩り"); // 対象外は不変
+  });
+
+  it("置換したノートのupdatedAtだけ更新する", () => {
+    const a = note("A", "りんご");
+    const after = replaceInNotes([a], "りんご", "みかん", new Set([a.id]), 12345);
+    expect(after[0].updatedAt).toBe(12345);
+  });
+
+  it("大文字小文字を無視して置換する", () => {
+    const a = note("A", "Hello World hello");
+    const after = replaceInNotes([a], "hello", "Hi", new Set([a.id]), 1000);
+    expect(after[0].content).toBe("Hi World Hi");
+  });
+
+  it("空クエリ・対象0件・ヒット無しは元配列をそのまま返す(冪等)", () => {
+    const notes = [note("A", "りんご")];
+    expect(replaceInNotes(notes, "  ", "みかん", new Set([notes[0].id]), 1000)).toBe(notes);
+    expect(replaceInNotes(notes, "りんご", "みかん", new Set(), 1000)).toBe(notes);
+    expect(replaceInNotes(notes, "ぶどう", "みかん", new Set([notes[0].id]), 1000)).toBe(notes);
+  });
+
+  it("正規表現の特殊文字を含むクエリでもリテラルとして扱う", () => {
+    const a = note("A", "価格は100円(税込)です");
+    const after = replaceInNotes([a], "100円(税込)", "110円(税込)", new Set([a.id]), 1000);
+    expect(after[0].content).toBe("価格は110円(税込)です");
   });
 });

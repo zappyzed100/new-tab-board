@@ -79,3 +79,63 @@ test("全文検索の結果が複数あっても重ならず縦に並ぶ", async
   boxes.sort((a, b) => a.top - b.top);
   expect(boxes[0].bottom).toBeLessThanOrEqual(boxes[1].top + 1);
 });
+
+test("Cmd/Ctrl+Rで置換欄が開き、選択した対象ノートだけに一括置換できる", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  const colFirst = (c: number) =>
+    page.locator(`[data-testid="note-column-${c}"] [data-testid^="note-editor-area-"]`).first();
+
+  // 共通ワードを含むノートを2件用意する。
+  await colFirst(0).locator(".cm-content").click();
+  await page.keyboard.type("りんごジュースの作り方");
+  await colFirst(1).locator(".cm-content").click();
+  await page.keyboard.type("りんごを買う");
+  const id0 = await colFirst(0).getAttribute("data-testid");
+  const id1 = await colFirst(1).getAttribute("data-testid");
+
+  await page.getByTestId("search-input").fill("りんご");
+  await expect(page.getByTestId("search-result-count")).toContainText("2件");
+
+  // 置換欄はCmd/Ctrl+Rで開く(既存の全文検索の拡張・ユーザー指示)。
+  await expect(page.getByTestId("replace-section")).toHaveCount(0);
+  await page.keyboard.press("Control+r");
+  await expect(page.getByTestId("replace-section")).toBeVisible();
+  await expect(page.getByTestId("replace-input")).toBeFocused();
+
+  // 既定で全ヒットが対象選択されている。1件だけチェックを外す。
+  const targetCheckboxes = page.locator('[data-testid^="replace-target-"]');
+  await expect(targetCheckboxes).toHaveCount(2);
+
+  // UI/CSS変更は数値でも重なり無しを確認する(CLAUDE.md規約)。検索欄と置換トグルボタンが
+  // 横に並んで重ならない・チェックボックス付きの結果2件が縦に重ならないことを実測する。
+  const searchInputBox = await page.getByTestId("search-input").boundingBox();
+  const replaceToggleBox = await page.getByTestId("replace-toggle").boundingBox();
+  if (!searchInputBox || !replaceToggleBox) throw new Error("search row not visible");
+  expect(searchInputBox.x + searchInputBox.width).toBeLessThanOrEqual(replaceToggleBox.x + 1);
+  const resultBoxes = await page.locator('[data-testid^="search-result-"]').evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }),
+  );
+  resultBoxes.sort((a, b) => a.top - b.top);
+  expect(resultBoxes[0].bottom).toBeLessThanOrEqual(resultBoxes[1].top + 1);
+
+  await page.getByTestId(`replace-target-${id1!.replace("note-editor-area-", "")}`).click();
+
+  await page.getByTestId("replace-input").fill("みかん");
+  await page.getByTestId("replace-apply").click();
+  await expect(page.getByTestId("replace-result-message")).toContainText("1件");
+
+  // チェックを外さなかった方(id0)だけ本文が置換され、外した方(id1)は元のまま。
+  await expect(page.locator(`[data-testid="${id0}"] .cm-content`)).toContainText(
+    "みかんジュースの作り方",
+  );
+  await expect(page.locator(`[data-testid="${id1}"] .cm-content`)).toContainText("りんごを買う");
+});

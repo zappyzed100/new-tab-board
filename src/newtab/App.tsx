@@ -59,6 +59,7 @@ import {
   buildNoteJumpShortcuts,
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts/shortcuts";
+import { replaceInNotes } from "../lib/search/noteSearch";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
@@ -158,6 +159,13 @@ export function App() {
   // Cmd/Ctrl+Sで「見えている全ペイン」に即時スナップショット+Drive同期をキックする
   // ための共有シグナル(各NoteEditorPaneがこの値の変化をuseEffectで監視する)。
   const [manualSyncSignal, setManualSyncSignal] = useState(0);
+  // Cmd/Ctrl+Rで全文検索の置換欄を開く共有シグナル(manualSyncSignalと同じ発想。ユーザー指示:
+  // 既存の全文検索を拡張して置換もできるように)。
+  const [replaceSignal, setReplaceSignal] = useState(0);
+  // 置換実行のたびに増える共有カウンタ。Notepad(CM6)はcontentをマウント時にしか読まないため、
+  // 置換で本文を外部から書き換えた後、既に開いているエディタへ反映するには再マウントが要る
+  // (NoteEditorPane.tsxのrestoreCounterと同じ理由)。
+  const [replaceContentVersion, setReplaceContentVersion] = useState(0);
   // 「🏷️ タグをふる」実行中フラグ(二重起動防止・ラベル切替)。
   const [tagging, setTagging] = useState(false);
   // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
@@ -467,6 +475,7 @@ export function App() {
 
   useGlobalShortcuts(shortcutRegistry, {
     toggleSearch: () => searchInputRef.current?.focus(),
+    replaceInSearch: () => setReplaceSignal((v) => v + 1),
     cheatSheet: () => setShowShortcutsModal(true),
     // 表示中の全ペイン(NoteEditorPane)がmanualSyncSignalの変化を検知し、
     // それぞれ自分のノートを即時スナップショット+Drive同期する。
@@ -559,6 +568,21 @@ export function App() {
       }
       return nextNotes;
     });
+  }
+
+  // 全文検索を拡張した一括置換(ユーザー指示: 対象ノートを選んで置換)。選んだノートのうち
+  // 実際に本文が変わった件数を返す(SearchPanel側の結果メッセージ表示に使う)。
+  function replaceTextInNotes(query: string, replacement: string, targetIds: Set<string>): number {
+    let changedCount = 0;
+    updateNotes((prev) => {
+      const next = replaceInNotes(prev, query, replacement, targetIds, clockNow());
+      changedCount = next === prev ? 0 : next.filter((n, i) => n !== prev[i]).length;
+      return next;
+    });
+    // 開いているエディタ(Notepad/CM6)は本文をマウント時にしか読まないため、置換した本文を
+    // 画面へ反映するには再マウントさせる合図が要る(上のNoteEditorPane propコメント参照)。
+    if (changedCount > 0) setReplaceContentVersion((v) => v + 1);
+    return changedCount;
   }
 
   function updateTodos(nextTodos: Todo[]) {
@@ -942,6 +966,8 @@ export function App() {
                       ref={searchInputRef}
                       notes={notes}
                       onSelectNote={(noteId) => selectNote(noteId)}
+                      replaceSignal={replaceSignal}
+                      onReplace={replaceTextInNotes}
                     />
                   </Suspense>
                 </div>
@@ -976,6 +1002,7 @@ export function App() {
                               isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
                               autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                               manualSyncSignal={manualSyncSignal}
+                              replaceContentVersion={replaceContentVersion}
                               onNotesChange={updateNotes}
                               onSelectNote={selectNote}
                               onSelectNoteByTitle={selectNoteByTitle}

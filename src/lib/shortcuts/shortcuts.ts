@@ -23,6 +23,11 @@ export const SHORTCUT_REGISTRY: ShortcutDef[] = [
     description: "全文検索欄にフォーカス",
   },
   {
+    id: "replaceInSearch",
+    combo: { key: "r", ctrlOrMeta: true },
+    description: "全文検索を拡張した置換欄を開く",
+  },
+  {
     id: "immediateSnapshot",
     combo: { key: "s", ctrlOrMeta: true },
     description: "今すぐスナップショット保存",

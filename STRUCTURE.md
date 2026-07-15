@@ -221,7 +221,7 @@
 - `src/lib/search/CLAUDE.md`
 - `src/lib/search/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
-- `src/lib/search/noteSearch.test.ts` — noteSearch.test.ts — 現在の本文を対象にした部分一致検索の単体テスト
+- `src/lib/search/noteSearch.test.ts` — noteSearch.test.ts — 現在の本文を対象にした部分一致検索/置換の単体テスト
 - `src/lib/search/noteSearch.ts` — noteSearch.ts — 現在のノート本文を対象にした部分一致の全文検索。
 - `src/lib/search/search.test.ts` — search.test.ts — search.ts(転置インデックスの構築・検索)の単体テスト(fake-indexeddb使用)
 - `src/lib/search/search.ts` — search.ts — 転置インデックスの構築・検索(SPEC.md §4.3 全文検索)
@@ -860,6 +860,7 @@
 ### `src/lib/search/noteSearch.ts`
 - type NoteSearchHit
 - function searchNotesByText
+- function replaceInNotes
 
 ### `src/lib/search/search.ts`
 - function indexSnapshot

@@ -75,6 +75,10 @@ type Props = {
   /** Cmd/Ctrl+Sが押されるたびに増える共有カウンタ。表示中の全ペインがこれを監視し、
    * 自分のノートを即時スナップショット+Drive同期する(「見えている全部を保存する」)。 */
   manualSyncSignal: number;
+  /** 全文検索の一括置換が実行されるたびに増える共有カウンタ(manualSyncSignalと同じ発想)。
+   * Notepad(CM6)はcontentをマウント時にしか読まないため、置換で本文が外部から書き換わった
+   * ノートを画面へ反映するには再マウントが要る(restoreCounterと同じ理由・下記key参照)。 */
+  replaceContentVersion: number;
   onNotesChange: (update: Note[] | ((prev: Note[]) => Note[])) => void;
   onSelectNote: (noteId: string) => void;
   onSelectNoteByTitle: (title: string) => void;
@@ -113,6 +117,7 @@ export function NoteEditorPane({
   isLast,
   autoFocus,
   manualSyncSignal,
+  replaceContentVersion,
   onNotesChange,
   onSelectNote,
   onSelectNoteByTitle,
@@ -552,7 +557,7 @@ export function NoteEditorPane({
             <MarkdownPreview content={note.content} onNavigateToNote={onSelectNoteByTitle} />
           ) : (
             <Notepad
-              key={`editor-${note.id}-${restoreCounter}`}
+              key={`editor-${note.id}-${restoreCounter}-${replaceContentVersion}`}
               content={note.content}
               autoFocus={autoFocus}
               onContentChange={(content) =>
