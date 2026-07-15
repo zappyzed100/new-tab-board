@@ -35,8 +35,31 @@
 
 同じ `noteId` でも「active フォルダのファイル」と「日付フォルダのファイル」が両方できるため、
 `appProperties.ntbKind`(`"active"` / `"date:2026/7/13"`)で区別する。`findFileForNote` は
-第4引数 `kind` で絞り込める。`resolveFolderPath` はセッション内でフォルダIDをキャッシュする
-(`resetDriveFolderCacheForTests` で解除)。
+第4引数 `kind` で絞り込める。
+
+## resolveFolderPath はフォルダIDをIndexedDBへ永続化する(ユーザー設計・2026-07-16)
+
+以前はセッション内メモリキャッシュ(`folderIdCache`)しか持たず、タブを閉じて開き直す
+たびに名前+親での検索(`getOrCreateFolder`)をやり直していた。複数タブ/複数セッションが
+ほぼ同時に「検索→未発見→作成」を行うと、Driveが同名フォルダの重複作成を防がないため
+`app`や`New Tab Board`フォルダが複製される実害があった(ユーザー報告)。
+
+対策としてユーザーが指定した優先順位で `resolveSegment` を書き直した:
+①`db.ts`の`getDriveFolderIds()`(IndexedDB永続)に保存済みのIDがあれば、名前検索すら
+せずそれを使う ②無ければ名前+親フォルダで検索(`getOrCreateFolder`。検索条件は
+`name=... and mimeType=... and '<parentId>' in parents and trashed=false`) ③見つかれば
+`saveDriveFolderId(path, id)`で永続化 ④無ければ新規作成して同様に永続化 ⑤以後はこの
+セッションはもちろん、次回以降のセッションもIDで直接アクセスし、名前検索をしない。
+
+`folderIdCache`(メモリ)は「同じタブが動いている間」の高速パスとして残置(IndexedDB読み取り
+すら省く)。`folderResolvePromiseCache`(同時呼び出しの単一化)は引き続き同一セッション内の
+競合(Cmd/Ctrl+Sで全ペインがほぼ同時に呼ぶ等)を防ぐ。テストでは
+`resetDriveFolderCacheForTests`(async化済み)でメモリ+永続の両方をクリアする。
+
+**既知の残存リスク**(ユーザー確認済み・対応は現状スコープ外): 2つの別アプリ/セッションが
+永続キャッシュも空の状態で完全に同時に初回起動すると、どちらも「存在しない」と判断して
+2個作る競合が残る。最も確実な回避策は、最初から共通フォルダを手動で1つ作り、そのIDを
+両アプリへ設定すること(現状、手動ID入力UIは無い)。
 
 ## Drive未接続(トークン無し)なら静かに何もしない
 

@@ -9,6 +9,7 @@ import {
   resolveFolderPath,
   uploadNote,
 } from "./drive";
+import { getDriveFolderIds, saveDriveFolderId } from "../storage/db";
 
 function fakeResponse(body: unknown, ok = true, status = 200): Response {
   return {
@@ -87,13 +88,18 @@ describe("uploadNote", () => {
 });
 
 describe("getOrCreateFolder / resolveFolderPath", () => {
-  beforeEach(() => resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCacheForTests());
 
-  it("既存フォルダが見つかればそのIDを返し、作成はしない", async () => {
+  it("既存フォルダが見つかればそのIDを返し、作成はしない(検索条件は名前+親フォルダ)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ files: [{ id: "folder-x" }] }));
     const id = await getOrCreateFolder("active", "parent-1", "tok", fetchImpl);
     expect(id).toBe("folder-x");
     expect(fetchImpl).toHaveBeenCalledTimes(1); // 検索のみ(作成POSTなし)
+    const [url] = fetchImpl.mock.calls[0];
+    const q = decodeURIComponent(url as string);
+    expect(q).toContain("name='active'");
+    expect(q).toContain("'parent-1' in parents"); // 名前だけでなく親フォルダも検索条件に含む
+    expect(q).toContain("trashed=false");
   });
 
   it("無ければ作成する(検索→作成の2回)", async () => {
@@ -119,6 +125,35 @@ describe("getOrCreateFolder / resolveFolderPath", () => {
     // 2度目はキャッシュヒットで通信ゼロ。
     expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("永続キャッシュに保存済みのIDがあれば、名前検索すらせず直接使う(ユーザー設計の優先順位1: セッションを跨いだ再訪問を模す)", async () => {
+    // resetDriveFolderCacheForTestsで空にしたところへ、前回セッションで解決済みだった
+    // 想定のIDを直接書き込む(セッション内のfolderIdCacheには一切触れない=タブを閉じて
+    // 開き直した状況を再現する)。
+    await saveDriveFolderId("app", "app-id");
+    await saveDriveFolderId("app/New Tab Board", "board-id");
+    await saveDriveFolderId("app/New Tab Board/active", "active-id");
+    const fetchImpl = vi.fn(); // 一度もDriveへ問い合わせないはず
+    const parts = ["app", "New Tab Board", "active"];
+    expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("新規に解決したフォルダIDは永続キャッシュへ保存する(次回セッションは検索しない)", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [] })) // 検索: 無し
+      .mockResolvedValueOnce(fakeResponse({ id: "solo-id" })); // 作成
+    const id = await resolveFolderPath(["solo"], "tok", fetchImpl);
+    expect(id).toBe("solo-id");
+    expect(await getDriveFolderIds()).toEqual({ solo: "solo-id" });
+  });
+
+  it("見つかった(作成せず)フォルダIDも永続キャッシュへ保存する", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ files: [{ id: "found-id" }] }));
+    await resolveFolderPath(["existing"], "tok", fetchImpl);
+    expect(await getDriveFolderIds()).toEqual({ existing: "found-id" });
   });
 
   it("同じパスへの同時呼び出しはフォルダを1回だけ作成する(複数ペインが同時にCmd/Ctrl+S同期する状況の回帰)", async () => {

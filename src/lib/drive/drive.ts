@@ -1,6 +1,7 @@
 // drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 // 履歴は上げない・現行内容のみ上書き(競合はlast-write-winsで単純化——SPEC.md §8)。
 import { logOp } from "../runtime/log";
+import { clearDriveFolderIds, getDriveFolderIds, saveDriveFolderId } from "../storage/db";
 
 const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const FILES_URL = "https://www.googleapis.com/drive/v3/files";
@@ -8,21 +9,27 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export type FetchLike = typeof fetch;
 
-/** フォルダ解決の結果をセッション内でキャッシュする(パス文字列→folderId)。同じ
- * app/New Tab Board/active/ 等を毎回検索しないため。 */
+/** フォルダ解決の結果をセッション内でキャッシュする(パス文字列→folderId)。IndexedDB
+ * (db.tsのgetDriveFolderIds/saveDriveFolderId)にも同じ内容を永続化しており、こちらは
+ * 「同じタブが動いている間だけ」有効な高速パス(IndexedDB読み取りすら省く)。永続キャッシュの
+ * 詳細はresolveSegment参照。 */
 const folderIdCache = new Map<string, string>();
 /** 解決中(検索→未発見なら作成)の段ごとのin-flight Promise(パス文字列→Promise)。
  * 複数ノートのペインがそれぞれ独立にsyncNoteToDriveを呼ぶため、Cmd/Ctrl+Sで全ペインが
  * ほぼ同時にresolveFolderPathへ入ると、folderIdCacheがまだ空の間に「同じ名前のフォルダを
  * 検索→無い→作成」を複数の呼び出しが並行に実行し、Driveは同名フォルダの重複作成を防がない
  * ため"app"や"New Tab Board"フォルダが複製されるバグがあった(ユーザー報告)。同じパスへの
- * 同時呼び出しをこのPromiseキャッシュで束ね、getOrCreateFolderの実呼び出しを1回に絞る。 */
+ * 同時呼び出しをこのPromiseキャッシュで束ね、getOrCreateFolderの実呼び出しを1回に絞る。
+ * この対策はセッション内(同じタブ)の同時呼び出しにしか効かない——**別々のタブ/リロード後の
+ * 再訪問で再び検索→未発見→作成が起きる残存リスクは、IndexedDBの永続キャッシュ
+ * (resolveSegment)で解消する**(ユーザー設計: 保存済みIDがあれば名前検索すらしない)。 */
 const folderResolvePromiseCache = new Map<string, Promise<string>>();
 
-/** テスト用: フォルダIDキャッシュをクリアする。 */
-export function resetDriveFolderCacheForTests(): void {
+/** テスト用: フォルダIDキャッシュ(セッション内+永続の両方)をクリアする。 */
+export async function resetDriveFolderCacheForTests(): Promise<void> {
   folderIdCache.clear();
   folderResolvePromiseCache.clear();
+  await clearDriveFolderIds();
 }
 
 /** 親フォルダ(parentId=null はマイドライブ直下)配下に name のフォルダを get-or-create する。 */
@@ -54,8 +61,10 @@ export async function getOrCreateFolder(
   return ((await createRes.json()) as { id: string }).id;
 }
 
-/** 1段分をget-or-createする。同じpath(累積パス)への同時呼び出しはPromiseを共有し、
- * getOrCreateFolderの実呼び出しを1回に絞る(上のfolderResolvePromiseCacheコメント参照)。 */
+/** 1段分を解決する(ユーザー設計の優先順位): ①保存済みのフォルダIDがあればそれを使う
+ * (名前検索すらしない)②無ければ名前+親で検索③見つかれば保存④無ければ新規作成して保存
+ * ——以後は名前でなくIDでアクセスする。同じpath(累積パス)への同時呼び出しはPromiseを共有し、
+ * 実際のDrive通信を1回に絞る(上のfolderResolvePromiseCacheコメント参照)。 */
 async function resolveSegment(
   path: string,
   part: string,
@@ -67,7 +76,13 @@ async function resolveSegment(
   if (cached) return cached;
   const inFlight = folderResolvePromiseCache.get(path);
   if (inFlight) return inFlight;
-  const promise = getOrCreateFolder(part, parentId, token, fetchImpl)
+  const promise = (async () => {
+    const persisted = (await getDriveFolderIds())[path];
+    if (persisted) return persisted;
+    const id = await getOrCreateFolder(part, parentId, token, fetchImpl);
+    await saveDriveFolderId(path, id);
+    return id;
+  })()
     .then((id) => {
       folderIdCache.set(path, id);
       return id;

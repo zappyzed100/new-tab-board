@@ -13,7 +13,7 @@ function fakeResponse(body: unknown, ok = true, status = 200): Response {
 }
 
 describe("readDriveGeneration", () => {
-  beforeEach(() => resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCacheForTests());
 
   it("ファイル未作成なら0を返す", async () => {
     const fetchImpl = vi
@@ -54,7 +54,7 @@ describe("readDriveGeneration", () => {
 });
 
 describe("bumpDriveGeneration", () => {
-  beforeEach(() => resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCacheForTests());
 
   it("未作成なら1(0+1)で新規作成する", async () => {
     const fetchImpl = vi

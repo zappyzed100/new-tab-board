@@ -11,6 +11,11 @@ const GEMINI_API_KEY_KEY = "geminiApiKey";
 // スマホのバッテリー低下警告(GAS Web App中継)の接続設定。トークンは秘匿情報のため
 // GEMINI_API_KEY_KEYと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
 const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
+// Google Driveのフォルダパス(例: "app/New Tab Board/active")→フォルダIDの永続キャッシュ
+// (ユーザー設計: 保存済みIDがあれば名前検索すらせずそれを使い、以後は名前でなくIDで
+// アクセスする。セッションを跨いだ再訪問のたびに名前+親で検索し直すと、複数ペインが
+// ほぼ同時に検索→未発見→作成を行った場合に同名フォルダが複製されるリスクが残るため)。
+const DRIVE_FOLDER_IDS_KEY = "driveFolderIds";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -153,6 +158,33 @@ export async function setBatteryWebhookConfig(config: BatteryWebhookConfig): Pro
   await db.put("settings", config, BATTERY_WEBHOOK_CONFIG_KEY);
   // NO-LOG: 共有トークンそのものはログに出さない(§7 秘匿。geminiApiKeyと同じ扱い)。
   logOp("db", "put", "settings/batteryWebhookConfig");
+}
+
+/** Google Driveのフォルダパス→フォルダIDの永続キャッシュ全体を返す(未設定なら空オブジェクト)。 */
+export async function getDriveFolderIds(): Promise<Record<string, string>> {
+  const db = await getDb();
+  return (
+    db.get("settings", DRIVE_FOLDER_IDS_KEY) as Promise<Record<string, string> | undefined>
+  ).then((v) => v ?? {});
+}
+
+/** 1パス分のフォルダIDを永続キャッシュへ追記する(他パスのエントリを消さないよう
+ * readwriteトランザクション内でread→マージ→writeする——複数パスがほぼ同時に解決される
+ * ことがあるため、単純なread-then-writeだと後勝ちで他パスの記録が消えうる)。 */
+export async function saveDriveFolderId(path: string, id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction("settings", "readwrite");
+  const current =
+    ((await tx.store.get(DRIVE_FOLDER_IDS_KEY)) as Record<string, string> | undefined) ?? {};
+  await tx.store.put({ ...current, [path]: id }, DRIVE_FOLDER_IDS_KEY);
+  await tx.done;
+  logOp("db", "put", `settings/driveFolderIds/${path}`);
+}
+
+/** テスト用: フォルダIDの永続キャッシュを空にする。 */
+export async function clearDriveFolderIds(): Promise<void> {
+  const db = await getDb();
+  await db.delete("settings", DRIVE_FOLDER_IDS_KEY);
 }
 
 // Gemini APIの1日あたり使用回数(ユーザー指示: 450回でGPT-OSS 120Bへの乗り換え警告を出す)。

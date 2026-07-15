@@ -937,6 +937,9 @@
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig
+- function getDriveFolderIds
+- function saveDriveFolderId
+- function clearDriveFolderIds
 - function geminiUsageDateKey
 - function getGeminiUsageCount
 - function recordGeminiUsage
