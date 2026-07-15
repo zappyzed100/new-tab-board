@@ -101,6 +101,7 @@ test("各ノートの操作ボタンは3行以内に収まる(狭い列でも)",
   const id = (await first.getAttribute("data-testid"))!.replace("note-editor-area-", "");
   const testids = [
     `move-note-up-${id}`,
+    `move-note-down-${id}`,
     `toggle-preview-${id}`,
     `toggle-history-${id}`,
     `summarize-${id}`,

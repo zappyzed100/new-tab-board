@@ -8,6 +8,7 @@ import {
   pasteResultsIntoNotes,
   ensureTrailingEmptyNotes,
   MAX_NOTES,
+  moveNoteDown,
   moveNoteUp,
   nextNoteLetterTitle,
   removeNote,
@@ -221,6 +222,24 @@ describe("moveNoteUp", () => {
     const notes = [a, b];
     expect(moveNoteUp(notes, a.id)).toBe(notes);
     expect(moveNoteUp(notes, "gone")).toBe(notes);
+  });
+});
+
+describe("moveNoteDown", () => {
+  it("順序列で1つ後ろのノートと入れ替える(moveNoteUpの対)", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const c = createNote("C", 2);
+    // A(index0)を1つ下へ → B と入れ替わって B, A, C
+    expect(sortedNotes(moveNoteDown([a, b, c], a.id)).map((n) => n.title)).toEqual(["B", "A", "C"]);
+  });
+
+  it("末尾ノートは動かさない(元配列をそのまま返す)", () => {
+    const a = createNote("A", 0);
+    const b = createNote("B", 1);
+    const notes = [a, b];
+    expect(moveNoteDown(notes, b.id)).toBe(notes);
+    expect(moveNoteDown(notes, "gone")).toBe(notes);
   });
 });
 

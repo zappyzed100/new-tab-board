@@ -32,6 +32,7 @@ import {
   ensureTrailingEmptyNotes,
   isDefaultNoteTitle,
   pasteResultsIntoNotes,
+  moveNoteDown,
   moveNoteUp,
   removeNote,
   reorderNotesById,
@@ -598,6 +599,9 @@ export function App() {
   function moveNoteUpOne(noteId: string) {
     updateNotes((prev) => moveNoteUp(prev, noteId));
   }
+  function moveNoteDownOne(noteId: string) {
+    updateNotes((prev) => moveNoteDown(prev, noteId));
+  }
   // ペインをまたぐドラッグ交換: 掴んだノートidをrefに置き(refは同期更新なので再レンダ待ちに
   // 依存しない)、別ペインへdropしたらその位置へ移動する。DataTransferは使わない
   // (合成DnDテスト環境ではペイン間でDataTransferが運ばれないため、refで確実に受け渡す)。
@@ -969,6 +973,7 @@ export function App() {
                               tagCandidates={tagCandidates}
                               isActive={note.id === activeNoteId}
                               isFirst={orderedNotes[0]?.id === note.id}
+                              isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
                               autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                               manualSyncSignal={manualSyncSignal}
                               onNotesChange={updateNotes}
@@ -981,6 +986,7 @@ export function App() {
                               onToggleSpecial={toggleSpecial}
                               onDeleteNote={deleteNote}
                               onMoveUp={moveNoteUpOne}
+                              onMoveDown={moveNoteDownOne}
                               onDragStartNote={handleNoteDragStart}
                               onDropNote={handleNoteDrop}
                             />

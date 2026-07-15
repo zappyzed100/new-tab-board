@@ -113,6 +113,15 @@ export function moveNoteUp(notes: Note[], id: string): Note[] {
   return reorderNotes(notes, i, i - 1);
 }
 
+/** 指定ノートを順序列で1つ後ろ(=表示上ひとつ右下)のノートと入れ替える。moveNoteUpの対
+ * (「ひとつ下へ」ボタン用)。末尾や存在しないidはそのまま返す。 */
+export function moveNoteDown(notes: Note[], id: string): Note[] {
+  const sorted = sortedNotes(notes);
+  const i = sorted.findIndex((n) => n.id === id);
+  if (i === -1 || i >= sorted.length - 1) return notes;
+  return reorderNotes(notes, i, i + 1);
+}
+
 /** 順序列(sortedNotes基準)の末尾にある空ノートが `desired` 件に満たなければ、
  * `nextNoteLetterTitle` で命名した空ノートを補充して返す純関数(冪等: 既に足りていれば
  * 元の配列をそのまま返す)。MAX_NOTES 上限に達したら打ち止める。

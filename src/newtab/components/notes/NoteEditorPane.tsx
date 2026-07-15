@@ -5,6 +5,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import {
+  ArrowDown,
   ArrowUp,
   BookOpen,
   CheckSquare,
@@ -68,6 +69,8 @@ type Props = {
   isActive: boolean;
   /** 順序列の先頭ノートか(「ひとつ上へ」を無効化するため)。 */
   isFirst: boolean;
+  /** 順序列の末尾ノートか(「ひとつ下へ」を無効化するため)。 */
+  isLast: boolean;
   autoFocus: boolean;
   /** Cmd/Ctrl+Sが押されるたびに増える共有カウンタ。表示中の全ペインがこれを監視し、
    * 自分のノートを即時スナップショット+Drive同期する(「見えている全部を保存する」)。 */
@@ -93,6 +96,8 @@ type Props = {
   onDeleteNote: (noteId: string) => void;
   /** 順序列で1つ前(表示上ひとつ左上)のノートと入れ替える。 */
   onMoveUp: (noteId: string) => void;
+  /** 順序列で1つ後ろ(表示上ひとつ右下)のノートと入れ替える。 */
+  onMoveDown: (noteId: string) => void;
   /** ドラッグ交換: つまみを掴んだ時に自分のidを「掴んだノート」として通知する。 */
   onDragStartNote: (noteId: string) => void;
   /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
@@ -105,6 +110,7 @@ export function NoteEditorPane({
   tagCandidates,
   isActive,
   isFirst,
+  isLast,
   autoFocus,
   manualSyncSignal,
   onNotesChange,
@@ -117,6 +123,7 @@ export function NoteEditorPane({
   onToggleSpecial,
   onDeleteNote,
   onMoveUp,
+  onMoveDown,
   onDragStartNote,
   onDropNote,
 }: Props) {
@@ -399,6 +406,17 @@ export function NoteEditorPane({
             onClick={() => onMoveUp(note.id)}
           >
             <ArrowUp size={14} aria-hidden="true" />
+          </IconButton>
+          <IconButton
+            type="button"
+            size="1"
+            variant="soft"
+            data-testid={`move-note-down-${note.id}`}
+            title="優先度を下げる(ひとつ後ろ=右下寄りへ移動)"
+            disabled={isLast}
+            onClick={() => onMoveDown(note.id)}
+          >
+            <ArrowDown size={14} aria-hidden="true" />
           </IconButton>
           <IconButton
             type="button"

@@ -688,6 +688,7 @@
 - function reorderNotes
 - function reorderNotesById
 - function moveNoteUp
+- function moveNoteDown
 - function ensureTrailingEmptyNotes
 - function pasteResultsIntoNotes
 
