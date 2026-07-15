@@ -1,0 +1,79 @@
+/* tokens.css — デザイントークン(primitive→semantic の2層。GUARDRAILS §11 表A準拠)。
+   フラットデザイン方向(ui-ux-pro-max skill推奨: 影/グラデーション最小化・タイポグラフィと
+   余白で階層をつくる)に合わせて再定義。ライト/ダーク両方をここに集約する。
+   数値スケール(spacing/radius)は既存E2Eのジオメトリ前提を壊さないよう据え置き、
+   色調のみ刷新している。 */
+
+:root {
+  /* --- primitive: 色ランプ(スキル推奨のプライマリ青#2563EB系+アクセント緑#059669系) --- */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --green-50: #ecfdf5;
+  --green-500: #10b981;
+  --green-600: #059669;
+  --amber-500: #d97706;
+  --red-500: #dc2626;
+  --slate-25: #f8fafc;
+  --slate-50: #f1f5f9;
+  --slate-100: #e2e8f0;
+  --slate-400: #94a3b8;
+  --slate-600: #475569;
+  --slate-900: #0f172a;
+  --slate-950: #0a0f1a;
+
+  /* --- primitive: spacing / radius / font スケール(既存値を維持) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", Roboto, sans-serif;
+  --duration-fast: 150ms;
+  --duration: 200ms;
+  --ease: ease;
+
+  /* --- semantic: ライト --- */
+  --bg: var(--slate-25);
+  --bg-accent: var(--blue-50);
+  --surface: #ffffff;
+  --surface-2: var(--slate-50);
+  --border: var(--slate-100);
+  --text: var(--slate-900);
+  --text-muted: var(--slate-600);
+  --accent: var(--blue-600);
+  --accent-strong: var(--blue-700);
+  --accent-fg: #ffffff;
+  --accent-soft: var(--blue-100);
+  --success: var(--green-600);
+  --success-soft: var(--green-50);
+  --warning: var(--amber-500);
+  --danger: var(--red-500);
+  /* フラットデザイン: 影は使わず、輪郭線(--border)と背景差だけで階層を作る。
+     scroll-jump等どうしても浮遊感が要る少数箇所のみ、ごく薄い1段の影を残す。 */
+  --shadow-flat: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme="dark"] {
+  --bg: var(--slate-950);
+  --bg-accent: #142238;
+  --surface: #121826;
+  --surface-2: #1a2233;
+  --border: #2a3346;
+  --text: #eef1f6;
+  --text-muted: #94a3b8;
+  --accent: var(--blue-500);
+  --accent-strong: #60a5fa;
+  --accent-fg: #0a0f1a;
+  --accent-soft: #1e3a63;
+  --success: var(--green-500);
+  --success-soft: #103224;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --shadow-flat: 0 1px 2px rgba(0, 0, 0, 0.4);
+}

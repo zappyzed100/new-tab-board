@@ -253,12 +253,14 @@
 - `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
 - `src/newtab/components/shell/MiniCalendar.tsx` — MiniCalendar.tsx — 小型カレンダー(react-day-picker + GCal URL連携。SPEC.md §4.9)
+- `src/newtab/components/shell/PanelCard.tsx` — PanelCard.tsx — サイドバーウィジェット共通の外枠(Card+見出し)。パネルごとに見出しサイズが
 - `src/newtab/components/shell/SpecialPanel.tsx` — SpecialPanel.tsx — ⭐スペシャル(保管棚)のサイドバーカード。スター済みノート(live)と
 - `src/newtab/components/shell/TagCandidatesPanel.tsx` — TagCandidatesPanel.tsx — タグ候補(ユーザーが手で並べる語彙)の管理UI。TODOリストの下に置く。
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
 - `src/newtab/styles.css`
+- `src/newtab/styles/tokens.css`
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
@@ -957,6 +959,9 @@
 
 ### `src/newtab/components/shell/MiniCalendar.tsx`
 - function MiniCalendar
+
+### `src/newtab/components/shell/PanelCard.tsx`
+- function PanelCard
 
 ### `src/newtab/components/shell/SpecialPanel.tsx`
 - function SpecialPanel
