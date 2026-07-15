@@ -6,6 +6,7 @@
 
 - `.gitattributes`
 - `.gitignore`
+- `.gitmodules`
 - `.pre-commit-config.yaml`
 - `.prettierignore`
 - `.prettierrc.json`
@@ -51,7 +52,9 @@
 
 ## `.github/`
 
+- `.github/dependabot.yml`
 - `.github/workflows/guardrails-ci.yml`
+- `.github/workflows/update-ui-skills.yml`
 
 ## `.guardrails/`
 
@@ -59,6 +62,10 @@
 - `.guardrails/CUSTOMIZE.md`
 - `.guardrails/GOALS.md`
 - `.guardrails/GUARDRAILS.md`
+
+## `.upstream/`
+
+- `.upstream/sources.yaml`
 
 ## `bindings/`
 
@@ -126,6 +133,7 @@
 - `scripts/reset-e2e-profile.mjs`
 - `scripts/seed-board.mjs`
 - `scripts/set-time-freeze.mjs`
+- `scripts/setup-upstreams.ps1`
 
 ## `src/`
 

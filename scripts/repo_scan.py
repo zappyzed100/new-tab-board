@@ -814,4 +814,6 @@ LAYER_FORBIDDEN_IMPORTS += [
 REQUIRED_PATHS += ["src", "src/lib", "src/newtab", "e2e"]
 SINGLE_TEST_COMMAND = ["npx", "vitest", "run", "{file}"]   # 単一スロット
 # BINDING-SOURCE: ts-react-crx@1
+# workbench: ベンダー領域と design-system 生成物の除外(正本: workbench CLAUDE.md)
+GENERATED_PATTERNS += [re.compile(r"^\.claude/skills/"), re.compile(r"^design-system/")]
 # <<< GUARDRAILS BINDING <<<

@@ -75,6 +75,11 @@ COMMANDS.update({
     "db":    [["node", "scripts/dump-storage.mjs"]],
 })
 # BINDING-SOURCE: ts-react-crx@1
+# workbench: ui-ux-pro-max 検索を uv 経由の動詞にする(正本: workbench CLAUDE.md)
+COMMANDS.update({
+    "design": [["uv", "run", "python",
+                ".claude/skills/ui-ux-pro-max/scripts/search.py", "{args}"]],
+})
 # <<< GUARDRAILS BINDING <<<
 
 VERB_HELP: dict[str, str] = {
