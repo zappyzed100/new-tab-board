@@ -11,10 +11,18 @@ export type FetchLike = typeof fetch;
 /** フォルダ解決の結果をセッション内でキャッシュする(パス文字列→folderId)。同じ
  * app/New Tab Board/active/ 等を毎回検索しないため。 */
 const folderIdCache = new Map<string, string>();
+/** 解決中(検索→未発見なら作成)の段ごとのin-flight Promise(パス文字列→Promise)。
+ * 複数ノートのペインがそれぞれ独立にsyncNoteToDriveを呼ぶため、Cmd/Ctrl+Sで全ペインが
+ * ほぼ同時にresolveFolderPathへ入ると、folderIdCacheがまだ空の間に「同じ名前のフォルダを
+ * 検索→無い→作成」を複数の呼び出しが並行に実行し、Driveは同名フォルダの重複作成を防がない
+ * ため"app"や"New Tab Board"フォルダが複製されるバグがあった(ユーザー報告)。同じパスへの
+ * 同時呼び出しをこのPromiseキャッシュで束ね、getOrCreateFolderの実呼び出しを1回に絞る。 */
+const folderResolvePromiseCache = new Map<string, Promise<string>>();
 
 /** テスト用: フォルダIDキャッシュをクリアする。 */
 export function resetDriveFolderCacheForTests(): void {
   folderIdCache.clear();
+  folderResolvePromiseCache.clear();
 }
 
 /** 親フォルダ(parentId=null はマイドライブ直下)配下に name のフォルダを get-or-create する。 */
@@ -46,6 +54,29 @@ export async function getOrCreateFolder(
   return ((await createRes.json()) as { id: string }).id;
 }
 
+/** 1段分をget-or-createする。同じpath(累積パス)への同時呼び出しはPromiseを共有し、
+ * getOrCreateFolderの実呼び出しを1回に絞る(上のfolderResolvePromiseCacheコメント参照)。 */
+async function resolveSegment(
+  path: string,
+  part: string,
+  parentId: string | null,
+  token: string,
+  fetchImpl: FetchLike,
+): Promise<string> {
+  const cached = folderIdCache.get(path);
+  if (cached) return cached;
+  const inFlight = folderResolvePromiseCache.get(path);
+  if (inFlight) return inFlight;
+  const promise = getOrCreateFolder(part, parentId, token, fetchImpl)
+    .then((id) => {
+      folderIdCache.set(path, id);
+      return id;
+    })
+    .finally(() => folderResolvePromiseCache.delete(path));
+  folderResolvePromiseCache.set(path, promise);
+  return promise;
+}
+
 /** パス(例: ["app","New Tab Board","active"])を順に get-or-create し、末端フォルダIDを返す。
  * 解決結果はキャッシュする(パスの各段を毎回検索しない)。 */
 export async function resolveFolderPath(
@@ -60,9 +91,7 @@ export async function resolveFolderPath(
   let path = "";
   for (const part of parts) {
     path = path ? `${path}/${part}` : part;
-    const existing = folderIdCache.get(path);
-    parentId = existing ?? (await getOrCreateFolder(part, parentId, token, fetchImpl));
-    folderIdCache.set(path, parentId);
+    parentId = await resolveSegment(path, part, parentId, token, fetchImpl);
   }
   return parentId as string;
 }

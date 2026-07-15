@@ -113,6 +113,29 @@ describe("getOrCreateFolder / resolveFolderPath", () => {
     expect(await resolveFolderPath(parts, "tok", fetchImpl)).toBe("active-id");
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
+
+  it("同じパスへの同時呼び出しはフォルダを1回だけ作成する(複数ペインが同時にCmd/Ctrl+S同期する状況の回帰)", async () => {
+    // 検索は常に「まだ無い」を返す——修正前は各同時呼び出しがそれぞれ独立に
+    // 検索→作成してしまい、同名フォルダ(app/New Tab Board等)が複製されるバグがあった
+    // (ユーザー報告: Drive上にappフォルダ・New Tab Boardフォルダが複数できる)。
+    let createCount = 0;
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        createCount += 1;
+        return fakeResponse({ id: `created-${createCount}` });
+      }
+      return fakeResponse({ files: [] });
+    });
+    const parts = ["app", "New Tab Board", "active"];
+    // 5つのノートペインがほぼ同時にresolveFolderPathを呼ぶ状況を再現(await無しで並行発火)。
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => resolveFolderPath(parts, "tok", fetchImpl)),
+    );
+    // 全員が同じフォルダIDへ解決される(バグがあれば各々別の新規作成IDになっていた)。
+    expect(new Set(results).size).toBe(1);
+    // 3段(app / New Tab Board / active)それぞれにつき作成は1回だけ。
+    expect(createCount).toBe(3);
+  });
 });
 
 describe("deleteDriveFile", () => {
