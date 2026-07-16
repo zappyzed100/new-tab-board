@@ -170,12 +170,12 @@
 - `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(launchWebAuthFlowラッパー)の単体テスト
 - `src/lib/drive/googleAuth.ts` — googleAuth.ts — launchWebAuthFlowによるOAuthアクセストークン取得の唯一の入出口(SPEC.md §2・§8)
-- `src/lib/drive/googlePicker.test.ts` — googlePicker.test.ts — googlePicker.ts(Google Picker APIラッパー)の単体テスト
-- `src/lib/drive/googlePicker.ts` — googlePicker.ts — Google Picker APIで、drive.fileスコープのままユーザーに既存のDriveフォルダを
 - `src/lib/drive/jsonBackup.test.ts` — jsonBackup.test.ts — jsonBackup.ts(全データJSONバックアップのDrive APIクライアント)の
 - `src/lib/drive/jsonBackup.ts` — jsonBackup.ts — 全データJSONバックアップのGoogle Drive API v3クライアント(SPEC.md §4.7)
 - `src/lib/drive/jsonBackupSync.test.ts` — jsonBackupSync.test.ts — jsonBackupSync.ts(全データJSONバックアップのDrive同期
 - `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
+- `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」PKCE実装)の単体テスト
+- `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装(認可コード+PKCE)。
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
@@ -676,10 +676,6 @@
 - function getAuthTokenWithError
 - function invalidateToken
 
-### `src/lib/drive/googlePicker.ts`
-- type PickerDeps
-- function pickSharedFolder
-
 ### `src/lib/drive/jsonBackup.ts`
 - type FetchLike
 - function findBackupFile
@@ -692,6 +688,11 @@
 - type JsonBackupSyncDeps
 - function syncJsonBackupToDrive
 - function restoreJsonBackupFromDrive
+
+### `src/lib/drive/pickerOAuth.ts`
+- type PickedFolder
+- type PickerOAuthDeps
+- function pickSharedFolderViaOAuth
 
 ### `src/lib/drive/useDriveSync.ts`
 - type DriveSyncStatus
@@ -964,8 +965,6 @@
 - function setNasFolderPath
 - function getGeminiApiKey
 - function setGeminiApiKey
-- function getPickerApiKey
-- function setPickerApiKey
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig

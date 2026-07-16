@@ -11,7 +11,6 @@ import {
   getGeminiUsageCount,
   getIndexEntry,
   getNasFolderPath,
-  getPickerApiKey,
   getSnapshot,
   getSnapshotsByNote,
   markSnapshotArchived,
@@ -21,7 +20,6 @@ import {
   recordGeminiUsage,
   setBatteryWebhookConfig,
   setNasFolderPath,
-  setPickerApiKey,
 } from "./db";
 
 describe("snapshots", () => {
@@ -105,17 +103,6 @@ describe("NASフォルダのパス", () => {
   it("put/get で往復できる", async () => {
     await setNasFolderPath("Z:\\NAS\\backup");
     expect(await getNasFolderPath()).toBe("Z:\\NAS\\backup");
-  });
-});
-
-describe("Google Picker APIキー", () => {
-  it("未設定ならundefinedを返す", async () => {
-    expect(await getPickerApiKey()).toBeUndefined();
-  });
-
-  it("put/get で往復できる", async () => {
-    await setPickerApiKey("AIzaXXX");
-    expect(await getPickerApiKey()).toBe("AIzaXXX");
   });
 });
 
