@@ -54,7 +54,7 @@
 `folderIdCache`(メモリ)は「同じタブが動いている間」の高速パスとして残置(IndexedDB読み取り
 すら省く)。`folderResolvePromiseCache`(同時呼び出しの単一化)は引き続き同一セッション内の
 競合(Cmd/Ctrl+Sで全ペインがほぼ同時に呼ぶ等)を防ぐ。テストでは
-`resetDriveFolderCacheForTests`(async化済み)でメモリ+永続の両方をクリアする。
+`resetDriveFolderCache`(async化済み)でメモリ+永続の両方をクリアする。
 
 **既知の残存リスク**(ユーザー確認済み・対応は現状スコープ外): 2つの別アプリ/セッションが
 永続キャッシュも空の状態で完全に同時に初回起動すると、どちらも「存在しない」と判断して

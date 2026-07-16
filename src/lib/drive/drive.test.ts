@@ -5,7 +5,7 @@ import {
   findFileForNote,
   getOrCreateFolder,
   listNoteFilesInFolder,
-  resetDriveFolderCacheForTests,
+  resetDriveFolderCache,
   resolveFolderPath,
   uploadNote,
 } from "./drive";
@@ -109,7 +109,7 @@ describe("uploadNote", () => {
 });
 
 describe("getOrCreateFolder / resolveFolderPath", () => {
-  beforeEach(async () => await resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCache());
 
   it("既存フォルダが見つかればそのIDを返し、作成はしない(検索条件は名前+親フォルダ)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ files: [{ id: "folder-x" }] }));
@@ -149,7 +149,7 @@ describe("getOrCreateFolder / resolveFolderPath", () => {
   });
 
   it("永続キャッシュに保存済みのIDがあれば、名前検索はせず実在確認だけして直接使う(ユーザー設計の優先順位1: セッションを跨いだ再訪問を模す)", async () => {
-    // resetDriveFolderCacheForTestsで空にしたところへ、前回セッションで解決済みだった
+    // resetDriveFolderCacheで空にしたところへ、前回セッションで解決済みだった
     // 想定のIDを直接書き込む(セッション内のfolderIdCacheには一切触れない=タブを閉じて
     // 開き直した状況を再現する)。名前+親での検索(getOrCreateFolder)は行わないが、
     // 実在確認(GET /files/{id})は行う(手動削除の検知——下の「stale」テスト参照)。

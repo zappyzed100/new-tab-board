@@ -641,7 +641,7 @@
 
 ### `src/lib/drive/drive.ts`
 - type FetchLike
-- function resetDriveFolderCacheForTests
+- function resetDriveFolderCache
 - function getOrCreateFolder
 - function resolveFolderPath
 - function deleteDriveFile

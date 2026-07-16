@@ -30,8 +30,12 @@ const folderIdCache = new Map<string, string>();
  * (resolveSegment)で解消する**(ユーザー設計: 保存済みIDがあれば名前検索すらしない)。 */
 const folderResolvePromiseCache = new Map<string, Promise<string>>();
 
-/** テスト用: フォルダIDキャッシュ(セッション内+永続の両方)をクリアする。 */
-export async function resetDriveFolderCacheForTests(): Promise<void> {
+/** フォルダIDキャッシュ(セッション内メモリ+永続の両方)をクリアする。テスト用の他、
+ * 「共有フォルダを選択」(DataPanel.tsx)でも使う——永続キャッシュ(IndexedDB)だけ
+ * クリアしてメモリの`folderIdCache`を残すと、同じタブ内では選び直した後もresolveSegment
+ * がメモリキャッシュを優先して古いフォルダIDを使い続けてしまう(実機不具合の是正・
+ * 2026-07-16)。 */
+export async function resetDriveFolderCache(): Promise<void> {
   folderIdCache.clear();
   folderResolvePromiseCache.clear();
   await clearDriveFolderIds();

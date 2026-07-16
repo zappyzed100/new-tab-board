@@ -1,6 +1,6 @@
 // driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resetDriveFolderCacheForTests } from "./drive";
+import { resetDriveFolderCache } from "./drive";
 import { bumpDriveGeneration, readDriveGeneration } from "./driveGeneration";
 
 function fakeResponse(body: unknown, ok = true, status = 200): Response {
@@ -13,7 +13,7 @@ function fakeResponse(body: unknown, ok = true, status = 200): Response {
 }
 
 describe("readDriveGeneration", () => {
-  beforeEach(async () => await resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCache());
 
   it("ファイル未作成なら0を返す", async () => {
     const fetchImpl = vi
@@ -54,7 +54,7 @@ describe("readDriveGeneration", () => {
 });
 
 describe("bumpDriveGeneration", () => {
-  beforeEach(async () => await resetDriveFolderCacheForTests());
+  beforeEach(async () => await resetDriveFolderCache());
 
   it("未作成なら1(0+1)で新規作成する", async () => {
     const fetchImpl = vi

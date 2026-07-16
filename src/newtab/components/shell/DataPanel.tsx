@@ -21,7 +21,6 @@ import {
   Upload,
 } from "lucide-react";
 import {
-  clearDriveFolderIds,
   getBatteryWebhookConfig,
   getGeminiApiKey,
   getNasFolderPath,
@@ -35,6 +34,7 @@ import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
 import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
+import { resetDriveFolderCache } from "../../../lib/drive/drive";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import { pickSharedFolderViaOAuth } from "../../../lib/drive/pickerOAuth";
 import type { AppLaunch, Bookmark, Note, Settings, SpecialItem, Todo } from "../../../types";
@@ -124,11 +124,13 @@ export function DataPanel({
   }
 
   // 複数アプリでapp/フォルダを共有するため、drive.fileスコープのままGoogle Pickerの
-  // 「デスクトップ・モバイル向けフロー」(OAuth認可URL+PKCE。Picker専用のChrome拡張機能型
-  // クライアントを使い、client_secret不使用)で既存の共有フォルダをユーザーに明示選択して
-  // もらい、そのフォルダIDを「app」パスの永続キャッシュへ直接書き込む(ユーザー設計)。
-  // 以後のresolveFolderPath(["app","New Tab Board",...])は名前検索すらせずこのIDを使う。
-  // 他パス(app/New Tab Board等)のキャッシュは親が変わりうるため一旦全部捨てて再解決させる。
+  // 「デスクトップ・モバイル向けフロー」(OAuth認可URL・インプリシットフロー。メインログインと
+  // 同じ「ウェブアプリケーション」型クライアントをdrive.file単体スコープで使い回す)で既存の
+  // 共有フォルダをユーザーに明示選択してもらい、そのフォルダIDを「app」パスの永続キャッシュへ
+  // 直接書き込む(ユーザー設計)。以後のresolveFolderPath(["app","New Tab Board",...])は
+  // 名前検索すらせずこのIDを使う。resetDriveFolderCache()でメモリ+永続の両方をクリアしてから
+  // 書き込む——永続キャッシュだけクリアすると、同じタブ内ではメモリの`folderIdCache`が
+  // 選び直した後も古いIDを返し続け、直後の「Driveへ退避」が失敗する実機不具合があった。
   async function handlePickSharedFolder() {
     let picked: { id: string; name: string | null } | null;
     try {
@@ -141,7 +143,7 @@ export function DataPanel({
       onMessage("フォルダ選択がキャンセルされました");
       return;
     }
-    await clearDriveFolderIds();
+    await resetDriveFolderCache();
     await saveDriveFolderId("app", picked.id);
     onMessage(
       `共有フォルダ「${picked.name ?? picked.id}」を選択しました(以後このフォルダを使います)`,
