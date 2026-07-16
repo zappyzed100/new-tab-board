@@ -12,10 +12,12 @@ import {
   noteToMarkdown,
   readArchivedSnapshot,
   reconcileActiveNotesOnNas,
+  todosToMarkdown,
   writeNoteMarkdownToNas,
   writeNoteToNasStructure,
+  writeTodosToNasActive,
 } from "./nasArchive";
-import type { Note } from "../../types";
+import type { Note, Todo } from "../../types";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { putSnapshot, getSnapshot } from "../storage/db";
 import type { Snapshot } from "../../types";
@@ -427,6 +429,44 @@ describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
   it("NAS未設定なら0(削除しない)", async () => {
     expect(await reconcileActiveNotesOnNas([], { getNasFolderPath: async () => undefined })).toBe(
       0,
+    );
+  });
+});
+
+describe("todosToMarkdown", () => {
+  it("order昇順でチェックリスト形式にする", () => {
+    const todos: Todo[] = [
+      { id: "t2", text: "後", done: false, order: 1 },
+      { id: "t1", text: "先", done: true, order: 0 },
+    ];
+    const md = todosToMarkdown(todos);
+    const lines = md.split("\n").filter((l) => l.startsWith("- ["));
+    expect(lines).toEqual(["- [x] 先", "- [ ] 後"]);
+  });
+
+  it("0件でもfront matterだけのMarkdownを返す", () => {
+    expect(todosToMarkdown([])).toContain("kind: todos");
+  });
+});
+
+describe("writeTodosToNasActive", () => {
+  it("active/todos.mdへ書く", async () => {
+    const files = new Map<string, string>();
+    const todos: Todo[] = [{ id: "t1", text: "買い物", done: false, order: 0 }];
+    const ok = await writeTodosToNasActive(todos, {
+      getNasFolderPath: async () => NAS_PATH,
+      writeFileToNas: async (_p, f, c) => {
+        files.set(f, c);
+        return true;
+      },
+    });
+    expect(ok).toBe(true);
+    expect(files.get("active/todos.md")).toContain("- [ ] 買い物");
+  });
+
+  it("NAS未設定ならfalse", async () => {
+    expect(await writeTodosToNasActive([], { getNasFolderPath: async () => undefined })).toBe(
+      false,
     );
   });
 });

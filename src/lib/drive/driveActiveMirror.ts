@@ -7,11 +7,14 @@
 // <id>.md(Markdown+front matter)。空ノートは上げない。
 import { deleteDriveFile, listNoteFilesInFolder, resolveFolderPath, uploadNote } from "./drive";
 import { ACTIVE_FOLDER_PATH } from "./driveSync";
-import { noteToMarkdown } from "../externalIO/nasArchive";
+import { noteToMarkdown, todosToMarkdown } from "../externalIO/nasArchive";
 import { logOp } from "../runtime/log";
-import type { Note } from "../../types";
+import type { Note, Todo } from "../../types";
 
 const APP_ROOT = ["app", "New Tab Board"];
+const FILES_URL = "https://www.googleapis.com/drive/v3/files";
+const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
+const TODOS_FILENAME = "todos.md";
 
 /** epoch ms を YYYY/M/D(4桁年・非ゼロ埋め。NASと同一書式)のパス片にする(例: 2026/7/13)。 */
 export function dateFolderParts(ms: number): string[] {
@@ -95,4 +98,69 @@ export async function copyNotesToDriveDateFolder(
 
   logOp("driveActiveMirror", "date-archive", `day=${dateKind} dated=${dated}`);
   return { dated };
+}
+
+async function findTodosFile(
+  folderId: string,
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<string | null> {
+  const q = `'${folderId}' in parents and name='${TODOS_FILENAME}' and trashed=false`;
+  const res = await fetchImpl(`${FILES_URL}?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Drive検索失敗: HTTP ${res.status}`);
+  const data = (await res.json()) as { files?: { id: string }[] };
+  return data.files?.[0]?.id ?? null;
+}
+
+export type PushTodosDeps = {
+  resolveFolderPath?: typeof resolveFolderPath;
+  fetchImpl?: typeof fetch;
+};
+
+/** TODO一覧をDriveのactive/todos.mdへ書く(ユーザー指示: TODOもactiveへ入れる。既存の
+ * settings-backup.jsonとの二重管理でよい)。appPropertiesにnoteIdを持たせないため、
+ * listNoteFilesInFolder(noteId持ちのファイルしか拾わない)経由のreconcileDriveActiveには
+ * 一切引っかからず、ノートの「消えたら消す」突合で誤って削除されない。 */
+export async function pushTodosToDriveActive(
+  todos: Todo[],
+  token: string,
+  deps: PushTodosDeps = {},
+): Promise<boolean> {
+  const _resolve = deps.resolveFolderPath ?? resolveFolderPath;
+  const _fetch = deps.fetchImpl ?? fetch;
+  const folderId = await _resolve(ACTIVE_FOLDER_PATH, token);
+  const existingId = await findTodosFile(folderId, token, _fetch);
+  const content = todosToMarkdown(todos);
+  const boundary = "newtabboard-todos";
+  // trashedフィールドは新規作成では書き込み不可でHTTP 403になる(uploadNote/uploadBackupと
+  // 同じ罠——ただしこの関数は名前+親で毎回検索するため、見つからない=作り直しになる方針で
+  // よく、trashed復活ロジック自体を持たない)。
+  const metadata: Record<string, unknown> = existingId
+    ? {}
+    : { name: TODOS_FILENAME, mimeType: "text/markdown", parents: [folderId] };
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: text/markdown; charset=UTF-8\r\n\r\n${content}\r\n` +
+    `--${boundary}--`;
+  const url = existingId
+    ? `${UPLOAD_URL}/${existingId}?uploadType=multipart`
+    : `${UPLOAD_URL}?uploadType=multipart`;
+  const res = await _fetch(url, {
+    method: existingId ? "PATCH" : "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+  if (!res.ok) {
+    logOp("driveActiveMirror", "todos-upload-error", `status=${res.status}`);
+    return false;
+  }
+  logOp("driveActiveMirror", "todos-upload", `mode=${existingId ? "update" : "create"}`);
+  return true;
 }

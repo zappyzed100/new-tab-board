@@ -654,6 +654,8 @@
 - type ReconcileDeps
 - function reconcileDriveActive
 - function copyNotesToDriveDateFolder
+- type PushTodosDeps
+- function pushTodosToDriveActive
 
 ### `src/lib/drive/driveGeneration.ts`
 - function readDriveGeneration
@@ -778,6 +780,8 @@
 - function activeNasFilenameFor
 - function writeNoteToNasStructure
 - function reconcileActiveNotesOnNas
+- function todosToMarkdown
+- function writeTodosToNasActive
 - function flushSnapshotToNas
 - function flushAllToNas
 - function readArchivedSnapshot

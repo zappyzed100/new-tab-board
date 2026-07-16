@@ -3,10 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   copyNotesToDriveDateFolder,
   dateFolderParts,
+  pushTodosToDriveActive,
   reconcileDriveActive,
 } from "./driveActiveMirror";
 import { noteToMarkdown } from "../externalIO/nasArchive";
-import type { Note } from "../../types";
+import type { Note, Todo } from "../../types";
+
+function fakeResponse(body: unknown, ok = true, status = 200): Response {
+  return { ok, status, json: async () => body } as Response;
+}
 
 const note = (id: string, content: string): Note =>
   ({ id, title: id, content, pinned: false, order: 0 }) as Note;
@@ -106,5 +111,47 @@ describe("copyNotesToDriveDateFolder", () => {
       { folderId: "date-folder", kind: "date:2026/1/5", filename: "n1.md" },
     );
     expect(res).toEqual({ dated: 1 });
+  });
+});
+
+describe("pushTodosToDriveActive", () => {
+  const todos: Todo[] = [{ id: "t1", text: "買い物", done: false, order: 0 }];
+
+  it("既存が無ければPOST(新規作成)し、noteIdをappPropertiesに含めない(reconcileDriveActiveの削除対象から外すため)", async () => {
+    const resolveFolderPath = vi.fn().mockResolvedValue("active-folder");
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [] })) // 検索: 無し
+      .mockResolvedValueOnce(fakeResponse({ id: "new-file" })); // 作成
+    const ok = await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl });
+    expect(ok).toBe(true);
+    const [, init] = fetchImpl.mock.calls[1];
+    expect(init.method).toBe("POST");
+    expect(init.body).toContain("todos.md");
+    expect(init.body).not.toContain("noteId");
+    expect(init.body).toContain("- [ ] 買い物");
+  });
+
+  it("既存が見つかればPATCH(更新)する", async () => {
+    const resolveFolderPath = vi.fn().mockResolvedValue("active-folder");
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [{ id: "existing-todos" }] }))
+      .mockResolvedValueOnce(fakeResponse({ id: "existing-todos" }));
+    const ok = await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl });
+    expect(ok).toBe(true);
+    const [url, init] = fetchImpl.mock.calls[1];
+    expect(init.method).toBe("PATCH");
+    expect(url).toContain("existing-todos");
+  });
+
+  it("アップロード失敗はfalseを返す", async () => {
+    const resolveFolderPath = vi.fn().mockResolvedValue("active-folder");
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(fakeResponse({ files: [] }))
+      .mockResolvedValueOnce(fakeResponse({}, false, 500));
+    const ok = await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl });
+    expect(ok).toBe(false);
   });
 });

@@ -70,7 +70,11 @@ import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
-import { flushAllToNas } from "../lib/externalIO/nasArchive";
+import {
+  flushAllToNas,
+  todosToMarkdown,
+  writeTodosToNasActive,
+} from "../lib/externalIO/nasArchive";
 import {
   decideActiveSync,
   noteSaveFingerprint,
@@ -85,7 +89,11 @@ import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { bumpDriveGeneration } from "../lib/drive/driveGeneration";
 import { logOp } from "../lib/runtime/log";
-import { copyNotesToDriveDateFolder, reconcileDriveActive } from "../lib/drive/driveActiveMirror";
+import {
+  copyNotesToDriveDateFolder,
+  pushTodosToDriveActive,
+  reconcileDriveActive,
+} from "../lib/drive/driveActiveMirror";
 import { syncNoteToDrive } from "../lib/drive/driveSync";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
@@ -225,6 +233,10 @@ export function App() {
   // NAS設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)の
   // 直近保存ハッシュ。内容不変のtickで無駄に再書き込みしない(nasSpecialSigRefと同じ発想)。
   const nasSettingsSigRef = useRef<string>("");
+  // TODOをactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので既存のsettings
+  // backupとは別に、NAS/Drive両方のactive/へも直近保存ハッシュ付きで書く)。
+  const nasTodosSigRef = useRef<string>("");
+  const driveTodosSigRef = useRef<string>("");
   // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
   // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
   function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
@@ -345,6 +357,15 @@ export function App() {
         if (await pushSettingsBackupToNas(settingsJson)) {
           nasSettingsSigRef.current = settingsHash;
         }
+      }
+    }
+    // TODOはactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップとは
+    // 別にactive/へ直接反映する)。
+    const todosMd = todosToMarkdown(todosRef.current);
+    const todosSig = contentHash(todosMd);
+    if (todosSig !== nasTodosSigRef.current) {
+      if (await writeTodosToNasActive(todosRef.current)) {
+        nasTodosSigRef.current = todosSig;
       }
     }
   }
@@ -821,6 +842,15 @@ export function App() {
     }
     await reconcileDriveActive(current, token);
     await copyNotesToDriveDateFolder(current, now, token);
+    // TODOはactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップ
+    // (jsonBackup)とは別にactive/へ直接反映する。NAS側と同じ発想)。
+    const todosMd = todosToMarkdown(todosRef.current);
+    const todosSig = contentHash(todosMd);
+    if (todosSig !== driveTodosSigRef.current) {
+      if (await pushTodosToDriveActive(todosRef.current, token)) {
+        driveTodosSigRef.current = todosSig;
+      }
+    }
   }
 
   async function handleBackupToDrive() {

@@ -28,7 +28,7 @@ import {
   readFileFromNas,
   writeFileToNas,
 } from "./nasNativeHost";
-import type { Note, Snapshot } from "../../types";
+import type { Note, Snapshot, Todo } from "../../types";
 
 /** YAMLスカラーとして安全な表現にする(front matter用)。特殊文字・空・数値見えは二重引用符で囲む。
  * 書き込み側(ここ)と読み込み側(native-host/build_index.py)で同じ規則を守る。 */
@@ -231,6 +231,25 @@ export async function reconcileActiveNotesOnNas(
   }
   logOp("nasArchive", "reconcile-active", `deleted=${deleted}`);
   return deleted;
+}
+
+/** TODO一覧を1ファイルにまとめたMarkdown(チェックリスト形式)にする。order昇順。
+ * ユーザー指示: TODOもactive/へ入れる(既存のsettings-backup.jsonとの二重管理でよい)。 */
+export function todosToMarkdown(todos: Todo[]): string {
+  const lines = ["---", "kind: todos", "---", ""];
+  for (const t of [...todos].sort((a, b) => a.order - b.order)) {
+    lines.push(`- [${t.done ? "x" : " "}] ${t.text}`);
+  }
+  return lines.join("\n");
+}
+
+/** TODO一覧をactive/todos.mdへ書く(NAS未設定/到達不可は静かにfalse)。 */
+export async function writeTodosToNasActive(todos: Todo[], deps: NasDeps = {}): Promise<boolean> {
+  const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
+  const _writeFileToNas = deps.writeFileToNas ?? writeFileToNas;
+  const path = await _getNasFolderPath();
+  if (!path) return false;
+  return _writeFileToNas(path, "active/todos.md", todosToMarkdown(todos));
 }
 
 /** Geminiのタグ付けで junk 判定されたノートIDの集合(NASアーカイブから除外する——ユーザー指示)。 */
