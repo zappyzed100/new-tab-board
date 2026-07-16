@@ -15,17 +15,22 @@ import {
   CloudUpload,
   FileText,
   FolderOpen,
+  FolderSymlink,
   KeyRound,
   Settings as SettingsIcon,
   Upload,
 } from "lucide-react";
 import {
+  clearDriveFolderIds,
   getBatteryWebhookConfig,
   getGeminiApiKey,
   getNasFolderPath,
+  getPickerApiKey,
+  saveDriveFolderId,
   setBatteryWebhookConfig,
   setGeminiApiKey,
   setNasFolderPath,
+  setPickerApiKey,
 } from "../../../lib/storage/db";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
@@ -33,6 +38,7 @@ import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
 import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
+import { pickSharedFolder } from "../../../lib/drive/googlePicker";
 import type { AppLaunch, Bookmark, Note, Settings, SpecialItem, Todo } from "../../../types";
 
 type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };
@@ -82,12 +88,18 @@ export function DataPanel({
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
   const [batteryConfigSet, setBatteryConfigSet] = useState(false);
+  // Google Picker APIキー(共有appフォルダ選択用)。GeminiキーやGASトークンと同じ扱い
+  // (秘匿情報のため保存済みの値は画面に出さず、設定済みかどうかだけ示す)。
+  const [showPickerKeyInput, setShowPickerKeyInput] = useState(false);
+  const [pickerKeyInput, setPickerKeyInput] = useState("");
+  const [pickerKeySet, setPickerKeySet] = useState(false);
 
   useEffect(() => {
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
     void getGeminiApiKey().then((key) => setGeminiKeySet(Boolean(key)));
+    void getPickerApiKey().then((key) => setPickerKeySet(Boolean(key)));
     void getBatteryWebhookConfig().then((config) => {
       if (config) {
         setBatteryUrlInput(config.url);
@@ -117,6 +129,59 @@ export function DataPanel({
           // 実際のエラー内容をそのまま案内に含める(NAS設定と同じ方針)。
           `Googleアカウントへの接続に失敗しました(${error}。ポップアップを閉じた場合は再度お試しください)`,
     );
+  }
+
+  async function handleSavePickerKey() {
+    const key = pickerKeyInput.trim();
+    if (!key) {
+      onMessage(
+        "Google Picker APIキーを入力してください(Cloud ConsoleでPicker APIを有効化して発行)",
+      );
+      return;
+    }
+    await setPickerApiKey(key);
+    setPickerKeyInput("");
+    setPickerKeySet(true);
+    setShowPickerKeyInput(false);
+    onMessage("Google Picker APIキーを保存しました");
+  }
+
+  // 複数アプリでapp/フォルダを共有するため、drive.fileスコープのままGoogle Pickerで既存の
+  // 共有フォルダをユーザーに明示選択してもらい、そのフォルダIDを「app」パスの永続キャッシュへ
+  // 直接書き込む(ユーザー指示)。以後のresolveFolderPath(["app","New Tab Board",...])は
+  // 名前検索すらせずこのIDを使う。他パス(app/New Tab Board等)のキャッシュは親が変わりうる
+  // ため一旦全部捨てて再解決させる。
+  async function handlePickSharedFolder() {
+    const apiKey = await getPickerApiKey();
+    if (!apiKey) {
+      onMessage("先にGoogle Picker APIキーを設定してください");
+      return;
+    }
+    const { token, error } = await getAuthTokenWithError(true);
+    if (!token) {
+      onMessage(`Googleアカウントへの接続に失敗しました(${error})`);
+      return;
+    }
+    // 既知の制約(2026-07-16): MV3のcontent_security_policy.extension_pagesはscript-srcを
+    // 'self'以外へ緩められない(https://apis.google.com からの読み込みが仕様上禁止)ため、
+    // このページへ直接gapiを読み込むことは現状できず、必ずここで失敗する。sandboxページ+
+    // postMessageでの橋渡しが必要(未実装)。失敗を無反応にせず案内する。
+    let picked: { id: string; name: string } | null;
+    try {
+      picked = await pickSharedFolder(token, apiKey);
+    } catch (err) {
+      onMessage(
+        `Google Pickerの読み込みに失敗しました(${err instanceof Error ? err.message : String(err)})`,
+      );
+      return;
+    }
+    if (!picked) {
+      onMessage("フォルダ選択がキャンセルされました");
+      return;
+    }
+    await clearDriveFolderIds();
+    await saveDriveFolderId("app", picked.id);
+    onMessage(`共有フォルダ「${picked.name}」を選択しました(以後このフォルダを使います)`);
   }
 
   async function handleRestoreFromDrive() {
@@ -309,6 +374,51 @@ export function DataPanel({
         >
           <SettingsIcon size={14} aria-hidden="true" />
           GDrive設定
+        </Button>
+        <Button
+          type="button"
+          variant={showPickerKeyInput ? "solid" : "soft"}
+          data-testid="data-set-picker-key"
+          title="Google Picker APIキーを設定する(共有フォルダ選択で使用。Cloud ConsoleでPicker APIを有効化して発行)"
+          onClick={() => setShowPickerKeyInput((v) => !v)}
+        >
+          <KeyRound size={14} aria-hidden="true" />
+          Picker APIキー{pickerKeySet ? "(設定済み)" : ""}
+        </Button>
+        {showPickerKeyInput ? (
+          <>
+            <TextField.Root
+              aria-label="Google Picker APIキー"
+              type="password"
+              placeholder={pickerKeySet ? "設定済み(再入力で上書き)" : "AIza... を貼り付け"}
+              data-testid="data-picker-key-input"
+              autoFocus
+              value={pickerKeyInput}
+              onChange={(e) => setPickerKeyInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSavePickerKey();
+              }}
+            />
+            <Button
+              type="button"
+              variant="soft"
+              data-testid="data-save-picker-key"
+              title="入力したAPIキーを保存する"
+              onClick={() => void handleSavePickerKey()}
+            >
+              保存
+            </Button>
+          </>
+        ) : null}
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-pick-shared-folder"
+          title="Google Picker で複数アプリ共有の既存フォルダ(app等)を選択する(drive.fileスコープのまま、選んだフォルダへのアクセスを得られる)"
+          onClick={() => void handlePickSharedFolder()}
+        >
+          <FolderSymlink size={14} aria-hidden="true" />
+          共有フォルダを選択
         </Button>
         <Button
           type="button"

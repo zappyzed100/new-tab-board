@@ -16,6 +16,11 @@ const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
 // アクセスする。セッションを跨いだ再訪問のたびに名前+親で検索し直すと、複数ペインが
 // ほぼ同時に検索→未発見→作成を行った場合に同名フォルダが複製されるリスクが残るため)。
 const DRIVE_FOLDER_IDS_KEY = "driveFolderIds";
+// Google Picker APIの開発者キー(ユーザー指示: drive.fileスコープのまま複数アプリでapp/
+// フォルダを共有するため、Pickerで既存フォルダへのアクセスを明示的に許可してもらう用途。
+// Cloud ConsoleでPicker APIを有効化して発行するキー——クライアント側で使う想定の値だが、
+// Geminiキーと同じ保存経路(chrome.storage.sync/Driveバックアップに乗らない)に揃える)。
+const PICKER_API_KEY_KEY = "pickerApiKey";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -141,6 +146,19 @@ export async function setGeminiApiKey(key: string): Promise<void> {
   await db.put("settings", key, GEMINI_API_KEY_KEY);
   // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
   logOp("db", "put", "settings/geminiApiKey");
+}
+
+/** Google Picker APIの開発者キーを返す。未設定ならundefined。 */
+export async function getPickerApiKey(): Promise<string | undefined> {
+  const db = await getDb();
+  return db.get("settings", PICKER_API_KEY_KEY) as Promise<string | undefined>;
+}
+
+export async function setPickerApiKey(key: string): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", key, PICKER_API_KEY_KEY);
+  // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
+  logOp("db", "put", "settings/pickerApiKey");
 }
 
 /** スマホのバッテリー低下警告のGAS Web App接続設定(url+共有トークン)。未設定ならundefined。 */

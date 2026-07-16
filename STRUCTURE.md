@@ -170,6 +170,8 @@
 - `src/lib/drive/driveSync.ts` — driveSync.ts — ノート現行内容のDrive同期オーケストレーション(SPEC.md §4.2・§8)
 - `src/lib/drive/googleAuth.test.ts` — googleAuth.test.ts — googleAuth.ts(launchWebAuthFlowラッパー)の単体テスト
 - `src/lib/drive/googleAuth.ts` — googleAuth.ts — launchWebAuthFlowによるOAuthアクセストークン取得の唯一の入出口(SPEC.md §2・§8)
+- `src/lib/drive/googlePicker.test.ts` — googlePicker.test.ts — googlePicker.ts(Google Picker APIラッパー)の単体テスト
+- `src/lib/drive/googlePicker.ts` — googlePicker.ts — Google Picker APIで、drive.fileスコープのままユーザーに既存のDriveフォルダを
 - `src/lib/drive/jsonBackup.test.ts` — jsonBackup.test.ts — jsonBackup.ts(全データJSONバックアップのDrive APIクライアント)の
 - `src/lib/drive/jsonBackup.ts` — jsonBackup.ts — 全データJSONバックアップのGoogle Drive API v3クライアント(SPEC.md §4.7)
 - `src/lib/drive/jsonBackupSync.test.ts` — jsonBackupSync.test.ts — jsonBackupSync.ts(全データJSONバックアップのDrive同期
@@ -674,6 +676,10 @@
 - function getAuthTokenWithError
 - function invalidateToken
 
+### `src/lib/drive/googlePicker.ts`
+- type PickerDeps
+- function pickSharedFolder
+
 ### `src/lib/drive/jsonBackup.ts`
 - type FetchLike
 - function findBackupFile
@@ -958,6 +964,8 @@
 - function setNasFolderPath
 - function getGeminiApiKey
 - function setGeminiApiKey
+- function getPickerApiKey
+- function setPickerApiKey
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig
