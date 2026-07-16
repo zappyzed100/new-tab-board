@@ -55,17 +55,33 @@ md(YAML front matter: id/title/tags/created_at/updated_at、AI要約は source_n
 - `native-host/build_index.py`: `active/*.md`グロブ→`active/*.txt`(日付フォルダ側`*/*/*/*.md`は
   無変更)
 
+**書式変更時は`noteSaveFingerprint`のバージョンを上げる**(2026-07-16是正・ユーザー報告
+「ドライブに退避でactiveにファイルが出力されない」): `nasSavedHashes`/`driveActiveSavedHashes`
+(いずれもsaveLocalData経由でセッションをまたいで永続化される)は本文が無変更なら再書き込み
+しない仕組みのため、この`.txt`拡張子変更のように**本文は変えずファイル名/構造だけ変える**
+書式変更をしても、既存ノートは「保存済み」判定でスキップされ続け、新形式のファイルが
+一切書かれない。`nasActiveSync.ts`の`noteSaveFingerprint`は`ACTIVE_FILE_FORMAT_VERSION`を
+ハッシュへ連結しており、書式を変えるたびにこの定数を上げて全ノートを一度だけ強制再同期
+させる(以後はまた内容ベースの差分検知に戻る)。
+
 - **ハッシュで保存済み判定(無駄な再保存を避ける)**(ユーザー指示): `pushActiveToNas` は各ノートの
-  `noteSaveFingerprint`(= `contentHash(noteToMarkdown(note))`)を前回保存時のハッシュ(`nasSavedHashes`・
-  localDataに永続)と比べ、**同じなら書かない**。これで①同じノートの無駄な再保存が消え②日付フォルダは
-  「その日に変わったノート」だけになる(毎日の全コピー重複を解消)。タグ付けは別途 `taggedHash`(content
+  `noteSaveFingerprint`(= `contentHash(noteToMarkdown(note))` + 書式バージョン)を前回保存時の
+  ハッシュ(`nasSavedHashes`・localDataに永続)と比べ、**同じなら書かない**。これで①同じノートの
+  無駄な再保存が消え②日付フォルダは「その日に変わったノート」だけになる(毎日の全コピー重複を
+  解消)。タグ付けは別途 `taggedHash`(content
   ハッシュ)で `needsRetag` が抑制(タイトル/タグ付け回数の削減)。
 - **NAS active への書き込みは「世代同期(5分毎の push)」に一本化**(`nasActiveSync.ts`・App)。各ペインの
   `SnapshotScheduler`(更新5分/200字/blur/paste)は**自動タグ付け(analyzeNote)だけ**を行い、タグは
   notes state に反映される。push はその state を読むので「タグ確定後に書く」も自然に満たす(NoteEditorPane
   からは NAS へ直接書かない)。空・junk は push 側(`pushActiveToNas`)で除外。
-- **消えたら消す**: `reconcileActiveNotesOnNas(notes)` が active/ を list-tree で列挙し、現在の非空・非junk
-  ノートに無い `active/<id>.md` を delete-file で消す(`pushActiveToNas` が push のたびに呼ぶ)。
+- **消えたら消す・リネームで孤立した旧ファイルも消す**: `reconcileActiveNotesOnNas(notes)` が active/ を
+  list-tree で列挙し、現在の非空・非junkノートに無い `active/<タイトル> (id8桁).txt` を delete-file で
+  消す(`pushActiveToNas` が push のたびに呼ぶ)。**同じid断片のファイルが複数残っている場合**(タイトル
+  変更で旧ファイル名が孤立した状態)は、現在の正本ファイル名が実際に存在することを確認してから、それ以外を
+  削除する(2026-07-16是正——正本がまだ書かれていない/書き込み失敗時は何も消さず、最後の1コピーを
+  誤って消す事故を防ぐ)。この分岐が無かった旧実装では「ノートidが今も存在するか」しか見ておらず、
+  リネームのたびにファイルが積み上がり続け、`pullActiveFromNas`が同じidの複数Noteを生成→盤面に
+  同じノートが複数枚表示され、削除(id一致で全件除去)すると全部消える不具合になっていた。
 - **旧経路は残置**: 旧 `notes/<id>.md`(`writeNoteMarkdownToNas`)は**現在未配線**(active/<id>.md へ
   移行済み)。関数と `noteToMarkdown` は残すが呼び出していない。既存の旧ファイルはNAS上に残置する。
 

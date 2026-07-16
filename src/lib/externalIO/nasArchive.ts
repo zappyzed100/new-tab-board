@@ -209,7 +209,20 @@ function idFragmentFromActiveFilename(filename: string): string | null {
 /** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になった/ゴミ判定のノートのactiveファイルを
  * 削除する(ブラウザで消えたらNASからも消す——ユーザー指示)。ファイル名がタイトルを含むため
  * (activeNasFilenameFor)、id完全一致ではなくファイル名末尾のid断片(8桁)で突き合わせる。
- * 削除件数を返す。 */
+ *
+ * **タイトル変更で孤立した旧ファイル名も削除する**(2026-07-16是正・ユーザー報告「置いてた
+ * ノートが3つに増殖し、1つ削除すると全部消えた」の根本原因): NASはGoogle DriveのappProperties
+ * のような「ノートidに紐づく既存ファイルを検索して上書き」ができず、タイトルを変えるたびに
+ * `writeNoteToNasStructure`は新タイトルのファイル名で書くだけで、旧タイトルのファイルは
+ * 消さない。旧実装は「そのidのノートが今も存在するか」しか見ておらず、存在する限り旧・新
+ * 両方のファイルが「保持対象」と誤判定されて積み上がり続けていた——`pullActiveFromNas`が
+ * それらを全部読むと front matter の同じ id を持つ Note が複数生成され、盤面に同じノートが
+ * 複数枚表示され、削除(id一致で全件除去)すると全部消える不具合になっていた。
+ *
+ * 同じid断片のファイルが複数ある場合、**現在の正本ファイル名(activeNasFilenameFor)が実際に
+ * 存在することを確認してから**、それ以外の古いファイルだけを削除する。正本がまだ存在しない
+ * (直前の書き込みが未実行/失敗)場合は何も削除しない——最後の1コピーを書き込み前に消して
+ * データを一瞬でも失う事態を避けるため。削除件数を返す。 */
 export async function reconcileActiveNotesOnNas(
   notes: Note[],
   deps: NasDeps = {},
@@ -219,17 +232,48 @@ export async function reconcileActiveNotesOnNas(
   const _deleteFileFromNas = deps.deleteFileFromNas ?? deleteFileFromNas;
   const path = await _getNasFolderPath();
   if (!path) return 0;
-  const keepIdFragments = new Set(
-    notes.filter((n) => n.content.trim() !== "" && !n.junk).map((n) => n.id.slice(0, 8)),
+  const keepNotes = notes.filter((n) => n.content.trim() !== "" && !n.junk);
+  const keepIdFragments = new Set(keepNotes.map((n) => n.id.slice(0, 8)));
+  const expectedFilenameByIdFragment = new Map(
+    keepNotes.map((n) => [n.id.slice(0, 8), activeNasFilenameFor(n)]),
   );
+
   const files = await _listNasTree(path, "active");
   if (files === null) return 0;
-  let deleted = 0;
+
+  // active/ 直下のファイルだけをid断片ごとにまとめる(リネームで生じた重複を検知するため。
+  // サブフォルダは想定しない)。id断片が取れないファイル(旧形式.md等)は個別に処理する。
+  const byIdFragment = new Map<string, string[]>();
+  const untracked: string[] = [];
   for (const f of files) {
-    // active/ 直下のファイルのみ対象(サブフォルダは想定しない)。現在の非空ノートに無ければ削除。
+    if (f.includes("/")) continue;
     const idFragment = idFragmentFromActiveFilename(f);
-    if (!f.includes("/") && (idFragment === null || !keepIdFragments.has(idFragment))) {
-      if (await _deleteFileFromNas(path, `active/${f}`)) deleted += 1;
+    if (idFragment === null) {
+      untracked.push(f);
+      continue;
+    }
+    const group = byIdFragment.get(idFragment) ?? [];
+    group.push(f);
+    byIdFragment.set(idFragment, group);
+  }
+
+  let deleted = 0;
+  for (const f of untracked) {
+    if (await _deleteFileFromNas(path, `active/${f}`)) deleted += 1;
+  }
+  for (const [idFragment, group] of byIdFragment) {
+    if (!keepIdFragments.has(idFragment)) {
+      // ノート自体が存在しない(削除/空/ゴミ) → 同じid断片のファイルを全部削除。
+      for (const f of group) {
+        if (await _deleteFileFromNas(path, `active/${f}`)) deleted += 1;
+      }
+      continue;
+    }
+    if (group.length <= 1) continue; // 重複なし=削除対象なし
+    const expected = expectedFilenameByIdFragment.get(idFragment);
+    if (!expected || !group.includes(expected)) continue; // 正本が未確認なら何も消さない
+    for (const f of group) {
+      if (f !== expected && (await _deleteFileFromNas(path, `active/${f}`))) deleted += 1;
     }
   }
   logOp("nasArchive", "reconcile-active", `deleted=${deleted}`);

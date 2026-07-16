@@ -431,6 +431,59 @@ describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
       0,
     );
   });
+
+  it(
+    "タイトル変更で同じid断片のファイルが複数残っていても、現在の正本(新タイトル)以外を削除する" +
+      "(2026-07-16是正: ノートが3つに増殖し1つ削除すると全部消えた不具合の回帰テスト——" +
+      "旧実装はノートの存在有無しか見ておらず、リネームで孤立した旧タイトルのファイルを" +
+      "永久に消せなかった)",
+    async () => {
+      const deleted: string[] = [];
+      const notes: Note[] = [
+        { id: "abcd1234-xxxx", title: "新タイトル", content: "本文", pinned: false, order: 0 },
+      ];
+      const n = await reconcileActiveNotesOnNas(notes, {
+        getNasFolderPath: async () => NAS_PATH,
+        // 旧タイトル→旧タイトル2→新タイトルの順にリネームされ、旧2つが孤立して残っている想定。
+        listNasTree: async () => [
+          "旧タイトル (abcd1234).txt",
+          "旧タイトル2 (abcd1234).txt",
+          "新タイトル (abcd1234).txt",
+        ],
+        deleteFileFromNas: async (_p, f) => {
+          deleted.push(f);
+          return true;
+        },
+      });
+      expect(deleted.sort()).toEqual([
+        "active/旧タイトル (abcd1234).txt",
+        "active/旧タイトル2 (abcd1234).txt",
+      ]);
+      expect(n).toBe(2);
+    },
+  );
+
+  it(
+    "現在の正本(新タイトル)のファイルがまだ存在しない場合は、同じid断片の他ファイルを削除しない" +
+      "(書き込み未完了/失敗時に最後の1コピーを消してデータを失わないための安全策)",
+    async () => {
+      const deleted: string[] = [];
+      const notes: Note[] = [
+        { id: "abcd1234-xxxx", title: "新タイトル", content: "本文", pinned: false, order: 0 },
+      ];
+      const n = await reconcileActiveNotesOnNas(notes, {
+        getNasFolderPath: async () => NAS_PATH,
+        // 「新タイトル (abcd1234).txt」がまだ書かれていない(直前の書き込みが未実行/失敗)想定。
+        listNasTree: async () => ["旧タイトル (abcd1234).txt"],
+        deleteFileFromNas: async (_p, f) => {
+          deleted.push(f);
+          return true;
+        },
+      });
+      expect(deleted).toEqual([]);
+      expect(n).toBe(0);
+    },
+  );
 });
 
 describe("todosToMarkdown", () => {
