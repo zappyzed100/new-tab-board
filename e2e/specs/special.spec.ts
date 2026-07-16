@@ -26,6 +26,28 @@ test("スペシャルカードはTODOの下・タグ候補の上に置かれる"
   expect(special.y).toBeLessThan(tags.y);
 });
 
+test("スペシャルのタグ入力欄はTODO入力欄と同じ配色になる(素の<input>だとテーマ色を拾わずTODOと食い違っていた不具合の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  const style = await page.evaluate(() => {
+    function boxStyle(testid: string) {
+      const el = document.querySelector(`[data-testid="${testid}"]`);
+      const box = el?.closest(".rt-TextFieldRoot") ?? el?.parentElement;
+      const cs = box ? getComputedStyle(box) : null;
+      return { className: box?.className, backgroundColor: cs?.backgroundColor };
+    }
+    return { todo: boxStyle("todo-new-input"), special: boxStyle("special-tag-input") };
+  });
+  expect(style.special.className).toBe(style.todo.className);
+  expect(style.special.backgroundColor).toBe(style.todo.backgroundColor);
+});
+
 test("スターでスペシャルに入り、削除すると凍結して一覧に残る", async ({ context, newTabUrl }) => {
   const page = await context.newPage();
   await page.setViewportSize({ width: 1600, height: 900 });

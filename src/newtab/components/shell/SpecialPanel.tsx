@@ -2,7 +2,7 @@
 // 削除で凍結した項目(frozen)を一覧する。タグの出現回数降順チップ+自由入力でタグ絞り込みできる
 // (ユーザー指示: フォルダ方式からタグ方式へ変更。クリック/入力で該当するスペシャルだけを残す)。
 import { useState, type KeyboardEvent } from "react";
-import { Badge, Button, Flex, Text } from "@radix-ui/themes";
+import { Badge, Button, Flex, Text, TextField } from "@radix-ui/themes";
 import { Star, X } from "lucide-react";
 import { specialEntries } from "../../../lib/entities/special";
 import { filterNotesByTags, tagCounts } from "../../../lib/search/tagSearch";
@@ -75,7 +75,7 @@ export function SpecialPanel({ notes, specialItems, onSelectNote, onRemove }: Pr
           </Flex>
         ) : null}
         <Flex gap="2" wrap="wrap" align="center">
-          <input
+          <TextField.Root
             type="text"
             placeholder="タグで絞り込み(Enterで追加)"
             data-testid="special-tag-input"
