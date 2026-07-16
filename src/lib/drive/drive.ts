@@ -298,12 +298,15 @@ export async function uploadNote(
   const metadata: Record<string, unknown> = {
     appProperties: { noteId: note.id, ...(opts.kind ? { ntbKind: opts.kind } : {}) },
     name: opts.filename ?? `${note.title}.md`,
+  };
+  if (existingFileId) {
     // 保存済みdriveFileIdの指す先がゴミ箱にいてもPATCHは成功してしまい、ファイルは
     // ゴミ箱に残り続ける(jsonBackup.tsのuploadBackupと同じ罠)。上書きのたびに
-    // trashed:falseを送って自動で復活させる(新規作成時は元々falseでno-op)。
-    trashed: false,
-  };
-  if (!existingFileId) {
+    // trashed:falseを送って自動で復活させる。新規作成(files.create)ではtrashedは
+    // 書き込み不可フィールドでHTTP 403 fieldNotWritableになるため、既存ファイルの
+    // 更新(PATCH)時だけ送る(実機確認・2026-07-16)。
+    metadata.trashed = false;
+  } else {
     metadata.mimeType = "text/markdown";
     if (opts.folderId) metadata.parents = [opts.folderId];
   }

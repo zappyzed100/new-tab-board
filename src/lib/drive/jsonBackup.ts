@@ -42,13 +42,16 @@ export async function uploadBackup(
   const boundary = "newtabboard-backup";
   const metadata: Record<string, unknown> = {
     appProperties: { [BACKUP_APP_PROPERTY.key]: BACKUP_APP_PROPERTY.value },
+  };
+  if (existingFileId) {
     // 保存済みIDの指す先がゴミ箱にいる場合、PATCHは成功するのにファイルはゴミ箱に
     // 残り続ける(=検索にもマイドライブにも出ない。ユーザーがDriveの中身を手で削除した後、
     // 「退避しました」なのにどこにも見えない実害が出た・2026-07-16)。上書きのたびに
-    // trashed:falseを送り、ゴミ箱にいたら自動で復活させる(新規作成時は元々falseでno-op)。
-    trashed: false,
-  };
-  if (!existingFileId) {
+    // trashed:falseを送り、ゴミ箱にいたら自動で復活させる。新規作成(files.create)では
+    // trashedは書き込み不可フィールドでHTTP 403 fieldNotWritableになるため、既存ファイルの
+    // 更新(PATCH)時だけ送る(実機確認・2026-07-16)。
+    metadata.trashed = false;
+  } else {
     metadata.name = BACKUP_FILE_NAME;
     metadata.mimeType = "application/json";
     if (folderId) metadata.parents = [folderId];

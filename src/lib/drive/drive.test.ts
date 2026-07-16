@@ -69,6 +69,12 @@ describe("uploadNote", () => {
     expect(fetchImpl.mock.calls[0][1].body).toContain('"trashed":false');
   });
 
+  it("新規作成(POST)のmetadataにtrashedを含めない(files.createはtrashedが書き込み不可フィールドでHTTP 403 fieldNotWritableになった実機不具合の回帰)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "new-file" }));
+    await uploadNote(note, "token-abc", null, fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].body).not.toContain("trashed");
+  });
+
   it("上書き(PATCH)でopts.folderIdがあればaddParents/removeParents=rootを送り、正しいフォルダへ入れ直す(実機でactiveファイルがマイドライブ直下に迷い込んだまま直らなかった不具合の回帰)", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
     await uploadNote(note, "token-abc", "file-1", fetchImpl, { folderId: "folder-active" });

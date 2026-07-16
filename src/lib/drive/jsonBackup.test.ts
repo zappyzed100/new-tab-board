@@ -82,6 +82,12 @@ describe("uploadBackup", () => {
     expect(fetchImpl.mock.calls[0][1].body).toContain('"trashed":false');
   });
 
+  it("新規作成(POST)のmetadataにtrashedを含めない(files.createはtrashedが書き込み不可フィールドでHTTP 403 fieldNotWritableになった実機不具合の回帰)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "new-file" }));
+    await uploadBackup(json, "token-abc", null, null, fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].body).not.toContain("trashed");
+  });
+
   it("既存ファイルIDが消えている(404)なら、新規作成にフォールバックして新IDを返す", async () => {
     const fetchImpl = vi
       .fn()
