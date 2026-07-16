@@ -1,102 +1,66 @@
-// pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装(認可コード+PKCE)。
+// pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装。
 // JS版Picker(gapi)はMV3のcontent_security_policy.extension_pagesがscript-srcを'self'以外へ
-// 緩められず、https://apis.google.com からの読み込みが不可能と実機で判明した(2026-07-16)。
-// 代わりにGoogle公式の「デスクトップ・モバイル向けPicker」方式を使う: OAuth認可URLに
-// trigger_onepick等のパラメータを付けてブラウザタブでPickerを開き、選択結果を
-// リダイレクトURLのpicked_file_idsで受け取る(JS Pickerライブラリ自体を読み込まない
-// ためCSP制約に触れない)。
+// 緩められず使用不能と判明(2026-07-16)。代わりにGoogle公式の「デスクトップ・モバイル向け
+// Picker」方式を使う: OAuth認可URLにtrigger_onepick等のパラメータを付けてブラウザタブで
+// Pickerを開き、選択結果をリダイレクトURLのpicked_file_idsで受け取る(JS Pickerライブラリ
+// 自体を読み込まないためCSP制約に触れない)。
 //
-// この方式はresponse_type=code(認可コード)を使い、コード交換には通常client_secretが
-// 要るが、Chrome拡張機能型のOAuthクライアント(installed app=public client)はPKCEで
-// 代替でき、client_secretを使わない(Google公式)。メインのログイン(googleAuth.ts・
-// ウェブアプリ型client_id)とは別の、Picker専用のChrome拡張機能型client_idを使う
-// ——drive.fileスコープ単体でなければならない制約があるため(メインはdrive.file+
-// calendar.readonlyを同時要求している)。
+// 当初はresponse_type=code(認可コード+PKCE)で、Picker専用の「Chrome拡張機能」型OAuth
+// クライアントを使う設計だったが、実機でHTTP 400 redirect_uri_mismatch(詳細:
+// flowName=GeneralOAuthFlow)になった。これはgoogleAuth.tsのヘッダーコメントに記録した
+// 「chrome.identity.getAuthTokenがChrome拡張機能型クライアントで旧カスタムURIスキーム経路
+// (GeneralOAuthFlow)に落ちてブロックされる」のと同一のGoogle側制約で、Chrome拡張機能型
+// クライアントはhttps://<拡張ID>.chromiumapp.org/形式のリダイレクトと原理的に非互換と判明。
+// 一方「デスクトップアプリ」型はloopback(http://127.0.0.1:port)かcustom URIスキーム
+// (非推奨)しか対応せず、これも使えない。https://…chromiumapp.org/を受け付けると実証済み
+// なのは、メインログイン(googleAuth.ts)が使う「ウェブアプリケーション」型クライアントのみ
+// ——ただしこの型はPKCEを使ってもclient_secretが必須というGoogle独自仕様のため、
+// response_type=codeのままでは詰む。
+//
+// 解決策: response_type=token(インプリシットフロー。メインログインと同じ仕組み)を使う。
+// アクセストークンをredirectで直接受け取るためコード交換自体が不要になり、client_secret
+// 問題が消える。クライアントIDはgoogleAuth.tsのgetOAuthClientId()で共有し(スコープだけ
+// drive.file単体に絞る——Picker専用フローの制約: 他スコープと同時要求不可)、新規クライアント
+// は使わない(2026-07-16 設計変更)。
 import { logOp } from "../runtime/log";
+import { getOAuthClientId } from "./googleAuth";
 
-// Cloud Consoleで作成した「Chrome拡張機能」型OAuthクライアント(ユーザー作成・2026-07-16)。
-// installed app(public client)のclient_idはclient_secretと違い秘匿情報ではないため、
-// ソースへ埋め込んでよい(Google公式)。
-const PICKER_CLIENT_ID = "872015431238-9lbkplb85gmm7ob0imgu1vkccde29soo.apps.googleusercontent.com";
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const PICKER_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 export type PickedFolder = { id: string; name: string | null };
 
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-/** PKCEのcode_verifier(暗号乱数由来のbase64url文字列)を作る。 */
-function generateCodeVerifier(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return base64UrlEncode(bytes);
-}
-
-/** code_verifierからcode_challenge(S256)を作る。 */
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  return base64UrlEncode(new Uint8Array(digest));
-}
-
-function buildAuthUrl(redirectUri: string, codeChallenge: string): string {
+function buildAuthUrl(clientId: string, redirectUri: string): string {
   const url = new URL(AUTH_ENDPOINT);
-  url.searchParams.set("client_id", PICKER_CLIENT_ID);
+  url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("response_type", "code");
+  url.searchParams.set("response_type", "token");
   url.searchParams.set("scope", PICKER_SCOPE);
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("trigger_onepick", "true");
   url.searchParams.set("allow_folder_selection", "true");
-  url.searchParams.set("code_challenge", codeChallenge);
-  url.searchParams.set("code_challenge_method", "S256");
   return url.toString();
 }
 
-/** リダイレクトURLから picked_file_ids(先頭1件をフォルダIDとして採用)・code・errorを取り出す。 */
+/** リダイレクトURLから access_token・picked_file_ids(先頭1件)・errorを取り出す。
+ * このPickerフロー固有パラメータの返却位置(クエリ文字列かフラグメントか)はGoogle公式
+ * ドキュメントに明記が無いため、両方を見る(implicitフローの通常挙動はフラグメント)。 */
 function parseRedirect(redirectUrl: string): {
-  code: string | null;
+  accessToken: string | null;
   folderId: string | null;
   error: string | null;
 } {
-  const params = new URL(redirectUrl).searchParams;
-  const pickedIds = params.get("picked_file_ids");
+  const url = new URL(redirectUrl);
+  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const fragmentParams = new URLSearchParams(fragment);
+  const get = (key: string) => url.searchParams.get(key) ?? fragmentParams.get(key);
+  const pickedIds = get("picked_file_ids");
   return {
-    code: params.get("code"),
+    accessToken: get("access_token"),
     folderId: pickedIds ? (pickedIds.split(",")[0] ?? null) : null,
-    error: params.get("error"),
+    error: get("error"),
   };
-}
-
-/** 認可コードをアクセストークンへ交換する(client_secret不使用・PKCEのcode_verifierのみ)。 */
-async function exchangeCodeForToken(
-  code: string,
-  codeVerifier: string,
-  redirectUri: string,
-  fetchImpl: typeof fetch,
-): Promise<string | null> {
-  const res = await fetchImpl(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: PICKER_CLIENT_ID,
-      code,
-      code_verifier: codeVerifier,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-    }).toString(),
-  });
-  if (!res.ok) {
-    logOp("pickerOAuth", "token-exchange-error", `status=${res.status}`);
-    return null;
-  }
-  const data = (await res.json()) as { access_token?: string };
-  return data.access_token ?? null;
 }
 
 /** 選ばれたフォルダの表示名をDrive APIで取得する(確認メッセージ用。失敗は致命的でないのでnull)。 */
@@ -122,28 +86,25 @@ export type PickerOAuthDeps = {
     url: string;
     interactive: boolean;
   }) => Promise<string | undefined>;
-  getRedirectURL?: (path?: string) => string;
+  getRedirectURL?: () => string;
+  getClientId?: () => string;
   fetchImpl?: typeof fetch;
 };
 
 /** Picker「デスクトップ・モバイル向けフロー」を開き、ユーザーが選んだフォルダの{id,name}を返す
- * (キャンセル/失敗はnull)。drive.fileスコープ単体・Chrome拡張機能型クライアント・PKCEで
- * client_secret無しに完結する(ユーザー設計・2026-07-16)。 */
+ * (キャンセル/失敗はnull)。response_type=token(インプリシットフロー)でメインログインと
+ * 同じ「ウェブアプリケーション」型クライアントを使い回し、drive.fileスコープ単体で要求する
+ * (ユーザー設計・2026-07-16)。 */
 export async function pickSharedFolderViaOAuth(
   deps: PickerOAuthDeps = {},
 ): Promise<PickedFolder | null> {
   const _launch = deps.launchWebAuthFlow ?? ((d) => chrome.identity.launchWebAuthFlow(d));
-  const _getRedirectURL = deps.getRedirectURL ?? ((path) => chrome.identity.getRedirectURL(path));
+  const _getRedirectURL = deps.getRedirectURL ?? (() => chrome.identity.getRedirectURL());
+  const _getClientId = deps.getClientId ?? getOAuthClientId;
   const _fetch = deps.fetchImpl ?? fetch;
 
-  // 引数無しで呼ぶ(https://<拡張ID>.chromiumapp.org/ のみ)。パス付き(例:"drive-picker")だと
-  // 別URIになり、「Chrome拡張機能」型クライアント(Item ID登録のみ・パス無し完全一致でしか
-  // 許可されない)ではredirect_uri_mismatchで400になる(実機確認・2026-07-16。メインの
-  // googleAuth.tsも同じ理由で引数無しで呼んでいる)。
   const redirectUri = _getRedirectURL();
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const authUrl = buildAuthUrl(redirectUri, codeChallenge);
+  const authUrl = buildAuthUrl(_getClientId(), redirectUri);
 
   logOp("pickerOAuth", "pick-start", "");
   const redirectUrl = await _launch({ url: authUrl, interactive: true });
@@ -151,17 +112,16 @@ export async function pickSharedFolderViaOAuth(
     logOp("pickerOAuth", "pick-no-redirect", "");
     return null;
   }
-  const { code, folderId, error } = parseRedirect(redirectUrl);
-  if (error || !code || !folderId) {
-    logOp("pickerOAuth", "pick-cancel-or-error", `error=${error ?? "none"}`);
+  const { accessToken, folderId, error } = parseRedirect(redirectUrl);
+  if (error || !accessToken || !folderId) {
+    logOp(
+      "pickerOAuth",
+      "pick-cancel-or-error",
+      `error=${error ?? "none"} hasToken=${accessToken !== null} hasFolder=${folderId !== null}`,
+    );
     return null;
   }
-  const token = await exchangeCodeForToken(code, codeVerifier, redirectUri, _fetch);
-  if (!token) {
-    logOp("pickerOAuth", "pick-exchange-failed", `folderId=${folderId}`);
-    return null;
-  }
-  const name = await fetchFolderName(folderId, token, _fetch);
+  const name = await fetchFolderName(folderId, accessToken, _fetch);
   logOp("pickerOAuth", "pick-done", `folderId=${folderId} name=${name ?? "unknown"}`);
   return { id: folderId, name };
 }

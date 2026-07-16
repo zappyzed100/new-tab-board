@@ -174,8 +174,8 @@
 - `src/lib/drive/jsonBackup.ts` — jsonBackup.ts — 全データJSONバックアップのGoogle Drive API v3クライアント(SPEC.md §4.7)
 - `src/lib/drive/jsonBackupSync.test.ts` — jsonBackupSync.test.ts — jsonBackupSync.ts(全データJSONバックアップのDrive同期
 - `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
-- `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」PKCE実装)の単体テスト
-- `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装(認可コード+PKCE)。
+- `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」実装)の単体テスト
+- `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装。
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
@@ -672,6 +672,7 @@
 - function syncNoteToDrive
 
 ### `src/lib/drive/googleAuth.ts`
+- function getOAuthClientId
 - function getAuthToken
 - function getAuthTokenWithError
 - function invalidateToken

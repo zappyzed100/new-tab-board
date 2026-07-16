@@ -27,6 +27,14 @@ function readOAuthConfig(): OAuthConfig {
   return { clientId: oauth2.client_id ?? "", scopes: oauth2.scopes ?? [] };
 }
 
+/** manifest.jsonのoauth2.client_id(「ウェブ アプリケーション」型・chromiumapp.orgリダイレクト
+ * 対応済み)を他のOAuthフロー(pickerOAuth.tsのPickerデスクトップ・モバイルフロー等)からも
+ * 再利用するための公開ゲッター。スコープは呼び出し側がフローごとに変えられるよう、
+ * client_idだけを返す(scopesは含めない)。 */
+export function getOAuthClientId(): string {
+  return readOAuthConfig().clientId;
+}
+
 function buildAuthUrl(config: OAuthConfig, redirectUri: string): string {
   const url = new URL(AUTH_ENDPOINT);
   url.searchParams.set("client_id", config.clientId);

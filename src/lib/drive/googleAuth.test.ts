@@ -103,6 +103,13 @@ describe("getAuthTokenWithError", () => {
   });
 });
 
+describe("getOAuthClientId", () => {
+  it("manifest.jsonのoauth2.client_idを返す(pickerOAuth.ts等が使い回すため)", async () => {
+    const { getOAuthClientId } = await load(vi.fn());
+    expect(getOAuthClientId()).toBe("test-client-id");
+  });
+});
+
 describe("invalidateToken", () => {
   it("キャッシュを破棄し、次回はlaunchWebAuthFlowを再度呼ぶ", async () => {
     const launch = vi
