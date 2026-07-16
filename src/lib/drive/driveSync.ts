@@ -71,13 +71,14 @@ export async function syncNoteToDrive(
     // ファイル内容(front matter付きmd)はNASのactive/<タイトル> (id8桁).txtと同一構造だが、
     // Driveのファイル名だけは<タイトル> (短いid).txt にする(ユーザー指示: Drive上で見て
     // 分かる名前にしたい)。中身のidは今までどおり保つのでfindFileForNote等の検索・突合には
-    // 影響しない。
+    // 影響しない。mimeTypeもtext/plainにする——text/markdownのままだとiPhoneのDriveアプリで
+    // 「サポートされていないファイル形式です」となり開けなかった実機不具合の修正(2026-07-16)。
     const fileId = await _uploadNote(
       { id: note.id, title: note.title, content: noteToMarkdown(note) },
       token,
       existingId,
       undefined,
-      { folderId, kind: ACTIVE_KIND, filename: activeFilenameFor(note) },
+      { folderId, kind: ACTIVE_KIND, filename: activeFilenameFor(note), mimeType: "text/plain" },
     );
     return { status: "synced", driveFileId: fileId, lastSyncedAt: now };
   } catch (err) {

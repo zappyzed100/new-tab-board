@@ -9,10 +9,12 @@ const note: Note = { id: "n1", title: "会議メモ", content: "本文", pinned:
 // 拡張子だけ.txtで中身は無変更)。
 const mdNote = { id: note.id, title: note.title, content: noteToMarkdown(note) };
 // Driveのactiveフォルダのファイル名はタイトルベース(ユーザー指示。中身のidは変わらない)。
+// mimeTypeはtext/plain(iPhoneのDriveアプリでtext/markdownが開けなかった実機不具合の修正)。
 const ACTIVE_OPTS = {
   folderId: "active-folder",
   kind: "active",
   filename: activeFilenameFor(note),
+  mimeType: "text/plain",
 };
 
 describe("activeFilenameFor", () => {

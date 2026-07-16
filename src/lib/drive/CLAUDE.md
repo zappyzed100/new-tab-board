@@ -63,6 +63,28 @@
 2個作る競合が残る。最も確実な回避策は、最初から共通フォルダを手動で1つ作り、そのIDを
 両アプリへ設定すること(現状、手動ID入力UIは無い)。
 
+## active/のmimeTypeはtext/plain(2026-07-16是正)——.txt拡張子だけでは不十分
+
+active/のファイル拡張子を`.md`→`.txt`へ変更した際(2026-07-16)、`uploadNote`の
+`metadata.mimeType`と多重パートボディの`Content-Type`ヘッダは`text/markdown`のまま
+据え置いていた(「中身は変えない」という当時の指示の解釈)。しかし実機でiPhoneの
+Google Driveアプリから開くと「サポートされていないファイル形式です」になった
+(ユーザー報告)——Driveアプリの内蔵ビューアはファイル名の拡張子ではなく`mimeType`
+メタデータで開けるかどうかを判定するため、`.txt`にリネームしただけでは
+`text/markdown`のままのファイルは開けない。
+
+`uploadNote`に`opts.mimeType`(既定`"text/markdown"`)を追加し、`driveSync.ts`の
+`syncNoteToDrive`(per-noteのactiveミラー)と`driveActiveMirror.ts`の
+`pushTodosToDriveActive`(active/todos.txt)の両方が`"text/plain"`を明示するよう
+修正した。日付フォルダ(`copyNotesToDriveDateFolder`)・special(`driveSpecial.ts`)は
+`.md`のままなので`opts.mimeType`を渡さず既定の`text/markdown`を使う。
+
+**新規作成(POST)だけでなく既存ファイルの更新(PATCH)でもmimeTypeを送る**——`filename`
+と同じ理由(ファイル名がリネームに追従する仕組みを流用)。以前`text/markdown`で
+作成済みだった既存のDriveファイルも、次回の同期(PATCH)で自動的に`text/plain`へ
+是正される。Drive APIの`files.update`は非Google-native形式間のmimeType変更を許容する
+(Google Docs等への変換とは別の話)。
+
 ## Drive未接続(トークン無し)なら静かに何もしない
 
 `getAuthToken(false)`(非対話)が null を返す=未接続。App の突合 effect も per-note 同期も、

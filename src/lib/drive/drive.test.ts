@@ -97,6 +97,29 @@ describe("uploadNote", () => {
     expect(init.body).toContain("新しいタイトル.md");
   });
 
+  it("mimeTypeは既定でtext/markdownにする(新規作成)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({ id: "new-file" }));
+    await uploadNote(note, "token-abc", null, fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].body).toContain('"mimeType":"text/markdown"');
+  });
+
+  it(
+    "opts.mimeTypeを渡すと新規作成・更新どちらでもそのmimeTypeを送る" +
+      "(2026-07-16: active/(拡張子.txt)をtext/plainにする回帰。iPhoneのDriveアプリで" +
+      "text/markdownが「サポートされていないファイル形式です」となり開けなかった不具合の修正——" +
+      "PATCHでも送るのは、以前text/markdownで作られていた既存ファイルを是正するため)",
+    async () => {
+      const createFetch = vi.fn().mockResolvedValue(fakeResponse({ id: "new-file" }));
+      await uploadNote(note, "token-abc", null, createFetch, { mimeType: "text/plain" });
+      expect(createFetch.mock.calls[0][1].body).toContain('"mimeType":"text/plain"');
+      expect(createFetch.mock.calls[0][1].body).toContain("Content-Type: text/plain");
+
+      const patchFetch = vi.fn().mockResolvedValue(fakeResponse({ id: "file-1" }));
+      await uploadNote(note, "token-abc", "file-1", patchFetch, { mimeType: "text/plain" });
+      expect(patchFetch.mock.calls[0][1].body).toContain('"mimeType":"text/plain"');
+    },
+  );
+
   it("HTTPエラーは例外を投げる", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({}, false, 500));
     await expect(uploadNote(note, "token-abc", null, fetchImpl)).rejects.toThrow("HTTP 500");

@@ -286,18 +286,26 @@ export async function findFileForNote(
  * 付与し、同じ noteId でも「active」用と「日付」用のファイルを区別できるようにする。
  * ファイル名(opts.filename)は新規/既存どちらでも毎回送る——タイトルベースの名前
  * (driveSyncのactive/)はノートのリネームのたびにDrive上のファイル名も追従させる必要が
- * あるため(ユーザー指示)。id固定の名前(日付フォルダ・special)は値が変わらないので実質no-op。 */
+ * あるため(ユーザー指示)。id固定の名前(日付フォルダ・special)は値が変わらないので実質no-op。
+ * opts.mimeType(既定"text/markdown")は呼び出し側が明示指定する——active/(拡張子.txt)は
+ * "text/plain"を渡す(iPhoneのGoogle Driveアプリが"text/markdown"を「サポートされていない
+ * ファイル形式」として開けなかった実機不具合の修正・2026-07-16。日付フォルダ/specialは
+ * .md のまま既定のtext/markdownを使う)。**新規作成だけでなく既存ファイルの更新(PATCH)でも
+ * 毎回送る**——filenameと同じ理由で、以前text/markdownとして作られた既存ファイルも
+ * 次回同期で正しいmimeTypeへ是正されるようにするため。 */
 export async function uploadNote(
   note: { id: string; title: string; content: string },
   token: string,
   existingFileId: string | null,
   fetchImpl: FetchLike = fetch,
-  opts: { folderId?: string; kind?: string; filename?: string } = {},
+  opts: { folderId?: string; kind?: string; filename?: string; mimeType?: string } = {},
 ): Promise<string> {
   const boundary = `newtabboard-${note.id}`;
+  const mimeType = opts.mimeType ?? "text/markdown";
   const metadata: Record<string, unknown> = {
     appProperties: { noteId: note.id, ...(opts.kind ? { ntbKind: opts.kind } : {}) },
     name: opts.filename ?? `${note.title}.md`,
+    mimeType,
   };
   if (existingFileId) {
     // 保存済みdriveFileIdの指す先がゴミ箱にいてもPATCHは成功してしまい、ファイルは
@@ -307,14 +315,13 @@ export async function uploadNote(
     // 更新(PATCH)時だけ送る(実機確認・2026-07-16)。
     metadata.trashed = false;
   } else {
-    metadata.mimeType = "text/markdown";
     if (opts.folderId) metadata.parents = [opts.folderId];
   }
   const body =
     `--${boundary}\r\n` +
     `Content-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\n` +
-    `Content-Type: text/markdown; charset=UTF-8\r\n\r\n${note.content}\r\n` +
+    `Content-Type: ${mimeType}; charset=UTF-8\r\n\r\n${note.content}\r\n` +
     `--${boundary}--`;
 
   // 既存ファイルへの上書き時、opts.folderIdが指定されていれば毎回addParents/removeParentsを

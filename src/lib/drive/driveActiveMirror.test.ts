@@ -154,4 +154,26 @@ describe("pushTodosToDriveActive", () => {
     const ok = await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl });
     expect(ok).toBe(false);
   });
+
+  it(
+    "mimeTypeはtext/plainにする(新規作成・更新どちらも)——2026-07-16: iPhoneのDriveアプリで" +
+      "text/markdownが「サポートされていないファイル形式です」となり開けなかった不具合の修正",
+    async () => {
+      const resolveFolderPath = vi.fn().mockResolvedValue("active-folder");
+      const createFetch = vi
+        .fn()
+        .mockResolvedValueOnce(fakeResponse({ files: [] }))
+        .mockResolvedValueOnce(fakeResponse({ id: "new-file" }));
+      await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl: createFetch });
+      expect(createFetch.mock.calls[1][1].body).toContain('"mimeType":"text/plain"');
+      expect(createFetch.mock.calls[1][1].body).toContain("Content-Type: text/plain");
+
+      const patchFetch = vi
+        .fn()
+        .mockResolvedValueOnce(fakeResponse({ files: [{ id: "existing-todos" }] }))
+        .mockResolvedValueOnce(fakeResponse({ id: "existing-todos" }));
+      await pushTodosToDriveActive(todos, "tok", { resolveFolderPath, fetchImpl: patchFetch });
+      expect(patchFetch.mock.calls[1][1].body).toContain('"mimeType":"text/plain"');
+    },
+  );
 });

@@ -134,17 +134,21 @@ export async function pushTodosToDriveActive(
   const existingId = await findTodosFile(folderId, token, _fetch);
   const content = todosToMarkdown(todos);
   const boundary = "newtabboard-todos";
+  // mimeTypeはtext/plain(active/todos.txt)——text/markdownのままだとiPhoneのDriveアプリで
+  // 「サポートされていないファイル形式です」となり開けなかった実機不具合の修正(2026-07-16。
+  // uploadNoteのactive用と同じ理由)。新規作成だけでなく既存ファイルの更新でも毎回送り、
+  // 以前text/markdownで作られていた既存ファイルも是正されるようにする。
   // trashedフィールドは新規作成では書き込み不可でHTTP 403になる(uploadNote/uploadBackupと
   // 同じ罠——ただしこの関数は名前+親で毎回検索するため、見つからない=作り直しになる方針で
   // よく、trashed復活ロジック自体を持たない)。
   const metadata: Record<string, unknown> = existingId
-    ? {}
-    : { name: TODOS_FILENAME, mimeType: "text/markdown", parents: [folderId] };
+    ? { mimeType: "text/plain" }
+    : { name: TODOS_FILENAME, mimeType: "text/plain", parents: [folderId] };
   const body =
     `--${boundary}\r\n` +
     `Content-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\n` +
-    `Content-Type: text/markdown; charset=UTF-8\r\n\r\n${content}\r\n` +
+    `Content-Type: text/plain; charset=UTF-8\r\n\r\n${content}\r\n` +
     `--${boundary}--`;
   const url = existingId
     ? `${UPLOAD_URL}/${existingId}?uploadType=multipart`
