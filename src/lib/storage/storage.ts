@@ -5,10 +5,35 @@ import { logOp } from "../runtime/log";
 const SYNC_KEY = "syncData";
 const LOCAL_KEY = "localData";
 
+/** 初回起動時のタグ候補の既定値(ユーザー指示: distから取ってきた時点で既に入っているように)。
+ * GitHub全リポジトリ(zappyzed100)のREADMEだけを読んで、繰り返し登場する技術/ドメインから
+ * 選定(2026-07-17)。ユーザーが手で並べ替え・削除できる(tagCandidates.ts)——ここは初期値のみ。 */
+const DEFAULT_TAG_CANDIDATES = [
+  "Python",
+  "TypeScript",
+  "Rust",
+  "Flutter",
+  "Chrome拡張",
+  "LLM",
+  "ガードレール",
+  "Playwright",
+  "データエンジニアリング",
+  "最適化",
+  "UI/UX",
+  "睡眠記録",
+  "Google Apps Script",
+  "Google Drive連携",
+  "自動化",
+  "ポートフォリオ",
+  "ドットファイル",
+  "メディアプレイヤー",
+];
+
 export const DEFAULT_SETTINGS: Settings = {
   openIn: "same",
   theme: "auto",
   searchEngine: "https://www.google.com/search?q=%s",
+  tagCandidates: DEFAULT_TAG_CANDIDATES,
 };
 
 type SyncShape = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings };

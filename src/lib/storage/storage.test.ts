@@ -69,4 +69,12 @@ describe("chrome.storage が無い場合(localStorageフォールバック)", ()
       settings: DEFAULT_SETTINGS,
     });
   });
+
+  it(
+    "既定のタグ候補は空でない(ユーザー指示: dist取得直後から候補が入っている状態にする——" +
+      "GitHub全リポジトリのREADMEから選定・2026-07-17)",
+    () => {
+      expect(DEFAULT_SETTINGS.tagCandidates?.length ?? 0).toBeGreaterThan(0);
+    },
+  );
 });
