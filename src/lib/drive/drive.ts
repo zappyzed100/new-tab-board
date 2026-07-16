@@ -339,7 +339,12 @@ export async function uploadNote(
       logOp("drive", "upload-recreate", `note=${note.id} existing file gone (404); creating new`);
       return uploadNote(note, token, null, fetchImpl, opts);
     }
-    logOp("drive", "upload-error", `note=${note.id} status=${res.status}`);
+    const bodyText = await res.text().catch(() => "");
+    logOp(
+      "drive",
+      "upload-error",
+      `note=${note.id} status=${res.status} body=${bodyText.slice(0, 500)}`,
+    );
     throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
   }
   const data = (await res.json()) as { id: string };

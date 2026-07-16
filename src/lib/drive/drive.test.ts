@@ -16,6 +16,7 @@ function fakeResponse(body: unknown, ok = true, status = 200): Response {
     ok,
     status,
     json: async () => body,
+    text: async () => JSON.stringify(body),
   } as Response;
 }
 

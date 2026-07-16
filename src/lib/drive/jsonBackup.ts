@@ -80,7 +80,10 @@ export async function uploadBackup(
       logOp("jsonBackup", "upload-recreate", "existing file gone (404); creating new");
       return uploadBackup(json, token, null, folderId, fetchImpl);
     }
-    logOp("jsonBackup", "upload-error", `status=${res.status}`);
+    // Googleのエラー本文(error.errors[].reason等)を残す——403はスコープ不足・レート制限・
+    // クォータ超過等、原因がstatusだけでは分からない一時的な診断用(2026-07-16)。
+    const bodyText = await res.text().catch(() => "");
+    logOp("jsonBackup", "upload-error", `status=${res.status} body=${bodyText.slice(0, 500)}`);
     throw new Error(`Driveアップロード失敗: HTTP ${res.status}`);
   }
   const data = (await res.json()) as { id: string };
