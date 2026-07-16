@@ -136,7 +136,11 @@ export async function pickSharedFolderViaOAuth(
   const _getRedirectURL = deps.getRedirectURL ?? ((path) => chrome.identity.getRedirectURL(path));
   const _fetch = deps.fetchImpl ?? fetch;
 
-  const redirectUri = _getRedirectURL("drive-picker");
+  // 引数無しで呼ぶ(https://<拡張ID>.chromiumapp.org/ のみ)。パス付き(例:"drive-picker")だと
+  // 別URIになり、「Chrome拡張機能」型クライアント(Item ID登録のみ・パス無し完全一致でしか
+  // 許可されない)ではredirect_uri_mismatchで400になる(実機確認・2026-07-16。メインの
+  // googleAuth.tsも同じ理由で引数無しで呼んでいる)。
+  const redirectUri = _getRedirectURL();
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const authUrl = buildAuthUrl(redirectUri, codeChallenge);

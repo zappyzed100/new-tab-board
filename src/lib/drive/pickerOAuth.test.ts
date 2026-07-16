@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { pickSharedFolderViaOAuth } from "./pickerOAuth";
 
-const REDIRECT_BASE = "https://ext-id.chromiumapp.org/drive-picker";
+const REDIRECT_BASE = "https://ext-id.chromiumapp.org/";
 
 function fakeFetch(tokenOk: boolean, folderName: string | null): typeof fetch {
   return vi.fn(async (url: RequestInfo | URL) => {
@@ -71,6 +71,15 @@ describe("pickSharedFolderViaOAuth", () => {
       fetchImpl: fakeFetch(true, null),
     });
     expect(result).toEqual({ id: "folder-1", name: null });
+  });
+
+  it("getRedirectURLを引数無しで呼ぶ(パス付きだと別URIになりChrome拡張機能型クライアントでredirect_uri_mismatchになる実機不具合の回帰)", async () => {
+    const getRedirectURL = vi.fn().mockReturnValue(REDIRECT_BASE);
+    await pickSharedFolderViaOAuth({
+      launchWebAuthFlow: vi.fn().mockResolvedValue(undefined),
+      getRedirectURL,
+    });
+    expect(getRedirectURL).toHaveBeenCalledWith();
   });
 
   it("認可URLにPKCE・drive.fileスコープ単体・trigger_onepick等の必須パラメータを含める", async () => {
