@@ -7,6 +7,7 @@ import {
   pushActiveToNas,
 } from "./nasActiveSync";
 import { noteToMarkdown } from "./nasArchive";
+import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
 
 const note = (over: Partial<Note>): Note =>
@@ -50,6 +51,18 @@ describe("noteSaveFingerprint", () => {
     const b = note({ id: "a", content: "本文B" });
     expect(noteSaveFingerprint(a)).not.toBe(noteSaveFingerprint(b));
   });
+
+  it(
+    "旧バージョン(拡張子変更前・本文のみのハッシュ)とは値が異なる——" +
+      "本文不変でも一度だけ再書き込みさせるための意図的な差分(2026-07-16。ユーザー報告: " +
+      "active/の拡張子を.mdから.txtへ変更した後、本文不変の既存ノートがハッシュ一致で" +
+      "スキップされ続け、旧.mdがリネームされないまま新.txtが一切書かれない不具合の修正)",
+    () => {
+      const n = note({ id: "a", content: "本文" });
+      const oldStyleHash = contentHash(noteToMarkdown({ ...n, order: 0 }));
+      expect(noteSaveFingerprint(n)).not.toBe(oldStyleHash);
+    },
+  );
 });
 
 describe("pullActiveFromNas", () => {
@@ -112,6 +125,24 @@ describe("pushActiveToNas", () => {
     expect(res.savedHashes).toHaveProperty("a"); // aのハッシュが記録される
     expect(res.savedHashes).not.toHaveProperty("b"); // 空・junkは記録しない
   });
+
+  it(
+    "旧バージョンのハッシュ(拡張子変更前・本文のみ)を渡すと、本文不変でも1回だけ再書き込みする" +
+      "(2026-07-16: active/の拡張子変更後に旧ハッシュがキャッシュに残っていても、新形式で" +
+      "再同期されることの回帰テスト)",
+    async () => {
+      const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);
+      const reconcileActiveNotesOnNas = vi.fn().mockResolvedValue(0);
+      const n = note({ id: "a", content: "本文" });
+      const oldStyleHashes = { a: contentHash(noteToMarkdown({ ...n, order: 0 })) };
+      const res = await pushActiveToNas([n], 1000, oldStyleHashes, {
+        writeNoteToNasStructure,
+        reconcileActiveNotesOnNas,
+      });
+      expect(res.written).toBe(1);
+      expect(writeNoteToNasStructure).toHaveBeenCalledWith(n, 1000);
+    },
+  );
 
   it("フィンガープリントが前回と同じノートは書かない(ハッシュで保存済み判定)", async () => {
     const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);

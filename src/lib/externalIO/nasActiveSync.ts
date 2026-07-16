@@ -14,9 +14,19 @@ import {
 import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
 
+/** active/ファイルの書式バージョン。フォーマット(拡張子・構造)を変えるたびに上げ、
+ * ノート本文が無変更でも保存済みハッシュキャッシュ(nasSavedHashes/driveActiveSavedHashes。
+ * どちらもsaveLocalData経由でセッションをまたいで永続化される)を一度だけ無効化して再書き込み
+ * させる。**"1"→"2"(2026-07-16)**: active/の拡張子を.mdから.txtへ変更した際、本文が無変更の
+ * 既存ノートは(fpが本文だけのハッシュだったため)保存済み判定でスキップされ続け、旧.mdが
+ * リネームされないまま新.txtが一切書かれない不具合になっていた(ユーザー報告「ドライブに退避
+ * でactiveにファイルが出力されない」)。 */
+const ACTIVE_FILE_FORMAT_VERSION = "2";
+
 /** ノートの「保存フィンガープリント」= 保存する.md全体のハッシュ(ユーザー指示: ハッシュで保存済みか判定)。
  * noteToMarkdown はタイトル/本文/タグ/order/pinned/done/special等の永続フィールドだけを含む(driveFileId/
  * taggedHash等の揮発フィールドは含まない)ので、これ1つで「保存すべき変化があったか」を捉えられる。
+ * ACTIVE_FILE_FORMAT_VERSIONを連結し、書式バージョンが変わったときも変化として検出する。
  *
  * ただし order は除外する(2026-07-16 是正): reorderNotes は並べ替えのたびに**全ノート**の order を
  * 0からの連番へ振り直すため、1回の「上へ」やドラッグ操作だけで全ノートのフィンガープリントが変わり、
@@ -27,7 +37,7 @@ import type { Note } from "../../types";
  * pinned は除外しない: togglePinNote は1ノートだけを更新する独立した操作であり、並べ替えのように
  * 全ノートを巻き込まない正当な内容変化のため。 */
 export function noteSaveFingerprint(note: Note): string {
-  return contentHash(noteToMarkdown({ ...note, order: 0 }));
+  return contentHash(`${ACTIVE_FILE_FORMAT_VERSION}:${noteToMarkdown({ ...note, order: 0 })}`);
 }
 
 export type SyncDecision = "push" | "pull" | "noop";
