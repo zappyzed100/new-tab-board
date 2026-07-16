@@ -14,14 +14,24 @@ import {
 import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
 
-/** active/ファイルの書式バージョン。フォーマット(拡張子・構造)を変えるたびに上げ、
- * ノート本文が無変更でも保存済みハッシュキャッシュ(nasSavedHashes/driveActiveSavedHashes。
- * どちらもsaveLocalData経由でセッションをまたいで永続化される)を一度だけ無効化して再書き込み
- * させる。**"1"→"2"(2026-07-16)**: active/の拡張子を.mdから.txtへ変更した際、本文が無変更の
+/** active/ファイルの書式バージョン。フォーマット(拡張子・構造・mimeType等の保存先メタデータ)を
+ * 変えるたびに上げ、ノート本文が無変更でも保存済みハッシュキャッシュ(nasSavedHashes/
+ * driveActiveSavedHashes。どちらもsaveLocalData経由でセッションをまたいで永続化される)を
+ * 一度だけ無効化して再書き込みさせる。
+ *
+ * **"1"→"2"(2026-07-16)**: active/の拡張子を.mdから.txtへ変更した際、本文が無変更の
  * 既存ノートは(fpが本文だけのハッシュだったため)保存済み判定でスキップされ続け、旧.mdが
  * リネームされないまま新.txtが一切書かれない不具合になっていた(ユーザー報告「ドライブに退避
- * でactiveにファイルが出力されない」)。 */
-const ACTIVE_FILE_FORMAT_VERSION = "2";
+ * でactiveにファイルが出力されない」)。
+ *
+ * **"2"→"3"(2026-07-16)**: Drive側のuploadNoteをmimeType text/plain対応にした修正で、
+ * 同じ理由の不具合をもう一度踏んだ——mimeTypeはnoteToMarkdownの中身(fpの計算元)に含まれない
+ * Drive側だけのメタデータのため、本文が無変更の既存ノートはuploadNote自体が呼ばれず、
+ * 旧mimeType(text/markdown)のDriveファイルが是正されないまま残っていた(ユーザー報告
+ * 「iPhoneのDriveアプリで開けない」の後続——日付フォルダに履歴スナップショット.txtが
+ * 混ざって見えたことで発覚)。NAS側はmimeTypeの影響を受けないため、この版上げによる
+ * 再書き込みは無害な冗長作業になる(内容は変わらず書き直すだけ)。 */
+const ACTIVE_FILE_FORMAT_VERSION = "3";
 
 /** ノートの「保存フィンガープリント」= 保存する.md全体のハッシュ(ユーザー指示: ハッシュで保存済みか判定)。
  * noteToMarkdown はタイトル/本文/タグ/order/pinned/done/special等の永続フィールドだけを含む(driveFileId/

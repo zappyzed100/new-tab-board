@@ -63,6 +63,19 @@ describe("noteSaveFingerprint", () => {
       expect(noteSaveFingerprint(n)).not.toBe(oldStyleHash);
     },
   );
+
+  it(
+    '旧書式バージョン("2":本文のみ)のハッシュとも値が異なる——' +
+      "DriveのuploadNoteをmimeType text/plain対応にした際、本文不変の既存ノートは" +
+      "uploadNote自体が呼ばれず旧mimeType(text/markdown)のDriveファイルが是正されない" +
+      "まま残っていた不具合の修正(2026-07-16。mimeTypeはnoteToMarkdownに含まれない" +
+      "Drive側だけのメタデータのため、書式バージョンを上げて強制的に再送信させる)",
+    () => {
+      const n = note({ id: "a", content: "本文" });
+      const previousVersionHash = contentHash(`2:${noteToMarkdown({ ...n, order: 0 })}`);
+      expect(noteSaveFingerprint(n)).not.toBe(previousVersionHash);
+    },
+  );
 });
 
 describe("pullActiveFromNas", () => {
