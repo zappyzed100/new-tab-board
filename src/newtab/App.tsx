@@ -233,7 +233,7 @@ export function App() {
   // NAS設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補)の
   // 直近保存ハッシュ。内容不変のtickで無駄に再書き込みしない(nasSpecialSigRefと同じ発想)。
   const nasSettingsSigRef = useRef<string>("");
-  // TODOをactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので既存のsettings
+  // TODOをactive/todos.txtへも書く(ユーザー指示: 「二重管理でもいい」ので既存のsettings
   // backupとは別に、NAS/Drive両方のactive/へも直近保存ハッシュ付きで書く)。
   const nasTodosSigRef = useRef<string>("");
   const driveTodosSigRef = useRef<string>("");
@@ -323,6 +323,10 @@ export function App() {
   // reconcileActiveNotesOnNasが削除する(いずれもユーザー指示: 無駄な再保存を避ける/古い
   // ファイルを消す)。
   async function pushNasActiveNow(): Promise<void> {
+    // 書き込み前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: NASへの
+    // 書き込みが実行される前にタグ付けを済ませてほしい)。tagAllNotesがupdateNotesで
+    // notesRefを更新済みなので、直後のnotesRef.current読み取りは新しいタグを反映する。
+    await tagAllNotes();
     const current = notesRef.current ?? [];
     const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
     nasSavedHashesRef.current = r.savedHashes;
@@ -359,7 +363,7 @@ export function App() {
         }
       }
     }
-    // TODOはactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップとは
+    // TODOはactive/todos.txtへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップとは
     // 別にactive/へ直接反映する)。
     const todosMd = todosToMarkdown(todosRef.current);
     const todosSig = contentHash(todosMd);
@@ -772,22 +776,18 @@ export function App() {
     }
   }
 
-  // 「🏷️ タグをふる」で全ノートにGeminiタグを付ける。前回タグ付け以降変更のないノートは
-  // スキップする(needsRetag。ユーザー指示「変化なしのファイルは再タグ付け不要」)。
-  async function handleTagAll() {
+  // 空でない全ノートの中で再タグ付けが必要なもの(needsRetag)にGeminiでタグを付ける共通処理。
+  // 「🏷️ タグをふる」ボタン(handleTagAll)だけでなく、NAS書き込み(pushNasActiveNow)・
+  // Drive退避(handleBackupToDrive)の先頭からも呼ぶ(ユーザー指示: 書き込み/退避が実行される
+  // 前に、まず空でない全ノートにGeminiをかけてから書き込み・退避を行ってほしい)。
+  // APIキー未設定/対象無しなら静かに何もしない(明示的な案内は handleTagAll 側だけが出す——
+  // 書き込み/退避のたびに毎回警告を出すと日常操作で煩わしいため)。件数を返す。
+  async function tagAllNotes(): Promise<{ targetCount: number; done: number; junkCount: number }> {
     const apiKey = await getGeminiApiKey();
-    if (!apiKey) {
-      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)");
-      return;
-    }
-    const all = notes ?? [];
+    if (!apiKey) return { targetCount: 0, done: 0, junkCount: 0 };
+    const all = notesRef.current ?? [];
     const targets = all.filter(needsRetag);
-    if (targets.length === 0) {
-      setDataPanelMessage("タグ付けが必要なノートはありません(変更なしのためスキップ)");
-      return;
-    }
-    setTagging(true);
-    setDataPanelMessage(`${targets.length}件のノートにGeminiでタグ付け中…`);
+    if (targets.length === 0) return { targetCount: 0, done: 0, junkCount: 0 };
     // タグ候補＋既存ノートの頻出タグ(最大200)を語彙として渡し、タグの統一を促す(ユーザー指示)。
     const vocabulary = buildTagVocabulary(tagCandidates, all);
     let done = 0;
@@ -810,12 +810,41 @@ export function App() {
         if (junk) junkCount += 1;
       }
     }
+    if (done > 0) refreshGeminiUsage(); // 大量のGemini呼び出し直後は使用量を即時に反映する(警告の出遅れ防止)。
+    return { targetCount: targets.length, done, junkCount };
+  }
+
+  // 「🏷️ タグをふる」ボタン: tagAllNotesを実行し、進捗/結果メッセージを表示する。
+  async function handleTagAll() {
+    const apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)");
+      return;
+    }
+    const all = notesRef.current ?? [];
+    const targetCount = all.filter(needsRetag).length;
+    if (targetCount === 0) {
+      setDataPanelMessage("タグ付けが必要なノートはありません(変更なしのためスキップ)");
+      return;
+    }
+    setTagging(true);
+    setDataPanelMessage(`${targetCount}件のノートにGeminiでタグ付け中…`);
+    const { done, junkCount } = await tagAllNotes();
     setTagging(false);
     setDataPanelMessage(
-      `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targets.length}件` +
+      `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targetCount}件` +
         `${junkCount > 0 ? `・ゴミ判定${junkCount}件はNAS保管対象外` : ""})`,
     );
-    refreshGeminiUsage(); // 大量のGemini呼び出し直後は使用量を即時に反映する(警告の出遅れ防止)。
+    // タグが付いたノートを次の5分ティックまで待たせず即座にNAS/Driveへ反映する(ユーザー指示:
+    // タグ付けボタンを押したものは待たずに保存対象にしてほしい)。「今すぐNASへ書き出し」/
+    // 「Driveへ退避」と同じ即時pushを流用する(いずれも先頭でtagAllNotesを呼ぶが、既に
+    // タグ付け済みなので二重コストにはならない)。Drive側は非対話トークンが取れる時だけ
+    // (未接続なら静かにスキップ——日常のタグ付けでOAuthポップアップを出さないため)。
+    if (done > 0) {
+      await pushNasActiveNow();
+      const token = await getAuthToken(false);
+      if (token) await pushDriveActiveNow(token);
+    }
   }
 
   // 「☁️ Driveへ退避」: 自動同期を待たず、現在の全データを今すぐDriveへ書き出す(退避の即時版)。
@@ -824,6 +853,9 @@ export function App() {
   // ハッシュで保存済みか判定して変わったノートだけ送り(pushNasActiveNowと同じ発想。ユーザー指示:
   // 変更が無いノートを送るな)、消えたノートはreconcileDriveActiveが削除する。
   async function pushDriveActiveNow(token: string): Promise<void> {
+    // 書き込み前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: Driveへの
+    // 書き込みが実行される前にタグ付けを済ませてほしい)。pushNasActiveNowと同じ理由。
+    await tagAllNotes();
     const current = notesRef.current ?? [];
     const now = clockNow();
     const updates: Record<string, { driveFileId: string; lastSyncedAt: number }> = {};
@@ -842,7 +874,7 @@ export function App() {
     }
     await reconcileDriveActive(current, token);
     await copyNotesToDriveDateFolder(current, now, token);
-    // TODOはactive/todos.mdへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップ
+    // TODOはactive/todos.txtへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップ
     // (jsonBackup)とは別にactive/へ直接反映する。NAS側と同じ発想)。
     const todosMd = todosToMarkdown(todosRef.current);
     const todosSig = contentHash(todosMd);
@@ -854,10 +886,29 @@ export function App() {
   }
 
   async function handleBackupToDrive() {
-    if (!backupJson) return;
+    if (!backupJson) return; // 準備ができているか(sync/notesがまだ無ければ何もしない)のゲート
+    // 退避前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: 書き込み/退避が
+    // 実行される前にタグ付けを済ませてほしい)。tagAllNotesはupdateNotes経由でReact stateを
+    // 更新するため、クロージャに閉じ込められたbackupJson(useMemo)はタグ付け前のスナップショット
+    // のまま古くなる——refsから読み直して最新のタグを含んだJSONを組み直す。
+    await tagAllNotes();
     setDataPanelMessage("Google Driveへ退避中…");
+    const freshBackupJson = sync
+      ? serializeExport(
+          buildExportPayload(
+            sync,
+            {
+              notes: notesRef.current ?? [],
+              todos: todosRef.current,
+              specialItems: specialItemsRef.current,
+              specialFolders: specialFoldersRef.current,
+            },
+            clockNow(),
+          ),
+        )
+      : backupJson;
     const result = await syncJsonBackupToDrive(
-      backupJson,
+      freshBackupJson,
       clockNow(),
       true,
       sync?.settings.jsonBackupFileId,
