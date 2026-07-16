@@ -350,7 +350,7 @@ describe("writeNoteToNasStructure(統一構造)", () => {
     ...over,
   });
 
-  it("非空ノートを active/<タイトル> (id8桁).md と <YYYY/M/D>/<id>.md へ書く", async () => {
+  it("非空ノートを active/<タイトル> (id8桁).txt と <YYYY/M/D>/<id>.md へ書く", async () => {
     const files = new Map<string, string>();
     const ok = await writeNoteToNasStructure(note(), TS_2026_07_12, {
       getNasFolderPath: async () => NAS_PATH,
@@ -360,9 +360,9 @@ describe("writeNoteToNasStructure(統一構造)", () => {
       },
     });
     expect(ok).toBe(true);
-    expect(files.has("active/会議 (n1).md")).toBe(true);
+    expect(files.has("active/会議 (n1).txt")).toBe(true);
     expect(files.has("2026/7/12/n1.md")).toBe(true);
-    expect(files.get("active/会議 (n1).md")).toContain("title: 会議");
+    expect(files.get("active/会議 (n1).txt")).toContain("title: 会議");
   });
 
   it("空ノートは書かない(false)", async () => {
@@ -390,10 +390,10 @@ describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
     const n = await reconcileActiveNotesOnNas(notes, {
       getNasFolderPath: async () => NAS_PATH,
       listNasTree: async () => [
-        "a (keep1234).md",
-        "b (gone1234).md",
-        "b (empty123).md",
-        "c (junky123).md",
+        "a (keep1234).txt",
+        "b (gone1234).txt",
+        "b (empty123).txt",
+        "c (junky123).txt",
       ],
       deleteFileFromNas: async (_p, f) => {
         deleted.push(f);
@@ -402,14 +402,14 @@ describe("reconcileActiveNotesOnNas(active/突合削除)", () => {
     });
     // keep1234(非空) は残す。gone(存在しない)/empty(空)/junky(ゴミ) は削除。
     expect(deleted.sort()).toEqual([
-      "active/b (empty123).md",
-      "active/b (gone1234).md",
-      "active/c (junky123).md",
+      "active/b (empty123).txt",
+      "active/b (gone1234).txt",
+      "active/c (junky123).txt",
     ]);
     expect(n).toBe(3);
   });
 
-  it("旧形式(<id>.md・括弧無し)のファイルはid断片が取れず保持対象なし扱いで削除される(移行)", async () => {
+  it("旧形式(<id>.md・拡張子/括弧が違う)のファイルはid断片が取れず保持対象なし扱いで削除される(移行)", async () => {
     const deleted: string[] = [];
     const notes: Note[] = [
       { id: "keep1234", title: "a", content: "本文", pinned: false, order: 0 },
@@ -450,7 +450,7 @@ describe("todosToMarkdown", () => {
 });
 
 describe("writeTodosToNasActive", () => {
-  it("active/todos.mdへ書く", async () => {
+  it("active/todos.txtへ書く", async () => {
     const files = new Map<string, string>();
     const todos: Todo[] = [{ id: "t1", text: "買い物", done: false, order: 0 }];
     const ok = await writeTodosToNasActive(todos, {
@@ -461,7 +461,7 @@ describe("writeTodosToNasActive", () => {
       },
     });
     expect(ok).toBe(true);
-    expect(files.get("active/todos.md")).toContain("- [ ] 買い物");
+    expect(files.get("active/todos.txt")).toContain("- [ ] 買い物");
   });
 
   it("NAS未設定ならfalse", async () => {

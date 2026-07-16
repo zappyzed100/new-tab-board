@@ -160,9 +160,11 @@ def parse_date_note_path(nas_folder: str, path: str):
 
 
 def build_index(nas_folder: str) -> dict:
-    """active/*.md(現在ブラウザにある非空ノートの正本。統一構造)・YYYY/M/D/*.md(日付フォルダの
-    日次コピー。統一構造)・年/月/日/*.txt(統一構造以前の旧履歴)を読み、data/index.db を作り直す。
-    取り込んだ件数 {"notes": n, "date_notes": d, "snapshots": m} を返す。
+    """active/*.txt(現在ブラウザにある非空ノートの正本。統一構造。2026-07-16に拡張子を.mdから
+    .txtへ変更——スマホのDriveアプリ/テキストビューアでの閲覧性を優先したユーザー指示。
+    front matter形式自体は無変更なのでパース側の扱いは変わらない)・YYYY/M/D/*.md(日付フォルダの
+    日次コピー。統一構造・拡張子は.md据え置き)・年/月/日/*.txt(統一構造以前の旧履歴)を読み、
+    data/index.db を作り直す。取り込んだ件数 {"notes": n, "date_notes": d, "snapshots": m} を返す。
     旧構造 notes/*.md も残っていれば取り込む(移行期の後方互換。同id は active/ が上書き)。"""
     data_dir = os.path.join(nas_folder, "data")
     os.makedirs(data_dir, exist_ok=True)
@@ -173,9 +175,9 @@ def build_index(nas_folder: str) -> dict:
         create_schema(conn)
         tag_ids: dict[str, int] = {}
         count = 0
-        # 旧 notes/ を先に、新 active/ を後に読む(同id は active/ が上書き=最新の正本)。
+        # 旧 notes/(.md)を先に、新 active/(.txt)を後に読む(同id は active/ が上書き=最新の正本)。
         md_paths = sorted(glob.glob(os.path.join(nas_folder, "notes", "*.md"))) + sorted(
-            glob.glob(os.path.join(nas_folder, "active", "*.md"))
+            glob.glob(os.path.join(nas_folder, "active", "*.txt"))
         )
         seen_ids: set[str] = set()
         for path in md_paths:

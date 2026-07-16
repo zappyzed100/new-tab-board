@@ -18,11 +18,12 @@ function sanitizeDriveFilenamePart(title: string): string {
   return noSlash === "" ? "(無題)" : noSlash;
 }
 
-/** activeフォルダのファイル名(ユーザー指示: <タイトル>.mdにする。ただし同じタイトルの
+/** activeフォルダのファイル名(ユーザー指示: <タイトル>.txtにする。ただし同じタイトルの
  * ノートが複数あってもDrive上で衝突・見分けがつかなくならないよう、末尾にnoteIdの短い
- * 断片を付ける)。 */
+ * 断片を付ける。拡張子はNASのactiveNasFilenameForと同じ理由で.txt——スマホのDriveアプリ/
+ * テキストビューアでの閲覧性を優先。中身はnoteToMarkdownのまま無変更・2026-07-16)。 */
 export function activeFilenameFor(note: { id: string; title: string }): string {
-  return `${sanitizeDriveFilenamePart(note.title)} (${note.id.slice(0, 8)}).md`;
+  return `${sanitizeDriveFilenamePart(note.title)} (${note.id.slice(0, 8)}).txt`;
 }
 
 export type SyncResult =
@@ -67,9 +68,10 @@ export async function syncNoteToDrive(
     logOp("driveSync", "resolve-folder-done", `note=${note.id} folderId=${folderId}`);
     const existingId =
       note.driveFileId ?? (await _findFileForNote(note.id, token, undefined, ACTIVE_KIND));
-    // ファイル内容(front matter付きmd)はNASのactive/<id>.mdと同一構造だが、Driveのファイル名
-    // だけは<タイトル> (短いid).md にする(ユーザー指示: Drive上で見て分かる名前にしたい)。
-    // 中身のidは今までどおり保つのでfindFileForNote等の検索・突合には影響しない。
+    // ファイル内容(front matter付きmd)はNASのactive/<タイトル> (id8桁).txtと同一構造だが、
+    // Driveのファイル名だけは<タイトル> (短いid).txt にする(ユーザー指示: Drive上で見て
+    // 分かる名前にしたい)。中身のidは今までどおり保つのでfindFileForNote等の検索・突合には
+    // 影響しない。
     const fileId = await _uploadNote(
       { id: note.id, title: note.title, content: noteToMarkdown(note) },
       token,

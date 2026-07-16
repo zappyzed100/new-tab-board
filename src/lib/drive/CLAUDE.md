@@ -4,10 +4,12 @@
 
 1. **per-note active ミラー**(`driveSync.ts` + `useDriveSync.ts` + `drive.ts`)
    各ペインが自分のノートを debounce して Drive の **`app/New Tab Board/active/`** フォルダへ
-   1ノート=1ファイル(Markdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
-   ファイル内容は NAS の `active/<id>.md` と完全一致(2026-07-13)。**ファイル名だけはDriveの
-   activeフォルダに限り `<タイトル> (idの先頭8桁).md`**(`activeFilenameFor`。ユーザー指示:
-   Drive上で見て分かる名前にしたい・2026-07-16)——NAS/日付フォルダ/specialは今までどおり
+   1ノート=1ファイル(中身はMarkdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
+   ファイル内容は NAS の `active/<タイトル> (id8桁).txt` と完全一致(2026-07-13)。**ファイル名は
+   Driveのactiveフォルダに限り `<タイトル> (idの先頭8桁).txt`**(`activeFilenameFor`。ユーザー指示:
+   Drive上で見て分かる名前にしたい・2026-07-16。**拡張子も同日にNAS側と合わせて.mdから.txtへ
+   変更**——スマホのDriveアプリ/テキストビューアで開きやすくするため。中身の形式は無変更。
+   詳細・連動箇所は`src/lib/externalIO/CLAUDE.md`参照)——NAS/日付フォルダ/specialは今までどおり
    `<id>.md` 固定(ファイル探索・突合はappProperties.noteIdで行うため、表示名を変えても
    壊れない)。タイトルが変わるたびDrive上のファイル名も追従する(`uploadNote`は既存ファイル
    の更新でも毎回nameを送り直す)。同名タイトルが複数あってもidの断片で衝突しない。

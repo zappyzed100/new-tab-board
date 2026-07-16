@@ -98,18 +98,20 @@ def test_generation_fails_for_missing_base(tmp_path) -> None:
         assert "error" in res
 
 
-def test_read_active_returns_all_md_with_content(tmp_path) -> None:
+def test_read_active_returns_all_txt_with_content(tmp_path) -> None:
+    # 2026-07-16: active/の拡張子を.mdから.txtへ変更(スマホのDriveアプリ/テキストビューアでの
+    # 閲覧性を優先——ユーザー指示。中身の形式は無変更)。
     nas = str(tmp_path)
-    handle({"type": "write-file", "path": nas, "filename": "active/n1.md", "content": "本文1"})
-    handle({"type": "write-file", "path": nas, "filename": "active/n2.md", "content": "本文2"})
-    # active直下でない/非.mdは対象外。
-    handle({"type": "write-file", "path": nas, "filename": "active/sub/n3.md", "content": "x"})
-    handle({"type": "write-file", "path": nas, "filename": "active/note.txt", "content": "y"})
+    handle({"type": "write-file", "path": nas, "filename": "active/n1.txt", "content": "本文1"})
+    handle({"type": "write-file", "path": nas, "filename": "active/n2.txt", "content": "本文2"})
+    # active直下でない/非.txtは対象外。
+    handle({"type": "write-file", "path": nas, "filename": "active/sub/n3.txt", "content": "x"})
+    handle({"type": "write-file", "path": nas, "filename": "active/note.md", "content": "y"})
     res = handle({"type": "read-active", "path": nas})
     assert res["ok"] is True
     assert res["files"] == [
-        {"filename": "n1.md", "content": "本文1"},
-        {"filename": "n2.md", "content": "本文2"},
+        {"filename": "n1.txt", "content": "本文1"},
+        {"filename": "n2.txt", "content": "本文2"},
     ]
 
 
@@ -331,20 +333,24 @@ def test_search_notes_without_index_returns_error(tmp_path) -> None:
     assert "index.db" in res["error"]
 
 
-def test_list_tree_lists_md_recursively(tmp_path) -> None:
+def test_list_tree_lists_md_and_txt_recursively(tmp_path) -> None:
+    # special/は.md、active/は.txt(2026-07-16〜)と呼び出し元によって拡張子が違うため、
+    # list-treeは両方を対象にする(subdir名では分岐しない汎用列挙——nas_bridge.pyのコメント参照)。
     lib = os.path.join(str(tmp_path), "library", "仕事", "2026")
     os.makedirs(lib, exist_ok=True)
     with open(os.path.join(lib, "計画.md"), "w", encoding="utf-8") as f:
         f.write("# 計画")
     with open(os.path.join(str(tmp_path), "library", "メモ.md"), "w", encoding="utf-8") as f:
         f.write("メモ")
-    # .md 以外は無視
-    with open(os.path.join(str(tmp_path), "library", "無視.txt"), "w", encoding="utf-8") as f:
-        f.write("x")
+    with open(os.path.join(str(tmp_path), "library", "会議.txt"), "w", encoding="utf-8") as f:
+        f.write("会議メモ")
+    # .md/.txt 以外は無視
+    with open(os.path.join(str(tmp_path), "library", "無視.json"), "w", encoding="utf-8") as f:
+        f.write("{}")
 
     res = handle({"type": "list-tree", "path": str(tmp_path), "subdir": "library"})
     assert res["ok"] is True
-    assert res["files"] == ["メモ.md", "仕事/2026/計画.md"]
+    assert res["files"] == ["メモ.md", "仕事/2026/計画.md", "会議.txt"]
 
 
 def test_list_tree_missing_folder_is_empty(tmp_path) -> None:

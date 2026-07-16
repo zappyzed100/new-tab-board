@@ -408,6 +408,7 @@
 - def test_parse_front_matter_quoted_and_empty_tags
 - def test_parse_front_matter_none
 - def test_build_index_creates_db_and_tag_join
+- def test_build_index_ingests_active_txt
 - def test_parse_snapshot_filename
 - def test_build_index_ingests_history_snapshots
 - def test_active_txt_not_indexed_as_snapshot
@@ -424,7 +425,7 @@
 - def test_delete_file_rejects_path_traversal
 - def test_generation_starts_at_zero_and_bumps
 - def test_generation_fails_for_missing_base
-- def test_read_active_returns_all_md_with_content
+- def test_read_active_returns_all_txt_with_content
 - def test_read_active_empty_when_no_active_dir
 - def test_write_file_creates_date_subfolders
 - def test_write_file_rejects_path_traversal
@@ -436,7 +437,7 @@
 - def test_search_notes_with_date_range_also_finds_date_archive
 - def test_search_notes_without_date_range_does_not_query_archive
 - def test_search_notes_without_index_returns_error
-- def test_list_tree_lists_md_recursively
+- def test_list_tree_lists_md_and_txt_recursively
 - def test_list_tree_missing_folder_is_empty
 - def test_unknown_message_type_returns_error
 

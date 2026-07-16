@@ -82,6 +82,35 @@ def test_build_index_creates_db_and_tag_join(tmp_path) -> None:
         db.close()
 
 
+def test_build_index_ingests_active_txt(tmp_path) -> None:
+    # 2026-07-16: active/の正本ファイルの拡張子が.mdから.txtへ変わった(スマホのDriveアプリ/
+    # テキストビューアでの閲覧性を優先——ユーザー指示)。build_indexはactive/*.txtをnotesテーブルへ
+    # 取り込めなければならない(旧仕様のactive/*.mdはもう書かれないため未対応でよい)。
+    active = str(tmp_path / "active")
+    _write_note(
+        active,
+        "山行記録 (n1).txt",
+        "---\nid: n1\ntitle: 山行記録\ntags:\n  - 登山\n---\n\n本日は高尾山へ。",
+    )
+
+    result = build_index(str(tmp_path))
+    assert result["notes"] == 1
+
+    db = sqlite3.connect(str(tmp_path / "data" / "index.db"))
+    try:
+        row = db.execute("SELECT title, content FROM notes WHERE id = 'n1'").fetchone()
+        assert row == ("山行記録", "本日は高尾山へ。")
+        tagged = db.execute(
+            "SELECT notes.title FROM notes"
+            " JOIN note_tags ON notes.id = note_tags.note_id"
+            " JOIN tags ON tags.id = note_tags.tag_id"
+            " WHERE tags.name = '登山'"
+        ).fetchall()
+        assert [r[0] for r in tagged] == ["山行記録"]
+    finally:
+        db.close()
+
+
 def test_parse_snapshot_filename() -> None:
     note = "1e4b7a53-4693-45ee-89b0-57b42053608a"
     snap = "46af3516-b65d-4d66-ae01-b6f8b328f888"

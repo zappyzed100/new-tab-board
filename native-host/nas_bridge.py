@@ -143,8 +143,10 @@ def handle_bump_generation(message: dict) -> dict:
 
 
 def handle_read_active(message: dict) -> dict:
-    """active/ 直下の .md を全部(ファイル名+内容)返す(pull用: タブをNAS activeで上書きする)。
-    active/ が無ければ空リスト。サブフォルダは対象外。ファイル名は表示用(<タイトル> (id8桁).md)で
+    """active/ 直下の .txt を全部(ファイル名+内容)返す(pull用: タブをNAS activeで上書きする)。
+    拡張子は2026-07-16に.mdから.txtへ変更(スマホのDriveアプリ/テキストビューアでの閲覧性を
+    優先——ユーザー指示。中身の形式(front matter+Markdown)自体は無変更)。
+    active/ が無ければ空リスト。サブフォルダは対象外。ファイル名は表示用(<タイトル> (id8桁).txt)で
     実際のidはcontent側のYAML front matterから読む(呼び出し側のmarkdownToNoteが担当)。"""
     try:
         base = message["path"]
@@ -153,7 +155,7 @@ def handle_read_active(message: dict) -> dict:
         if os.path.isdir(active_dir):
             for name in sorted(os.listdir(active_dir)):
                 full = os.path.join(active_dir, name)
-                if name.endswith(".md") and os.path.isfile(full):
+                if name.endswith(".txt") and os.path.isfile(full):
                     with open(full, "r", encoding="utf-8") as f:
                         files.append({"filename": name, "content": f.read()})
         return {"type": "read-active-result", "ok": True, "files": files}
@@ -233,7 +235,10 @@ def handle_search(message: dict) -> dict:
 
 
 def handle_list_tree(message: dict) -> dict:
-    """subdir(例: "library")配下の .md ファイルを相対パスで再帰列挙する(ライブラリのツリー閲覧用)。
+    """subdir(例: "special"・"active"・"library")配下の .md/.txt ファイルを相対パスで再帰列挙する
+    (special/の突合削除・active/の突合削除の両方から使う汎用列挙)。.txtも対象にしたのは
+    2026-07-16にactive/の拡張子を.mdから.txtへ変更したため(特定subdir名では分岐しない——
+    両方の呼び出し元が同じ関数を共用する設計のため拡張子は両対応にする)。
     フォルダが無ければ空リスト。baseの外へ出るsubdirは拒否。"""
     try:
         base = message["path"]
@@ -244,7 +249,7 @@ def handle_list_tree(message: dict) -> dict:
         files = []
         for dirpath, _dirnames, filenames in os.walk(root):
             for name in filenames:
-                if name.endswith(".md"):
+                if name.endswith(".md") or name.endswith(".txt"):
                     rel = os.path.relpath(os.path.join(dirpath, name), root).replace("\\", "/")
                     files.append(rel)
         files.sort()

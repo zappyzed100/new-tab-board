@@ -172,15 +172,17 @@ function sanitizeNasFilenamePart(title: string): string {
   return safe === "" ? "(無題)" : safe;
 }
 
-/** activeフォルダのファイル名(ユーザー指示: Drive側のactiveFilenameForと同じ<タイトル> (id8桁).md
- * にする。同じタイトルのノートが複数あってもファイル名が衝突しないようidの短い断片を付ける)。 */
+/** activeフォルダのファイル名(ユーザー指示: Drive側のactiveFilenameForと同じ<タイトル> (id8桁).txt
+ * にする。同じタイトルのノートが複数あってもファイル名が衝突しないようidの短い断片を付ける。
+ * 拡張子はactiveだけ.txt(スマホのDriveアプリ/テキストビューアでの閲覧性を優先——ユーザー指示・
+ * 2026-07-16。中身はnoteToMarkdownのまま無変更。日付フォルダは.md据え置き)。 */
 export function activeNasFilenameFor(note: { id: string; title: string }): string {
-  return `${sanitizeNasFilenamePart(note.title)} (${note.id.slice(0, 8)}).md`;
+  return `${sanitizeNasFilenamePart(note.title)} (${note.id.slice(0, 8)}).txt`;
 }
 
-/** ノート1件を統一構造でNASへ書く: active/<タイトル> (id8桁).md と <YYYY/M/D>/<id>.md
- * (md + front matter)。非空ノートのみ(空はactiveへ入れない——ユーザー指示)。
- * NAS未設定/到達不可は静かにfalse。 */
+/** ノート1件を統一構造でNASへ書く: active/<タイトル> (id8桁).txt と <YYYY/M/D>/<id>.md
+ * (どちらも中身はmd + front matter。拡張子だけactiveは.txt)。非空ノートのみ(空はactiveへ
+ * 入れない——ユーザー指示)。NAS未設定/到達不可は静かにfalse。 */
 export async function writeNoteToNasStructure(
   note: Note,
   now: number,
@@ -197,10 +199,11 @@ export async function writeNoteToNasStructure(
   return okActive && okDate;
 }
 
-/** ファイル名末尾の「(xxxxxxxx).md」からid断片を取り出す(旧形式<id>.mdは括弧が無く一致しない
- * ——移行時は自然に「保持対象なし」判定され、後続の削除で片付く)。 */
+/** ファイル名末尾の「(xxxxxxxx).txt」からid断片を取り出す(旧形式<id>.md・旧拡張子.mdは
+ * 括弧が無い/拡張子が違うため一致しない——移行時は自然に「保持対象なし」判定され、
+ * 後続の削除で片付く)。 */
 function idFragmentFromActiveFilename(filename: string): string | null {
-  return /\(([^()]+)\)\.md$/.exec(filename)?.[1] ?? null;
+  return /\(([^()]+)\)\.txt$/.exec(filename)?.[1] ?? null;
 }
 
 /** active/ を現在の非空ノート一覧へ突き合わせ、消えた/空になった/ゴミ判定のノートのactiveファイルを
@@ -243,13 +246,14 @@ export function todosToMarkdown(todos: Todo[]): string {
   return lines.join("\n");
 }
 
-/** TODO一覧をactive/todos.mdへ書く(NAS未設定/到達不可は静かにfalse)。 */
+/** TODO一覧をactive/todos.txtへ書く(NAS未設定/到達不可は静かにfalse)。拡張子は他のactive
+ * ファイルと同じ理由で.txt(2026-07-16)。 */
 export async function writeTodosToNasActive(todos: Todo[], deps: NasDeps = {}): Promise<boolean> {
   const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;
   const _writeFileToNas = deps.writeFileToNas ?? writeFileToNas;
   const path = await _getNasFolderPath();
   if (!path) return false;
-  return _writeFileToNas(path, "active/todos.md", todosToMarkdown(todos));
+  return _writeFileToNas(path, "active/todos.txt", todosToMarkdown(todos));
 }
 
 /** Geminiのタグ付けで junk 判定されたノートIDの集合(NASアーカイブから除外する——ユーザー指示)。 */

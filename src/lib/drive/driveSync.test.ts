@@ -5,7 +5,8 @@ import { noteToMarkdown } from "../externalIO/nasArchive";
 import type { Note } from "../../types";
 
 const note: Note = { id: "n1", title: "会議メモ", content: "本文", pinned: false, order: 0 };
-// active/<id>.md へは Markdown+front matter で書く(uploadNoteのcontentへmdを渡す)。
+// active/<タイトル> (id8桁).txt へは Markdown+front matter で書く(uploadNoteのcontentへmdを渡す。
+// 拡張子だけ.txtで中身は無変更)。
 const mdNote = { id: note.id, title: note.title, content: noteToMarkdown(note) };
 // Driveのactiveフォルダのファイル名はタイトルベース(ユーザー指示。中身のidは変わらない)。
 const ACTIVE_OPTS = {
@@ -15,19 +16,19 @@ const ACTIVE_OPTS = {
 };
 
 describe("activeFilenameFor", () => {
-  it("<タイトル> (idの先頭8桁).md にする(ユーザー指示: Driveで見て分かる名前にしたい)", () => {
+  it("<タイトル> (idの先頭8桁).txt にする(ユーザー指示: Driveで見て分かる名前にしたい)", () => {
     expect(
       activeFilenameFor({ id: "3040f49a-50c5-4439-bd10-0c29e6db1333", title: "会議メモ" }),
-    ).toBe("会議メモ (3040f49a).md");
+    ).toBe("会議メモ (3040f49a).txt");
   });
 
   it("空タイトルは(無題)にする", () => {
-    expect(activeFilenameFor({ id: "abcdefgh-0000", title: "  " })).toBe("(無題) (abcdefgh).md");
+    expect(activeFilenameFor({ id: "abcdefgh-0000", title: "  " })).toBe("(無題) (abcdefgh).txt");
   });
 
   it("改行・スラッシュを含むタイトルは一行の見苦しくない形にする", () => {
     expect(activeFilenameFor({ id: "12345678-0000", title: "会議\nメモ/議事録" })).toBe(
-      "会議 メモ-議事録 (12345678).md",
+      "会議 メモ-議事録 (12345678).txt",
     );
   });
 

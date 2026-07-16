@@ -14,7 +14,7 @@ import type { Note, Todo } from "../../types";
 const APP_ROOT = ["app", "New Tab Board"];
 const FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
-const TODOS_FILENAME = "todos.md";
+const TODOS_FILENAME = "todos.txt";
 
 /** epoch ms を YYYY/M/D(4桁年・非ゼロ埋め。NASと同一書式)のパス片にする(例: 2026/7/13)。 */
 export function dateFolderParts(ms: number): string[] {

@@ -127,7 +127,7 @@ describe("pushTodosToDriveActive", () => {
     expect(ok).toBe(true);
     const [, init] = fetchImpl.mock.calls[1];
     expect(init.method).toBe("POST");
-    expect(init.body).toContain("todos.md");
+    expect(init.body).toContain("todos.txt");
     expect(init.body).not.toContain("noteId");
     expect(init.body).toContain("- [ ] 買い物");
   });
