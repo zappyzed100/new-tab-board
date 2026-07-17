@@ -21,10 +21,10 @@ const NOTIFICATION_ID = "pre-event-notification";
 // する方式にする(ユーザー指示の「一日一回・0:30くらい・起動時に未実行なら補完」を満たす)。
 const DAILY_ALARM_NAME = "daily-maintenance";
 const DAILY_INTERVAL_MINUTES = 60;
-// スマホのバッテリー低下警告(GAS Web App中継。gas/README.md参照)。予定ポーリングと同じ
-// 15分間隔で確認する(ユーザー指示)。
+// スマホのバッテリー低下警告(GAS Web App中継。gas/README.md参照)。1時間間隔で確認する
+// (ユーザー指示・2026-07-18に15分から変更)。
 const BATTERY_POLL_ALARM_NAME = "battery-poll";
-const BATTERY_POLL_INTERVAL_MINUTES = 15;
+const BATTERY_POLL_INTERVAL_MINUTES = 60;
 const BATTERY_NOTIFICATION_ID = "battery-low-notification";
 
 chrome.runtime.onInstalled.addListener(() => {

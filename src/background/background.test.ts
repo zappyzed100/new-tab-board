@@ -155,7 +155,7 @@ describe("インストール/起動", () => {
     });
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: BATTERY_POLL_ALARM_NAME,
-      opts: { periodInMinutes: 15 },
+      opts: { periodInMinutes: 60 },
     });
   });
 
@@ -169,7 +169,7 @@ describe("インストール/起動", () => {
     });
     expect(fake.calls.alarmsCreate).toContainEqual({
       name: BATTERY_POLL_ALARM_NAME,
-      opts: { periodInMinutes: 15 },
+      opts: { periodInMinutes: 60 },
     });
   });
 });
