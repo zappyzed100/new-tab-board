@@ -9,7 +9,6 @@ import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
-import { decideBatteryAlarm } from "../lib/battery/batteryAlarm";
 import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
@@ -200,19 +199,17 @@ async function stopAlarm(): Promise<void> {
   logOp("background", "stop-alarm", "pre-event alarm stopped");
 }
 
-/** GAS Web App(gas/README.md参照)へバッテリー残量を問い合わせ、10/20/50%の閾値を新たに
- * 下回っていれば警告を鳴らす(ユーザー指示)。未設定/未接続は静かにスキップする。 */
+/** GAS Web App(gas/README.md参照)へバッテリー残量を問い合わせる。doGetはconsume-on-read
+ * (読んだら即座にGAS側で削除)なので、非nullが返れば常に「スマホが新たに閾値を下回った
+ * 未処理イベント」を意味し、そのまま警告してよい(再発火の抑制はGAS側の削除が兼ねるため
+ * chrome側で発火済み閾値を覚える必要がない——ユーザー指摘で2026-07-18に変更)。
+ * 未設定/未接続/既に消費済みは静かにスキップする。 */
 async function pollBatteryStatus(): Promise<void> {
   const config = await getBatteryWebhookConfig();
   if (!config) return;
   const status = await fetchBatteryStatus(config.url, config.token);
   if (!status) return;
-  const local = await loadLocalData();
-  const decision = decideBatteryAlarm(status.level, local.batteryFiredThresholds ?? []);
-  await saveLocalData({ ...local, batteryFiredThresholds: decision.nextFired });
-  if (decision.toFire.length > 0) {
-    await fireBatteryAlarm(status.level);
-  }
+  await fireBatteryAlarm(status.level);
 }
 
 async function fireBatteryAlarm(level: number): Promise<void> {

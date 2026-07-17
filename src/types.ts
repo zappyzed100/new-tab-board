@@ -133,9 +133,6 @@ export type LocalData = {
    * 予定前アラームとオフスクリーンのループ音声を共用するため、どちらの「停止」でも
    * もう片方が鳴っていれば音声は止めない(background.tsのfireAlarm/stopAlarm参照)。 */
   batteryAlarmActive?: boolean;
-  /** 直近の低電力エピソードで、既に警告を鳴らした閾値(%)の集合。バッテリーが最高閾値を
-   * 上回るまで回復したらリセットされる(decideBatteryAlarm参照)。 */
-  batteryFiredThresholds?: number[];
 };
 
 export type Snapshot = {

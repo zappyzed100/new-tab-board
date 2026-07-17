@@ -420,7 +420,7 @@ describe("battery-poll アラーム(スマホのバッテリー低下警告・GA
     expect(fake.calls.notificationsCreate).toEqual([]);
   });
 
-  it("閾値を新たに下回れば警告を鳴らし、発火済み閾値を永続化する", async () => {
+  it("GASから値が返れば常に警告を鳴らす(発火済み管理はGAS側のconsume-on-readに一本化)", async () => {
     vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
     vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null });
     const fake = makeFakeChrome({ localData: { notes: [] } });
@@ -431,7 +431,6 @@ describe("battery-poll アラーム(スマホのバッテリー低下警告・GA
 
     const saved = fake.store.localData as LocalData;
     expect(saved.batteryAlarmActive).toBe(true);
-    expect(saved.batteryFiredThresholds).toEqual([50, 20]);
     expect(fake.calls.offscreenCreate).toHaveLength(1);
     expect(fake.calls.notificationsCreate).toEqual([
       {
@@ -445,19 +444,31 @@ describe("battery-poll アラーム(スマホのバッテリー低下警告・GA
     ]);
   });
 
-  it("同じ低電力エピソード中は同じ閾値で再度鳴らさない", async () => {
-    vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
-    vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null });
-    const fake = makeFakeChrome({
-      localData: { notes: [], batteryFiredThresholds: [50, 20] },
-    });
-    vi.stubGlobal("chrome", fake.chromeStub);
+  it(
+    "同じ残量でもGASが再度値を返せばそのたびに鳴らす(GAS側がconsume-on-readで既読を" +
+      "消すため、chrome側では重複抑制をしない——doGetがnullを返す限りは何もしない、が唯一の抑制)",
+    async () => {
+      vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+      const fake = makeFakeChrome({ localData: { notes: [] } });
+      vi.stubGlobal("chrome", fake.chromeStub);
 
-    handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
-    await flushMicrotasks();
+      vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null });
+      handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+      await flushMicrotasks();
 
-    expect(fake.calls.notificationsCreate).toEqual([]);
-  });
+      vi.mocked(fetchBatteryStatus).mockResolvedValue(null); // 消費済み・スマホ未報告
+      handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+      await flushMicrotasks();
+
+      expect(fake.calls.notificationsCreate).toHaveLength(1); // 2回目はnullなので鳴らない
+
+      vi.mocked(fetchBatteryStatus).mockResolvedValue({ level: 15, updatedAt: null }); // 再度POSTされた
+      handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+      await flushMicrotasks();
+
+      expect(fake.calls.notificationsCreate).toHaveLength(2); // 新しい値なら再度鳴る
+    },
+  );
 
   it("「停止」ボタンで通知を消しbatteryAlarmActiveをfalseにする(予定前アラームが非鳴動ならoffscreenも閉じる)", async () => {
     vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });

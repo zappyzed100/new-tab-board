@@ -147,8 +147,6 @@
 - `src/background/CLAUDE.md`
 - `src/background/background.test.ts` — background.test.ts — background.ts(サービスワーカー: Calendar定期ポーリング+予定前アラーム)の単体テスト
 - `src/background/background.ts` — background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
-- `src/lib/battery/batteryAlarm.test.ts` — batteryAlarm.test.ts — decideBatteryAlarm(閾値越え判定)の単体テスト
-- `src/lib/battery/batteryAlarm.ts` — batteryAlarm.ts — バッテリー低下アラームの閾値越え判定(純関数)。
 - `src/lib/display/calendarMonth.test.ts` — calendarMonth.test.ts — calendarMonth.ts(GCal URL生成)の単体テスト
 - `src/lib/display/calendarMonth.ts` — calendarMonth.ts — Google カレンダーURL生成(純関数。SPEC.md §4.9)
 - `src/lib/display/clockFormat.test.ts` — clockFormat.test.ts — clockFormat.ts(時計/日付フォーマット)の単体テスト
@@ -617,11 +615,6 @@
 - def import_targets
 - def dart_package_roots
 - def is_kit_source_repo
-
-### `src/lib/battery/batteryAlarm.ts`
-- const DEFAULT_BATTERY_THRESHOLDS
-- type BatteryAlarmDecision
-- function decideBatteryAlarm
 
 ### `src/lib/display/calendarMonth.ts`
 - function buildGCalUrl
