@@ -3,12 +3,18 @@
 ## ノートは全件を1枚のボード(実測masonry)で常時表示する(2026-07-13にアルゴリズム変更)
 
 旧「最大3件を横並び+チェックボックスで表示選択」モデルは撤去した(`resolveVisibleNoteIds`/
-`MAX_VISIBLE_NOTES`/`note-tab-visible-*` は削除済み)。現在はノート**全件**をボードに出し、
+`MAX_VISIBLE_NOTES`/`note-tab-visible-*` は削除済み)。現在はノート**全件のカード**をボードに出し、
 App.tsx が **各ペインの実高さ(ResizeObserver)を測り、`sortedNotes`(ピン→order)順に「その時点で
 一番低い列へ入れる」greedy最密詰め**で各列(`.note-column`)へ振り分けて縦積みする(列数は画面幅から
 `noteColumnCountFor`。最大3列)。**列固定(旧 `i % 列数`)から2026-07-13にユーザー選択「最密」で変更**。
 
-- **測定の仕組み**: 各ペインを `MeasuredNote`(App.tsx・`.note-cell`)で包み、ResizeObserver で
+ただし、全カード内の詳細ペインを常駐させてはいけない。最大501件すべてにEditorView・選択描画層・
+scheduler・ボタン群を生成する構造はGPU/CPU資源を無制限に積み上げ、2026-07-19にBraveのHangWatcherが
+GPU入力スレッド停止のダンプを採取する実害が出た。`components/board/ViewportNote.tsx`が表示領域周辺
+だけ`NoteEditorPane`を生成し、さらに`Notepad.tsx`もCodeMirror単体の二重防御を持つ。回帰は
+`e2e/stress/resource-budget.spec.ts`で500件時の詳細ペイン・CodeMirror・Observer・timer・DOM数を検査する。
+
+- **測定の仕組み**: 各ペインを `ViewportNote`(`components/board/`・`.note-cell`)で包み、表示中だけResizeObserverで
   高さを親state(`noteHeights`)へ返す。列幅は一定なので**列を移っても高さは変わらず**、内容変更の
   ときだけ高さが変わる=再配置は入力時のみ(タイプ中のチラつきはこの範囲。ユーザー了承済みの割り切り)。
   ループ防止: `reportNoteHeight` は 0.5px 未満の差なら参照を変えない。

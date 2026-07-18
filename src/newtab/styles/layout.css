@@ -137,6 +137,19 @@ body {
   min-width: 0;
 }
 
+.note-pane-placeholder {
+  height: 100%;
+  min-height: 520px;
+  contain: strict;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: var(--space-3);
+  font-weight: 600;
+}
+
 /* ノート位置入れ替え用のドラッグつまみ(ヘッダ左端)。エディタ本文ではなくここを掴む
    (本文をdraggableにするとテキスト選択と衝突するため)。 */
 .note-drag-handle {
