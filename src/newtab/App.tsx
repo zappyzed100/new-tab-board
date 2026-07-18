@@ -9,9 +9,12 @@ import {
   BatteryWarning,
   BellOff,
   CalendarClock,
+  ChevronDown,
+  ChevronUp,
   Keyboard,
   StickyNote,
   Tag,
+  Wrench,
 } from "lucide-react";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
@@ -161,6 +164,10 @@ export function App() {
   // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  // データ操作パネル(ファイルを開く/Drive・NAS操作等)は普段使わず高さだけ食うため、
+  // 新規タブを開くたびに折りたたんだ状態から始める(ユーザー指示:「一目でノート内容が
+  // 見えるように」)。セッションを跨いだ記憶はしない(開けば毎回また閉じた状態に戻る)。
+  const [showDataPanel, setShowDataPanel] = useState(false);
   // 本日のGemini使用回数(450到達でGPT-OSS 120Bへの乗り換え警告を出す——ユーザー指示)。
   const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
@@ -1132,47 +1139,79 @@ export function App() {
               </Button>
             ) : null}
 
-            <Flex asChild align="center" gap="4" wrap="wrap">
-              <header>
-                <Clock />
-                <ThemeToggle
-                  theme={sync.settings.theme}
-                  onThemeChange={(theme) => updateSettings({ theme })}
-                />
+            {/* テーマ選択の右側が常に余っていたため、データ操作/ショートカット一覧の
+                トグルボタンをそこへ寄せた(ユーザー指示)。展開ボタン自体はヘッダーの
+                小さな行に収まり、実際のDataPanel本文は従来どおりブックマーク欄の下に
+                フル幅で展開する(ヘッダーの狭い右側にボタン10個を詰め込むと窮屈なため)。 */}
+            <Flex asChild align="center" justify="between" gap="4" wrap="wrap">
+              <header className="app-header">
+                <Flex align="center" gap="4" wrap="wrap">
+                  <Clock />
+                  <ThemeToggle
+                    theme={sync.settings.theme}
+                    onThemeChange={(theme) => updateSettings({ theme })}
+                  />
+                </Flex>
+                <Flex asChild align="center" gap="3" wrap="wrap">
+                  <nav>
+                    {/* データ操作(ファイルを開く/Drive・NAS操作等)は普段使わず高さだけ食うため、
+                        既定で折りたたみ、押した時だけ展開する(ユーザー指示)。折りたたみ中は
+                        DataPanelごとアンマウントする(display:noneではなく非表示——高さを
+                        完全にゼロにするため)。 */}
+                    <Button
+                      type="button"
+                      variant={showDataPanel ? "solid" : "soft"}
+                      size="2"
+                      data-testid="toggle-data-panel"
+                      title={
+                        showDataPanel
+                          ? "データ操作パネルを閉じる"
+                          : "データ操作パネルを開く(ファイルを開く/Drive・NAS操作など)"
+                      }
+                      onClick={() => setShowDataPanel((v) => !v)}
+                    >
+                      <Wrench size={14} aria-hidden="true" />
+                      データ操作
+                      {showDataPanel ? (
+                        <ChevronUp size={14} aria-hidden="true" />
+                      ) : (
+                        <ChevronDown size={14} aria-hidden="true" />
+                      )}
+                    </Button>
+                    {/* ヘルプ系は使用頻度が低いため、日常操作のボタンより右に置く(ユーザー指示)。 */}
+                    <Button
+                      type="button"
+                      variant="soft"
+                      data-testid="open-shortcuts-modal"
+                      title="使えるキーボードショートカットの一覧を表示する"
+                      onClick={() => setShowShortcutsModal(true)}
+                    >
+                      <Keyboard size={14} aria-hidden="true" />
+                      ショートカット一覧(?)
+                    </Button>
+                  </nav>
+                </Flex>
               </header>
             </Flex>
+
+            {/* データ操作パネルはブックマークバーの上に置く(ユーザー指示)。 */}
+            {showDataPanel ? (
+              <DataPanel
+                sync={sync}
+                onImportData={importData}
+                onOpenFileAsNote={openFileAsNote}
+                onMessage={setDataPanelMessage}
+                onBackupToDrive={() => void handleBackupToDrive()}
+                onRestoreFromNas={() => void handleRestoreFromNas()}
+                onPushNasActiveNow={pushNasActiveNow}
+              />
+            ) : null}
 
             <BookmarkGrid
               bookmarks={sync.bookmarks}
               openIn={sync.settings.openIn}
               onBookmarksChange={updateBookmarks}
             />
-
-            <Flex asChild align="center" gap="3" wrap="wrap">
-              <nav>
-                <DataPanel
-                  sync={sync}
-                  onImportData={importData}
-                  onOpenFileAsNote={openFileAsNote}
-                  onMessage={setDataPanelMessage}
-                  onBackupToDrive={() => void handleBackupToDrive()}
-                  onRestoreFromNas={() => void handleRestoreFromNas()}
-                  onPushNasActiveNow={pushNasActiveNow}
-                />
-
-                {/* ヘルプ系は使用頻度が低いため、日常操作のボタン群より右に置く(ユーザー指示)。 */}
-                <Button
-                  type="button"
-                  variant="soft"
-                  data-testid="open-shortcuts-modal"
-                  title="使えるキーボードショートカットの一覧を表示する"
-                  onClick={() => setShowShortcutsModal(true)}
-                >
-                  <Keyboard size={14} aria-hidden="true" />
-                  ショートカット一覧(?)
-                </Button>
-              </nav>
-            </Flex>
 
             {/* データ操作ツールバー(ファイルを開く/NASへ書き出し等)と、この下のノート域
                 (ノート文字サイズ等)の間に区切り線を入れる(ユーザー指示)。 */}
