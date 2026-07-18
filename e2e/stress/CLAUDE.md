@@ -6,4 +6,5 @@
 
 Linux/XvfbではChrome起動時のnew-tab overrideがfixtureの初期清掃より遅れて現れ、空stateで負荷fixtureを
 上書きしうる。`e2e/fixtures.ts`は初期Appによる空ノート3件の保存完了をstorage上で確認してからblank化
-する。待ち時間を延ばすのではなく、競合する非同期書き込みが完了したという状態を開始条件にする。
+する。負荷specはそのblankページを再利用し、seed前に`context.newPage()`で新たなAppを起動しない。
+待ち時間を延ばすのではなく、競合する非同期書き込みが完了したという状態を開始条件にする。
