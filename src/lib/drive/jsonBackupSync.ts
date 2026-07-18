@@ -4,6 +4,7 @@
 import { getAuthToken } from "./googleAuth";
 import { downloadBackup, findBackupFile, uploadBackup } from "./jsonBackup";
 import { resolveFolderPath } from "./drive";
+import { parseImportPayload } from "../fileio/exportImport";
 import { logOp } from "../runtime/log";
 
 /** バックアップファイルの置き場所(ユーザー指示: マイドライブ直下ではなくノート同期と
@@ -13,7 +14,12 @@ const BACKUP_FOLDER_PATH = ["app", "New Tab Board"];
 export type JsonBackupSyncResult =
   | { status: "synced"; fileId: string; syncedAt: number }
   | { status: "unauthenticated" }
+  | { status: "skipped-empty-guard" }
   | { status: "error" };
+
+function hasBookmarks(json: string): boolean {
+  return (parseImportPayload(json)?.bookmarks.length ?? 0) > 0;
+}
 
 export type JsonBackupRestoreResult =
   | { status: "restored"; json: string }
@@ -40,6 +46,7 @@ export async function syncJsonBackupToDrive(
   const _getAuthToken = deps.getAuthToken ?? getAuthToken;
   const _findBackupFile = deps.findBackupFile ?? findBackupFile;
   const _uploadBackup = deps.uploadBackup ?? uploadBackup;
+  const _downloadBackup = deps.downloadBackup ?? downloadBackup;
   const _resolveFolderPath = deps.resolveFolderPath ?? resolveFolderPath;
 
   logOp(
@@ -61,6 +68,29 @@ export async function syncJsonBackupToDrive(
       "sync-resolved-existing-id",
       `existingId=${existingId ?? "none(will create)"} source=${knownFileId ? "known" : "search"} folderId=${folderId}`,
     );
+
+    // 空(バグ/一時的な読み込み不良等)になったローカル状態で、既存の非空バックアップを
+    // 無条件上書きしてしまう事故を防ぐ(2026-07-18: chrome.storage.syncの8KB/item上限超過が
+    // 引き金でブックマークがローカルからもDriveバックアップからも消えた実害を受けて追加)。
+    // 検証用ダウンロード自体が失敗した場合は、ガードのために本来の同期を止めない(ベストエフォート)。
+    if (existingId && !hasBookmarks(json)) {
+      try {
+        const existingJson = await _downloadBackup(existingId, token);
+        if (hasBookmarks(existingJson)) {
+          logOp(
+            "jsonBackupSync",
+            "sync-skipped-empty-guard",
+            `existingId=${existingId} reason=local-bookmarks-empty-but-remote-has-bookmarks`,
+          );
+          return { status: "skipped-empty-guard" };
+        }
+      } catch (err) {
+        logOp("jsonBackupSync", "sync-guard-check-error", "既存バックアップの検証に失敗(続行)", {
+          error: err,
+        });
+      }
+    }
+
     const fileId = await _uploadBackup(json, token, existingId ?? null, folderId);
     logOp("jsonBackupSync", "sync-done", `fileId=${fileId}`);
     return { status: "synced", fileId, syncedAt: now };

@@ -253,7 +253,7 @@
 - `src/lib/storage/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/storage/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
-- `src/lib/storage/storage.ts` — storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+- `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/clipboard/PastedImagesPanel.tsx` — PastedImagesPanel.tsx — Ctrl+Vで貼り付けた画像の一次保存(ローカルのみ・NASへは出さない)と、
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)

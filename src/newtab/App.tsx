@@ -926,6 +926,12 @@ export function App() {
       setDataPanelMessage(
         "Googleアカウントにログインできませんでした(「GDrive設定」から接続してください)",
       );
+    } else if (result.status === "skipped-empty-guard") {
+      setDataPanelMessage(
+        "ブックマークが空のためDriveへの退避を安全のため中止しました" +
+          "(既存のDriveバックアップにはブックマークが残っています。" +
+          "手元のブックマークが正しいか確認してからもう一度お試しください)",
+      );
     } else {
       setDataPanelMessage("Driveへの退避に失敗しました");
     }
