@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   Keyboard,
+  Search,
   StickyNote,
   Tag,
   Wrench,
@@ -160,14 +161,17 @@ export function App() {
   const [specialItems, setSpecialItems] = useState<SpecialItem[]>([]);
   const [specialFolders, setSpecialFolders] = useState<string[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  // 全文検索バーは常時表示(開閉トグルは撤去済み——ユーザー指示)。Cmd/Ctrl+Fは
-  // この検索欄へフォーカスを移す操作として再割り当てする(下のsearchInputRef参照)。
+  // 全文検索欄への参照(Cmd/Ctrl+Fでこの欄へフォーカスを移す)。
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  // データ操作パネル(ファイルを開く/Drive・NAS操作等)は普段使わず高さだけ食うため、
+  // データ操作パネル(ファイルを開く/Drive・NAS操作等)・全文検索・NAS検索は、
   // 新規タブを開くたびに折りたたんだ状態から始める(ユーザー指示:「一目でノート内容が
   // 見えるように」)。セッションを跨いだ記憶はしない(開けば毎回また閉じた状態に戻る)。
+  // 全文検索・NAS検索は元々常時表示だったが、これも普段使わず高さだけ食うとの指摘で
+  // 同じ折りたたみ式へ揃えた(2026-07-18)。
   const [showDataPanel, setShowDataPanel] = useState(false);
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
+  const [showTagSearchPanel, setShowTagSearchPanel] = useState(false);
   // 本日のGemini使用回数(450到達でGPT-OSS 120Bへの乗り換え警告を出す——ユーザー指示)。
   const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
@@ -587,8 +591,19 @@ export function App() {
   );
 
   useGlobalShortcuts(shortcutRegistry, {
-    toggleSearch: () => searchInputRef.current?.focus(),
-    replaceInSearch: () => setReplaceSignal((v) => v + 1),
+    // 全文検索は折りたたみ式になったため、Cmd/Ctrl+Fは開いてからフォーカスする
+    // (未マウント時はsearchInputRef.currentがまだ無いので、実際のフォーカスは
+    // 下のuseEffect(showSearchPanel依存)がマウント後に行う)。
+    toggleSearch: () => {
+      setShowSearchPanel(true);
+      searchInputRef.current?.focus();
+    },
+    // 置換も全文検索の一部なので、同時に開く(replaceSignalはSearchPanel初回マウント時の
+    // useEffectでも拾えるため、開くのと同時にインクリメントしてよい)。
+    replaceInSearch: () => {
+      setShowSearchPanel(true);
+      setReplaceSignal((v) => v + 1);
+    },
     cheatSheet: () => setShowShortcutsModal(true),
     // 表示中の全ペイン(NoteEditorPane)がmanualSyncSignalの変化を検知し、
     // それぞれ自分のノートを即時スナップショット+Drive同期する。
@@ -604,6 +619,15 @@ export function App() {
       ]),
     ),
   });
+
+  // 「既に開いている状態でCmd/Ctrl+Fを再度押す」場合の再フォーカス用(このeffectは
+  // ref.currentが既に存在する時だけ意味を持つ)。初回オープン時(SearchPanelはlazy+
+  // Suspenseのため非同期マウント)のフォーカスはこのeffectのタイミングに間に合わない
+  // ことがあるため、SearchPanel側の検索欄にautoFocusを付けてマウント自体で保証している
+  // (2026-07-18)。
+  useEffect(() => {
+    if (showSearchPanel) searchInputRef.current?.focus();
+  }, [showSearchPanel]);
 
   // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles/components.cssの.cm-editorが参照)。
   // ノート以外のUI文字には影響しない(ユーザー指示)。未設定なら既定値。
@@ -1293,22 +1317,62 @@ export function App() {
                       <Tag size={14} aria-hidden="true" />
                       {tagging ? "タグ付け中…" : "まとめてタグをふる"}
                     </Button>
+                    {/* 全文検索・NAS検索も普段使わず高さだけ食うため、データ操作パネルと
+                        同じ折りたたみ式にした(ユーザー指示・2026-07-18)。 */}
+                    <Button
+                      type="button"
+                      variant={showSearchPanel ? "solid" : "soft"}
+                      size="1"
+                      data-testid="toggle-search-panel"
+                      title={showSearchPanel ? "全文検索を閉じる" : "全文検索を開く(Cmd/Ctrl+F)"}
+                      onClick={() => setShowSearchPanel((v) => !v)}
+                    >
+                      <Search size={14} aria-hidden="true" />
+                      全文検索
+                      {showSearchPanel ? (
+                        <ChevronUp size={14} aria-hidden="true" />
+                      ) : (
+                        <ChevronDown size={14} aria-hidden="true" />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={showTagSearchPanel ? "solid" : "soft"}
+                      size="1"
+                      data-testid="toggle-tag-search-panel"
+                      title={
+                        showTagSearchPanel ? "NAS検索を閉じる" : "NAS検索を開く(タグ・本文・期間)"
+                      }
+                      onClick={() => setShowTagSearchPanel((v) => !v)}
+                    >
+                      <Tag size={14} aria-hidden="true" />
+                      NAS検索
+                      {showTagSearchPanel ? (
+                        <ChevronUp size={14} aria-hidden="true" />
+                      ) : (
+                        <ChevronDown size={14} aria-hidden="true" />
+                      )}
+                    </Button>
                   </Flex>
-                  <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
-                    <SearchPanel
-                      ref={searchInputRef}
-                      notes={notes}
-                      onSelectNote={(noteId) => selectNote(noteId)}
-                      replaceSignal={replaceSignal}
-                      onReplace={replaceTextInNotes}
-                    />
-                  </Suspense>
+                  {showSearchPanel ? (
+                    <Suspense fallback={<div data-testid="search-loading">検索を読み込み中…</div>}>
+                      <SearchPanel
+                        ref={searchInputRef}
+                        notes={notes}
+                        onSelectNote={(noteId) => selectNote(noteId)}
+                        replaceSignal={replaceSignal}
+                        onReplace={replaceTextInNotes}
+                      />
+                    </Suspense>
+                  ) : null}
                 </div>
-                <TagSearchPanel
-                  notes={notes}
-                  onSelectNote={selectNote}
-                  onPasteResults={pasteSearchResults}
-                />
+                {showTagSearchPanel ? (
+                  <TagSearchPanel
+                    notes={notes}
+                    onSelectNote={selectNote}
+                    onPasteResults={pasteSearchResults}
+                  />
+                ) : null}
                 {orderedNotes.length > 0 ? (
                   // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。

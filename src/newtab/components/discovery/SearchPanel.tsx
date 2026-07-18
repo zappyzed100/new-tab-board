@@ -1,7 +1,8 @@
 // SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
 // スナップショット索引(search.ts)ではなく生の本文をその場で検索する——日本語の部分文字列でも
 // 引け、まだ履歴に刻まれていない書きかけの本文も対象になる(ユーザー指摘「全文検索が空」への対応)。
-// 常時表示(検索ON/OFFトグルは撤去済み)のため、Cmd/Ctrl+Fはこの検索欄へフォーカスを移す。
+// 折りたたみ式(App.tsxのshowSearchPanelで開閉、既定は閉。2026-07-18)——Cmd/Ctrl+Fは
+// 開いた上でこの検索欄へフォーカスを移す(App.tsx側のuseEffectがマウント後に処理)。
 // Cmd/Ctrl+Rは既存の全文検索を拡張した置換欄を開く(ユーザー指示)——対象ノートを
 // チェックボックスで選んで、選んだノートだけに一括置換を適用できる。
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
@@ -89,6 +90,7 @@ export const SearchPanel = forwardRef<HTMLInputElement, Props>(function SearchPa
       <Flex gap="2" align="center">
         <TextField.Root
           ref={ref}
+          autoFocus
           aria-label="全文検索"
           data-testid="search-input"
           placeholder="検索したい語を入力(本文の一部でも可)"

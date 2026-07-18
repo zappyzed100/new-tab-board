@@ -10,6 +10,7 @@ test("タグ検索パネル: 自由入力タグ・カスタム期間・NAS未設
   const page = await context.newPage();
   await page.goto(newTabUrl);
   await expect(page.getByTestId("app-root")).toBeVisible();
+  await page.getByTestId("toggle-tag-search-panel").click();
   await expect(page.getByTestId("tag-search-panel")).toBeVisible();
 
   // 自由入力タグ → 選択タグのチップが出る。
