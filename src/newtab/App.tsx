@@ -80,12 +80,13 @@ import {
   writeTodosToNasActive,
 } from "../lib/externalIO/nasArchive";
 import {
+  claimNasOwnership,
   decideActiveSync,
   noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
 } from "../lib/externalIO/nasActiveSync";
-import { bumpNasGeneration, readNasGeneration } from "../lib/externalIO/nasNativeHost";
+import { readNasGeneration } from "../lib/externalIO/nasNativeHost";
 import { getNasFolderPath } from "../lib/storage/db";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
@@ -636,22 +637,40 @@ export function App() {
   // 人間がノートを操作したら、NAS世代同期の所有権をこのセッションが得る(初回だけbump——ユーザー指示
   // 「人間が操作しNASと通信し始めるとき、新しい世代をもらう」)。NAS未設定なら何もしない。
   // pull(NASで上書き)やロード時の末尾空補充はプログラム的更新なのでここを通さない。
+  // bumpはCAS(claimNasOwnership。2026-07-19是正)——自分の知っている世代がもう古ければ
+  // (他タブが先にbump/pushしていたら)所有権を得ず、まずpullしてローカルを最新化する。
+  // 以前は無条件bumpだったため、他タブの削除をpullしていないタブが所有権を奪ってしまい、
+  // 次のpushで削除前の古いノート一覧がNASへ書き戻される(削除が復活する)実害があった。
   // Drive側も同じ考え方で独立にbumpする(ユーザー指示: 接続がうまく行った方の世代だけを
   // 進めることで抜けの無い情報受け渡しの土台にする)——NASが未設定/未接続でもDrive側は
   // 試みる(どちらか一方が失敗してももう一方は進む、が本来の狙いのため早期returnで
-  // まとめない)。
+  // まとめない)。Drive側はまだpullで戻す経路が無いため、CAS化は現状スコープ外
+  // (src/lib/drive/CLAUDE.md参照——将来マルチデバイス対応時に揃える)。
   function markUserEdit() {
     if (!nasOwnerRef.current) {
       nasOwnerRef.current = true; // 楽観的に所有者化(bump失敗時も次tickでpush可否を再判定)
       void (async () => {
-        const path = await getNasFolderPath();
-        if (!path) return; // NAS未設定なら世代同期は使わない(ローカルのみ)
-        const g = await bumpNasGeneration(path);
-        if (g !== null) {
-          nasGenRef.current = g;
+        const result = await claimNasOwnership(nasGenRef.current);
+        if (result.kind === "no-nas" || result.kind === "network-error") return;
+        if (result.kind === "claimed") {
+          nasGenRef.current = result.generation;
           const local = await loadLocalData();
-          await saveLocalData({ ...local, nasGeneration: g });
+          await saveLocalData({ ...local, nasGeneration: result.generation });
+          return;
         }
+        // stale: 自分の知っている世代は既に古い(他タブが先にbump/pushしていた)。所有権の
+        // 主張を取り消し、pull結果があればローカルへ反映する(このタブの直前の編集は
+        // pull結果で上書きされ得る——複数タブがほぼ同時に競合編集した際のトレードオフだが、
+        // 少なくとも「古い状態がpushされて他タブの削除がロールバックされる」実害は防げる)。
+        nasOwnerRef.current = false;
+        if (result.pulledNotes) {
+          nasGenRef.current = result.generation;
+          applyPulledNotes(result.pulledNotes);
+          const local = await loadLocalData();
+          await saveLocalData({ ...local, nasGeneration: result.generation });
+        }
+        // pull失敗時はnasGenRef.currentを進めない→次のtickのdecideActiveSyncが
+        // 「NASの方が新しい」と自然に判定してpullを再試行する。
       })();
     }
     if (!driveOwnerRef.current) {

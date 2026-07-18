@@ -81,9 +81,9 @@ def test_generation_starts_at_zero_and_bumps(tmp_path) -> None:
         "ok": True,
         "generation": 0,
     }
-    # bumpするたびに+1され、read-generationにも反映される。
-    assert handle({"type": "bump-generation", "path": nas})["generation"] == 1
-    assert handle({"type": "bump-generation", "path": nas})["generation"] == 2
+    # bumpは呼び出し側が知っている現在値(expected)を渡し、一致すれば+1される。
+    assert handle({"type": "bump-generation", "path": nas, "expected": 0})["generation"] == 1
+    assert handle({"type": "bump-generation", "path": nas, "expected": 1})["generation"] == 2
     assert handle({"type": "read-generation", "path": nas})["generation"] == 2
     # ファイルに整数で永続化されている。
     with open(os.path.join(nas, "data", "generation.txt"), encoding="utf-8") as f:
@@ -93,9 +93,39 @@ def test_generation_starts_at_zero_and_bumps(tmp_path) -> None:
 def test_generation_fails_for_missing_base(tmp_path) -> None:
     missing = str(tmp_path / "no-such-nas")
     for t in ("read-generation", "bump-generation"):
-        res = handle({"type": t, "path": missing})
+        res = handle({"type": t, "path": missing, "expected": 0})
         assert res["ok"] is False
         assert "error" in res
+
+
+def test_bump_generation_rejects_stale_expected(tmp_path) -> None:
+    # 2026-07-19: bump-generationはCAS(compare-and-swap)——複数タブが同時に開いている時、
+    # 一方が既にbump済みの状態を知らないまま(=古いexpectedのまま)もう一方がbumpしようと
+    # すると、無条件bumpでは所有権を奪い取れてしまい、そのタブが持つ古い(削除前の)ノート
+    # 一覧がNASへ丸ごと書き戻される実害があった。expectedが現在値と不一致ならok:falseで
+    # stale:true・現在値を返し、呼び出し側はまずpullしてから再試行する契約にする。
+    nas = str(tmp_path)
+    first = handle({"type": "bump-generation", "path": nas, "expected": 0})
+    assert first == {"type": "generation-result", "ok": True, "generation": 1}
+    # 別タブがまだ世代0のつもりでbumpしようとすると、現在値(1)と不一致でstale。
+    stale = handle({"type": "bump-generation", "path": nas, "expected": 0})
+    assert stale == {"type": "generation-result", "ok": False, "stale": True, "generation": 1}
+    # stale失敗は世代を進めない(ファイルは1のまま)。
+    assert handle({"type": "read-generation", "path": nas})["generation"] == 1
+
+
+def test_read_generation_rounds_down_out_of_range_values(tmp_path) -> None:
+    # 世代ファイルへ負値/非現実的な巨大値が書き込まれていた場合(手動編集・壊れ)は
+    # 0として扱う(拡張側のNumberが精度を失う前に安全側へ丸める保険——ユーザー指摘)。
+    nas = str(tmp_path)
+    os.makedirs(os.path.join(nas, "data"), exist_ok=True)
+    generation_path = os.path.join(nas, "data", "generation.txt")
+    with open(generation_path, "w", encoding="utf-8") as f:
+        f.write("99999999999999999999")  # 10**15を大きく超える異常値
+    assert handle({"type": "read-generation", "path": nas})["generation"] == 0
+    with open(generation_path, "w", encoding="utf-8") as f:
+        f.write("-5")
+    assert handle({"type": "read-generation", "path": nas})["generation"] == 0
 
 
 def test_read_active_returns_all_txt_with_content(tmp_path) -> None:

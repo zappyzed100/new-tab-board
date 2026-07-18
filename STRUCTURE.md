@@ -427,6 +427,8 @@
 - def test_delete_file_rejects_path_traversal
 - def test_generation_starts_at_zero_and_bumps
 - def test_generation_fails_for_missing_base
+- def test_bump_generation_rejects_stale_expected
+- def test_read_generation_rounds_down_out_of_range_values
 - def test_read_active_returns_all_txt_with_content
 - def test_read_active_empty_when_no_active_dir
 - def test_write_file_creates_date_subfolders
@@ -768,6 +770,9 @@
 - function decideActiveSync
 - type PullDeps
 - function pullActiveFromNas
+- type ClaimOwnershipDeps
+- type ClaimOwnershipResult
+- function claimNasOwnership
 - type PushDeps
 - function pushActiveToNas
 
@@ -798,6 +803,7 @@
 - function deleteFileFromNas
 - function rebuildNasIndex
 - function readNasGeneration
+- type BumpGenerationResult
 - function bumpNasGeneration
 - function readNasActive
 - function listNasTree

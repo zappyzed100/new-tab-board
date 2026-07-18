@@ -283,12 +283,31 @@ describe("世代同期(read/bump-generation, read-active)", () => {
     expect(fake.sentMessages).toEqual([{ type: "read-generation", path: "Z:\\NAS" }]);
   });
 
-  it("bumpNasGeneration は加算後の新値を返し、bump-generationを送る", async () => {
+  it("bumpNasGeneration はexpectedを添えてbump-generationを送り、成功時は新世代を返す", async () => {
     const fake = makeFakePort();
-    const promise = bumpNasGeneration("Z:\\NAS", () => fake.port);
+    const promise = bumpNasGeneration("Z:\\NAS", 3, () => fake.port);
     fake.emitMessage({ type: "generation-result", ok: true, generation: 4 });
-    expect(await promise).toBe(4);
-    expect(fake.sentMessages).toEqual([{ type: "bump-generation", path: "Z:\\NAS" }]);
+    expect(await promise).toEqual({ ok: true, generation: 4 });
+    expect(fake.sentMessages).toEqual([{ type: "bump-generation", path: "Z:\\NAS", expected: 3 }]);
+  });
+
+  it(
+    "bumpNasGeneration はCAS不一致(stale)ならok:false,stale:trueと現在世代を返す" +
+      "(2026-07-19: 他タブが既に世代を進めていた場合、無条件bumpだと古いノート一覧を" +
+      "NASへ書き戻してしまうため、呼び出し側がまずpullし直せるようにする)",
+    async () => {
+      const fake = makeFakePort();
+      const promise = bumpNasGeneration("Z:\\NAS", 3, () => fake.port);
+      fake.emitMessage({ type: "generation-result", ok: false, stale: true, generation: 5 });
+      expect(await promise).toEqual({ ok: false, stale: true, generation: 5 });
+    },
+  );
+
+  it("bumpNasGeneration は通信失敗(host未導入等)ならnull", async () => {
+    const fake = makeFakePort();
+    const promise = bumpNasGeneration("Z:\\NAS", 3, () => fake.port);
+    fake.emitDisconnect();
+    expect(await promise).toBeNull();
   });
 
   it("generation-resultのok:falseならnull", async () => {
