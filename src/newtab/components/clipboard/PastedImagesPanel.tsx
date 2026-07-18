@@ -17,15 +17,20 @@ type View = { id: string; url: string; blob: Blob; createdAt: number };
 /** blobをPNGへ変換する(ClipboardItemはpngが最も確実にコピーできるため)。失敗時は元のblob。 */
 async function blobToPng(blob: Blob): Promise<Blob> {
   const bmp = await createImageBitmap(blob);
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return blob;
-  ctx.drawImage(bmp, 0, 0);
-  return await new Promise<Blob>((resolve) =>
-    canvas.toBlob((b) => resolve(b ?? blob), "image/png"),
-  );
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return blob;
+    ctx.drawImage(bmp, 0, 0);
+    return await new Promise<Blob>((resolve) =>
+      canvas.toBlob((b) => resolve(b ?? blob), "image/png"),
+    );
+  } finally {
+    // ImageBitmapはJSのGCだけではGPU/デコーダ資源の解放時期が保証されないため明示解放する。
+    bmp.close();
+  }
 }
 
 export function PastedImagesPanel() {
@@ -133,7 +138,13 @@ export function PastedImagesPanel() {
         <Flex gap="3" wrap="wrap" data-testid="pasted-images-list">
           {images.map((v) => (
             <div key={v.id} className="pasted-image-item" data-testid={`pasted-image-${v.id}`}>
-              <img src={v.url} alt="貼り付け画像" className="pasted-image-thumb" />
+              <img
+                src={v.url}
+                alt="貼り付け画像"
+                className="pasted-image-thumb"
+                loading="lazy"
+                decoding="async"
+              />
               <Flex gap="1" mt="1">
                 <Button
                   type="button"

@@ -19,6 +19,11 @@ import { markdown } from "@codemirror/lang-markdown";
 import { selectNextOccurrence } from "@codemirror/search";
 import { evaluateLineIfCalculator } from "../../../lib/linking/calculator";
 
+const EDITOR_MIN_HEIGHT_PX = 320;
+// 画面へ入る少し前にCM6を準備する。全ノート分を常駐させると、各EditorViewの描画層が
+// GPUプロセスへ累積し、BraveのHangWatcherがGPU入力スレッドの停止を検出した実害がある。
+const EDITOR_VIEWPORT_MARGIN_PX = 640;
+
 type Props = {
   content: string;
   onContentChange: (content: string) => void;
@@ -62,9 +67,17 @@ const editingKeymap = [
 type CursorInfo = { line: number; col: number; pos: number; length: number };
 
 export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
+  // IntersectionObserverが無いテスト/旧ブラウザでは従来どおり即マウントして機能を落とさない。
+  const [editorMounted, setEditorMounted] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
+  // 画面外へ出たEditorViewを破棄する前に実高さを保存し、プレースホルダへ引き継ぐ。
+  // これが無いと破棄のたびにmasonryの高さが縮み、列の再配置とスクロールジャンプが起きる。
+  const [placeholderHeight, setPlaceholderHeight] = useState(EDITOR_MIN_HEIGHT_PX);
   const [cursor, setCursor] = useState<CursorInfo>({
     line: 1,
     col: 1,
@@ -73,7 +86,29 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
   });
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const viewport = viewportRef.current;
+    if (!viewport || typeof IntersectionObserver === "undefined") {
+      setEditorMounted(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        if (!entry.isIntersecting && containerRef.current) {
+          setPlaceholderHeight(
+            Math.max(EDITOR_MIN_HEIGHT_PX, containerRef.current.getBoundingClientRect().height),
+          );
+        }
+        setEditorMounted(entry.isIntersecting);
+      },
+      { rootMargin: `${EDITOR_VIEWPORT_MARGIN_PX}px 0px` },
+    );
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!editorMounted || !containerRef.current) return;
     function readCursor(state: EditorState): CursorInfo {
       const pos = state.selection.main.head;
       const line = state.doc.lineAt(pos);
@@ -123,12 +158,24 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
     if (autoFocus) view.focus();
     return () => view.destroy();
     // content/onContentChangeは初回マウント時のみ使用する(意図的な依存配列省略——
-    // ノート切替時はkey propで再マウントされるため、ここでの再実行は不要)。
-  }, []);
+    // ノート切替時はkey prop、画面外から戻った時はeditorMountedで再マウントされる)。
+  }, [editorMounted]);
 
   return (
-    <div>
-      <div data-testid="notepad-editor" ref={containerRef} />
+    <div
+      ref={viewportRef}
+      data-testid="notepad-viewport"
+      data-editor-state={editorMounted ? "mounted" : "deferred"}
+    >
+      {editorMounted ? (
+        <div data-testid="notepad-editor" ref={containerRef} />
+      ) : (
+        <div
+          data-testid="notepad-editor-placeholder"
+          aria-hidden="true"
+          style={{ height: `${placeholderHeight}px` }}
+        />
+      )}
       <div data-testid="notepad-status-bar">
         行 {cursor.line}、列 {cursor.col}、{cursor.pos}文字/全{cursor.length}文字
       </div>

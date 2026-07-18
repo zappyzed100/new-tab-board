@@ -8,8 +8,13 @@ export default tseslint.config(
     // .claude/skills/ はベンダーコピー(手で編集しない・CLAUDE.md参照)、upstream/ は
     // submodule(別リポジトリの内容)なので、どちらも本プロジェクトのlint対象外とする。
     ignores: [
-      "dist/**", "node_modules/**", "playwright-report/**", "test-results/**",
-      ".claude/skills/**", "upstream/**",
+      "dist/**",
+      "node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
+      "**/.pytest_cache/**",
+      ".claude/skills/**",
+      "upstream/**",
     ],
   },
   js.configs.recommended,

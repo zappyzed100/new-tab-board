@@ -150,6 +150,14 @@
   min-height: 320px;
 }
 
+[data-testid="notepad-editor-placeholder"] {
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface-2);
+}
+
 [data-testid="notepad-editor"] .cm-editor {
   height: 100%;
   min-height: 320px;

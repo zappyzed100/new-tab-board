@@ -1,6 +1,5 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
   AlertTriangle,
@@ -22,6 +21,7 @@ import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
+import { ViewportNote } from "./components/board/ViewportNote";
 import { PastedImagesPanel } from "./components/clipboard/PastedImagesPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
@@ -101,6 +101,7 @@ import {
 import { syncNoteToDrive } from "../lib/drive/driveSync";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
+import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
 import type { AppLaunch, Bookmark, LocalData, Note, Settings, SpecialItem, Todo } from "../types";
 import { SpecialPanel } from "./components/shell/SpecialPanel";
 
@@ -111,39 +112,6 @@ type SyncState = { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Se
 const SearchPanel = lazy(() =>
   import("./components/discovery/SearchPanel").then((m) => ({ default: m.SearchPanel })),
 );
-
-// 実測masonry用: 子(ノートペイン)の描画後の実高さを ResizeObserver で測り、onHeight で親へ返す
-// ラッパ。親はこの高さで「一番低い列」への振り分けを決める。列を移っても列幅は同じなので測定値は
-// 変わらず、内容変更のときだけ高さが変わる(＝再配置は入力時のみ)。
-function MeasuredNote({
-  noteId,
-  linearIndex,
-  onHeight,
-  children,
-}: {
-  noteId: string;
-  /** order(優先度)列でのこのノートの位置。実測masonryは列配置を高さで決めるため、論理的な
-   * 並び順は列レイアウトから復元できない——data属性で明示し、E2E/デバッグが順序を読めるようにする。 */
-  linearIndex: number;
-  onHeight: (id: string, h: number) => void;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) onHeight(noteId, e.contentRect.height);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [noteId, onHeight]);
-  return (
-    <div ref={ref} className="note-cell" data-linear-index={linearIndex}>
-      {children}
-    </div>
-  );
-}
 
 // タブ↔NAS active の世代同期の間隔(ユーザー指示: activeで5分毎に最新データと連携)。
 const NAS_SYNC_INTERVAL_MS = 300_000;
@@ -528,6 +496,10 @@ export function App() {
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
+  const noteLinearIndices = useMemo(
+    () => new Map(orderedNotes.map((note, index) => [note.id, index])),
+    [orderedNotes],
+  );
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
   // タグ候補(TODOリスト下で管理・LLMのタグ推定へ渡す優先候補)。設定にsync/バックアップされる。
   const tagCandidates = sync?.settings.tagCandidates ?? [];
@@ -1384,11 +1356,16 @@ export function App() {
                         data-testid={`note-column-${colIndex}`}
                       >
                         {column.map((note) => (
-                          <MeasuredNote
+                          <ViewportNote
                             key={note.id}
                             noteId={note.id}
-                            linearIndex={orderedNotes.indexOf(note)}
+                            title={note.title}
+                            linearIndex={noteLinearIndices.get(note.id) ?? -1}
+                            active={note.id === activeNoteId}
+                            estimatedHeight={noteHeights.get(note.id)}
+                            contentVersion={note.updatedAt}
                             onHeight={reportNoteHeight}
+                            onSuspend={() => void forceSnapshot(note.id, note.content)}
                           >
                             <NoteEditorPane
                               note={note}
@@ -1414,7 +1391,7 @@ export function App() {
                               onDragStartNote={handleNoteDragStart}
                               onDropNote={handleNoteDrop}
                             />
-                          </MeasuredNote>
+                          </ViewportNote>
                         ))}
                       </div>
                     ))}

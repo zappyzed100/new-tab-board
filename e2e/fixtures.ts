@@ -25,24 +25,26 @@ export const test = base.extend<{
       headless: false,
       args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
     });
-    // 拡張機能がchrome_url_overrides.newtabを持つため、起動時にChromeが自動で開く最初の
-    // タブも独立したApp.tsxインスタンスとして起動し、バックグラウンドで自分の初期状態
-    // (空ノート等)をchrome.storage.localへ後から書き込みうる。この「幽霊タブ」がテスト用
-    // タブ(newPage())とは別に生き残り、後勝ちの保存でテストが書いたデータを上書きして
-    // reload後のアサーションが偶発的に失敗する実害を確認した。ヘッド付きChromeは全タブを
-    // 閉じるとブラウザごと終了してしまう(newPage自体が失敗する)ため、閉じずabout:blankへ
-    // 逃がしてApp.tsxのマウントを止める。起動直後は自動タブがまだ生成されていないことが
-    // ある(Windows/headed Chromeの起動タイミング依存)ため、出現を少し待ってから2回blankし、
-    // 遅れて現れる分も取りこぼさないようにする(1回だけだと約1/3の頻度で取りこぼし実害を確認)。
-    if (context.pages().length === 0) {
-      await context.waitForEvent("page", { timeout: 5000 }).catch(() => {});
-    }
+    // new-tab overrideの初期Appは末尾の空ノート3件を非同期保存する。保存開始後すぐblankへ
+    // 逃がしてもchrome.storage.set自体は継続し、テストのseedを後勝ちで空データへ戻す実害がある。
+    // 固定時間待ちではなく、拡張ページを明示起動して初期保存がstorageへ反映されたことを
+    // 条件として待ち、その後で全ページをblank化する。
+    const [worker] = context.serviceWorkers().length
+      ? context.serviceWorkers()
+      : [await context.waitForEvent("serviceworker")];
+    const extensionId = worker.url().split("/")[2];
+    const startupPage = context.pages()[0] ?? (await context.newPage());
+    await startupPage.goto(`chrome-extension://${extensionId}/index.html`);
+    await startupPage.getByTestId("app-root").waitFor({ state: "visible" });
+    await startupPage.waitForFunction(async () => {
+      // NO-LOG: 隔離E2Eプロファイルの初期保存完了を待つfixture内の観察で、本番I/Oではない。
+      const stored = await chrome.storage.local.get("localData");
+      return (
+        (stored.localData as { notes?: unknown[] } | undefined)?.notes?.length === 3
+      );
+    });
     for (const page of context.pages()) {
       await page.goto("about:blank").catch(() => {});
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    for (const page of context.pages()) {
-      if (page.url() !== "about:blank") await page.goto("about:blank").catch(() => {});
     }
     await use(context);
     await context.close();

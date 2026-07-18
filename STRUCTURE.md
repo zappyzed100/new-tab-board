@@ -97,6 +97,8 @@
 - `e2e/specs/special.spec.ts` — special.spec.ts — ⭐スター/スペシャル(保管棚)の回帰。スターでスペシャル一覧に出る、削除で凍結して
 - `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
+- `e2e/stress/CLAUDE.md`
+- `e2e/stress/resource-budget.spec.ts` — resource-budget.spec.ts — 500ノート時の詳細ペイン・描画・timer・Observer・DOM上限を検査する。
 
 ## `gas/`
 
@@ -255,6 +257,8 @@
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
+- `src/newtab/components/board/CLAUDE.md`
+- `src/newtab/components/board/ViewportNote.tsx` — ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
 - `src/newtab/components/clipboard/PastedImagesPanel.tsx` — PastedImagesPanel.tsx — Ctrl+Vで貼り付けた画像の一次保存(ローカルのみ・NASへは出さない)と、
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
@@ -987,6 +991,9 @@
 
 ### `src/newtab/App.tsx`
 - function App
+
+### `src/newtab/components/board/ViewportNote.tsx`
+- function ViewportNote
 
 ### `src/newtab/components/clipboard/PastedImagesPanel.tsx`
 - function PastedImagesPanel
