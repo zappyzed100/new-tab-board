@@ -36,6 +36,10 @@ jobs:
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      # check-bootstrap の Step 3（pre-commit のシム導入済みか）はシム実体（.git/hooks/*）の
+      # 有無を見るため、fresh checkoutではここで一度installしないと毎回HARDで落ちる
+      # （2026-07-18発見: `pre-commit run --all-files` はシムを作らない——installとrunは別操作）。
+      - run: uvx pre-commit install
       # フックによるファイル変更（§3.2 の再生成差分を含む）も CI では失敗として現れる
       - run: uvx pre-commit run --all-files --show-diff-on-failure
 
