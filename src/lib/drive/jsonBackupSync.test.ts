@@ -2,8 +2,26 @@
 // オーケストレーション)の単体テスト
 import { describe, expect, it, vi } from "vitest";
 import { restoreJsonBackupFromDrive, syncJsonBackupToDrive } from "./jsonBackupSync";
+import { buildExportPayload, serializeExport } from "../fileio/exportImport";
+import type { Bookmark, Settings } from "../../types";
 
 const json = '{"version":1,"bookmarks":[]}';
+
+const settings: Settings = { openIn: "same", theme: "dark", searchEngine: "https://x/?q=%s" };
+const bookmark: Bookmark = {
+  id: "b1",
+  url: "https://example.com",
+  label: "Example",
+  icon: { type: "favicon" },
+  order: 0,
+};
+const jsonWithBookmarks = serializeExport(
+  buildExportPayload(
+    { bookmarks: [bookmark], appLaunches: [], settings },
+    { notes: [], todos: [], specialItems: [], specialFolders: [] },
+    1000,
+  ),
+);
 
 describe("syncJsonBackupToDrive", () => {
   it("未認証(token無し)ならunauthenticatedを返し、アップロードは呼ばない", async () => {
@@ -36,15 +54,24 @@ describe("syncJsonBackupToDrive", () => {
     const findBackupFile = vi.fn();
     const uploadBackup = vi.fn().mockResolvedValue("existing-file");
     const resolveFolderPath = vi.fn().mockResolvedValue("folder-app");
-    const result = await syncJsonBackupToDrive(json, 2000, false, "existing-file", {
+    const downloadBackup = vi.fn();
+    // ローカル側にブックマークがあるので空上書きガードは発火せず、既存の検証(ダウンロード)は不要。
+    const result = await syncJsonBackupToDrive(jsonWithBookmarks, 2000, false, "existing-file", {
       getAuthToken: vi.fn().mockResolvedValue("token-abc"),
       findBackupFile,
       uploadBackup,
       resolveFolderPath,
+      downloadBackup,
     });
     expect(result).toEqual({ status: "synced", fileId: "existing-file", syncedAt: 2000 });
     expect(findBackupFile).not.toHaveBeenCalled();
-    expect(uploadBackup).toHaveBeenCalledWith(json, "token-abc", "existing-file", "folder-app");
+    expect(downloadBackup).not.toHaveBeenCalled();
+    expect(uploadBackup).toHaveBeenCalledWith(
+      jsonWithBookmarks,
+      "token-abc",
+      "existing-file",
+      "folder-app",
+    );
   });
 
   it("アップロード失敗はerrorステータスを返す", async () => {
@@ -63,6 +90,48 @@ describe("syncJsonBackupToDrive", () => {
       resolveFolderPath: vi.fn().mockRejectedValue(new Error("network down")),
     });
     expect(result).toEqual({ status: "error" });
+  });
+
+  it(
+    "ローカルのブックマークが空で、既存Driveバックアップに中身があればアップロードを中止する" +
+      "(2026-07-18: 空への無条件上書きでブックマークが消えた実害を受けた回帰テスト)",
+    async () => {
+      const uploadBackup = vi.fn();
+      const downloadBackup = vi.fn().mockResolvedValue(jsonWithBookmarks);
+      const result = await syncJsonBackupToDrive(json, 1000, false, "existing-file", {
+        getAuthToken: vi.fn().mockResolvedValue("token-abc"),
+        resolveFolderPath: vi.fn().mockResolvedValue("folder-app"),
+        downloadBackup,
+        uploadBackup,
+      });
+      expect(result).toEqual({ status: "skipped-empty-guard" });
+      expect(downloadBackup).toHaveBeenCalledWith("existing-file", "token-abc");
+      expect(uploadBackup).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ローカルも既存Driveバックアップも空ならガードせずアップロードする(空同士の上書きは正常系)", async () => {
+    const uploadBackup = vi.fn().mockResolvedValue("existing-file");
+    const result = await syncJsonBackupToDrive(json, 1000, false, "existing-file", {
+      getAuthToken: vi.fn().mockResolvedValue("token-abc"),
+      resolveFolderPath: vi.fn().mockResolvedValue("folder-app"),
+      downloadBackup: vi.fn().mockResolvedValue(json), // 既存も空
+      uploadBackup,
+    });
+    expect(result).toEqual({ status: "synced", fileId: "existing-file", syncedAt: 1000 });
+    expect(uploadBackup).toHaveBeenCalled();
+  });
+
+  it("既存バックアップの検証(ダウンロード)が失敗しても、ガードのため同期を止めずアップロードする", async () => {
+    const uploadBackup = vi.fn().mockResolvedValue("existing-file");
+    const result = await syncJsonBackupToDrive(json, 1000, false, "existing-file", {
+      getAuthToken: vi.fn().mockResolvedValue("token-abc"),
+      resolveFolderPath: vi.fn().mockResolvedValue("folder-app"),
+      downloadBackup: vi.fn().mockRejectedValue(new Error("network down")),
+      uploadBackup,
+    });
+    expect(result).toEqual({ status: "synced", fileId: "existing-file", syncedAt: 1000 });
+    expect(uploadBackup).toHaveBeenCalled();
   });
 });
 

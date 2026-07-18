@@ -8,29 +8,93 @@ import {
   saveSyncData,
 } from "./storage";
 
+function stubChromeStorage() {
+  const syncStore: Record<string, unknown> = {};
+  const localStore: Record<string, unknown> = {};
+  const removedSyncKeys: string[] = [];
+  const syncGet = vi.fn(async (key: string) => ({ [key]: syncStore[key] }));
+  vi.stubGlobal("chrome", {
+    storage: {
+      sync: {
+        get: syncGet,
+        set: async (items: Record<string, unknown>) => Object.assign(syncStore, items),
+        remove: async (key: string) => {
+          removedSyncKeys.push(key);
+          delete syncStore[key];
+        },
+      },
+      local: {
+        get: async (key: string) => ({ [key]: localStore[key] }),
+        set: async (items: Record<string, unknown>) => Object.assign(localStore, items),
+      },
+    },
+  });
+  return { syncStore, localStore, removedSyncKeys, syncGet };
+}
+
 describe("chrome.storage が使える場合", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("sync領域へ保存した内容を読み戻せる", async () => {
-    const store: Record<string, unknown> = {};
-    vi.stubGlobal("chrome", {
-      storage: {
-        sync: {
-          get: async (key: string) => ({ [key]: store[key] }),
-          set: async (items: Record<string, unknown>) => Object.assign(store, items),
-        },
-        local: {
-          get: async (key: string) => ({ [key]: store[key] }),
-          set: async (items: Record<string, unknown>) => Object.assign(store, items),
-        },
-      },
-    });
+  it("local領域へ保存した内容を読み戻せる(syncは使わない)", async () => {
+    const { syncStore } = stubChromeStorage();
 
     const data = { bookmarks: [], appLaunches: [], settings: DEFAULT_SETTINGS };
     await saveSyncData(data);
     expect(await loadSyncData()).toEqual(data);
+    expect(syncStore.syncData).toBeUndefined(); // syncには一切書かない
+  });
+
+  it(
+    "旧chrome.storage.syncに残っていたデータは初回読み込みでlocalへ引き継がれ、" +
+      "syncからは削除される(2026-07-18: 8KB/item上限でブックマークが消えた実害を受けた移行)",
+    async () => {
+      const { syncStore, localStore, removedSyncKeys, syncGet } = stubChromeStorage();
+      const legacy = {
+        bookmarks: [
+          {
+            id: "b1",
+            url: "https://example.com",
+            label: "Example",
+            icon: { type: "favicon" as const },
+            order: 0,
+          },
+        ],
+        appLaunches: [],
+        settings: DEFAULT_SETTINGS,
+      };
+      syncStore.syncData = legacy;
+
+      expect(await loadSyncData()).toEqual(legacy);
+      expect(localStore.syncData).toEqual(legacy); // localへ引き継がれた
+      expect(removedSyncKeys).toEqual(["syncData"]); // 旧syncエントリは掃除される
+
+      // 2回目の読み込みはlocalから読むだけで、既に消えたsyncを見に行かない
+      syncGet.mockClear();
+      expect(await loadSyncData()).toEqual(legacy);
+      expect(syncGet).not.toHaveBeenCalled();
+    },
+  );
+
+  it("書き込み失敗はエラーを再送出する(呼び出し側が診断できるよう無音にしない)", async () => {
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: async (key: string) => ({ [key]: undefined }),
+          set: async () => {
+            throw new Error("QUOTA_BYTES_PER_ITEM quota exceeded");
+          },
+        },
+        sync: {
+          get: async (key: string) => ({ [key]: undefined }),
+        },
+      },
+    });
+
+    await expect(
+      saveSyncData({ bookmarks: [], appLaunches: [], settings: DEFAULT_SETTINGS }),
+    ).rejects.toThrow("quota exceeded");
   });
 });
 

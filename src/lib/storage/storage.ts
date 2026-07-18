@@ -1,4 +1,4 @@
-// storage.ts — chrome.storage(sync/local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+// storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 import type { AppLaunch, Bookmark, LocalData, Settings } from "../../types";
 import { logOp } from "../runtime/log";
 
@@ -57,25 +57,55 @@ async function readArea<T>(area: "sync" | "local", key: string, fallback: T): Pr
 
 async function writeArea<T>(area: "sync" | "local", key: string, value: T): Promise<void> {
   const started = Date.now();
-  if (hasChromeStorage(area)) {
-    await chrome.storage[area].set({ [key]: value });
-    logOp("storage", "save", `chrome.storage.${area}`, { elapsedMs: Date.now() - started });
-    return;
+  try {
+    if (hasChromeStorage(area)) {
+      await chrome.storage[area].set({ [key]: value });
+      logOp("storage", "save", `chrome.storage.${area}`, { elapsedMs: Date.now() - started });
+      return;
+    }
+    window.localStorage.setItem(`${area}:${key}`, JSON.stringify(value));
+    logOp("storage", "save", `localStorage(fallback:${area})`, { elapsedMs: Date.now() - started });
+  } catch (err) {
+    // 保存呼び出しは全て呼び出し側でvoid(fire-and-forget)されるため、ここでログしなければ
+    // 失敗が完全に無音になる(2026-07-18: chrome.storage.syncの8KB/item上限超過で書き込みが
+    // 静かに失敗しブックマークが消えた実インシデントを受けて追加)。
+    logOp("storage", "save-error", `chrome.storage.${area}/${key}`, {
+      error: err,
+      elapsedMs: Date.now() - started,
+    });
+    throw err;
   }
-  window.localStorage.setItem(`${area}:${key}`, JSON.stringify(value));
-  logOp("storage", "save", `localStorage(fallback:${area})`, { elapsedMs: Date.now() - started });
 }
 
+/** bookmarks/appLaunches/settingsは元々chrome.storage.syncに乗せていたが、8KB/item上限を
+ * 超えると書き込みが無音で失敗しブックマークが消える実害が出たため、上限の無いlocalへ
+ * 移設した(2026-07-18)。複数端末間の自動同期はsyncの役目を諦め、Drive/NAS JSONバックアップの
+ * 手動復元へ委ねる(SPEC.md §8)。既にsyncへ入っている旧データは初回読み込み時に一度だけ
+ * localへ引き継ぐ(移行後はsync側を消し、以後syncは一切使わない)。 */
 export async function loadSyncData(): Promise<SyncShape> {
-  return readArea<SyncShape>("sync", SYNC_KEY, {
-    bookmarks: [],
-    appLaunches: [],
-    settings: DEFAULT_SETTINGS,
-  });
+  const fallback: SyncShape = { bookmarks: [], appLaunches: [], settings: DEFAULT_SETTINGS };
+  const local = await readArea<SyncShape | null>("local", SYNC_KEY, null);
+  if (local) return local;
+
+  const legacy = await readArea<SyncShape | null>("sync", SYNC_KEY, null);
+  if (!legacy) return fallback;
+
+  logOp("storage", "migrate", "sync->local (legacy syncData found)");
+  await writeArea("local", SYNC_KEY, legacy);
+  if (hasChromeStorage("sync")) {
+    try {
+      await chrome.storage.sync.remove(SYNC_KEY);
+    } catch (err) {
+      logOp("storage", "migrate-cleanup-error", "chrome.storage.sync.remove failed (非致命的)", {
+        error: err,
+      });
+    }
+  }
+  return legacy;
 }
 
 export async function saveSyncData(data: SyncShape): Promise<void> {
-  await writeArea("sync", SYNC_KEY, data);
+  await writeArea("local", SYNC_KEY, data);
 }
 
 export async function loadLocalData(): Promise<LocalShape> {

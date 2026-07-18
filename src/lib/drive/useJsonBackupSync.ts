@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { now as clockNow } from "../runtime/clock";
 import { syncJsonBackupToDrive } from "./jsonBackupSync";
 
-export type JsonBackupSyncStatus = "idle" | "syncing" | "synced" | "unauthenticated" | "error";
+export type JsonBackupSyncStatus =
+  "idle" | "syncing" | "synced" | "unauthenticated" | "skipped-empty-guard" | "error";
 
 // 全データJSONバックアップの自動退避間隔。ユーザー指示「同期回数が多すぎる」を受け、編集/並べ替えの
 // たびに全文を上げないよう5分へ(履歴スナップショット・Drive active と同じ節度)。並べ替えだけの

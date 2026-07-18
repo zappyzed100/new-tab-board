@@ -19,13 +19,16 @@ export type Settings = {
   theme: "light" | "dark" | "auto";
   searchEngine: string;
   /** 全データJSONバックアップ(jsonBackup.ts)のDrive上のファイルID。一度作成した後は
-   * 同じファイルへ上書きし続けるためのキャッシュ(chrome.storage.syncに乗るため複数端末で共有される)。 */
+   * 同じファイルへ上書きし続けるためのキャッシュ。chrome.storage.local保存(2026-07-18に
+   * syncの8KB/item上限超過でブックマークが消えた実害を受けてsyncから移設)のため、複数端末間
+   * では自動共有されない——端末をまたぐ復元はDrive/NASバックアップの手動復元に委ねる。 */
   jsonBackupFileId?: string;
   /** ノート本文(エディタ)の文字サイズ(px)。A-/A+で一括調整する(ユーザー指示)。
    * 未設定なら既定13px。ノート以外のUI文字には影響しない。 */
   noteFontSize?: number;
   /** タグ候補(ユーザーが手で並べる語彙)。LLMのタグ推定時に「優先的に選ぶ候補」として渡す
-   * (ユーザー指示)。TODOリストの下で管理する。syncに乗り・Driveバックアップにも含まれる。 */
+   * (ユーザー指示)。TODOリストの下で管理する。chrome.storage.localに乗り・Driveバックアップ
+   * にも含まれる。 */
   tagCandidates?: string[];
 };
 

@@ -4,6 +4,7 @@
 import { readFileFromNas, writeFileToNas } from "./nasNativeHost";
 import { getNasFolderPath } from "../storage/db";
 import { parseSettingsBackupPayload, type SettingsBackupPayload } from "../fileio/settingsBackup";
+import { logOp } from "../runtime/log";
 
 export const SETTINGS_BACKUP_FILENAME = "data/settings-backup.json";
 
@@ -13,7 +14,14 @@ export type SettingsBackupNasDeps = {
   readFileFromNas?: typeof readFileFromNas;
 };
 
-/** 設定バックアップJSONをNASへ書く。NAS未設定/書き込み失敗はfalse。 */
+function hasBookmarks(payload: SettingsBackupPayload | null): boolean {
+  return (payload?.bookmarks.length ?? 0) > 0;
+}
+
+/** 設定バックアップJSONをNASへ書く。NAS未設定/書き込み失敗はfalse。
+ * ローカルのブックマークが空になった状態で、NAS側に残る非空バックアップを無条件上書きして
+ * しまう事故を防ぐガード付き(2026-07-18: jsonBackupSync.tsの同種ガードと対の実装。
+ * chrome.storage.syncの8KB/item上限超過でブックマークが消えた実害を受けて追加)。 */
 export async function pushSettingsBackupToNas(
   json: string,
   deps: SettingsBackupNasDeps = {},
@@ -21,6 +29,27 @@ export async function pushSettingsBackupToNas(
   const path = await (deps.getNasFolderPath ?? getNasFolderPath)();
   if (!path) return false;
   const _write = deps.writeFileToNas ?? writeFileToNas;
+  const _read = deps.readFileFromNas ?? readFileFromNas;
+
+  if (!hasBookmarks(parseSettingsBackupPayload(json))) {
+    try {
+      const existingJson = await _read(path, SETTINGS_BACKUP_FILENAME);
+      const existing = existingJson ? parseSettingsBackupPayload(existingJson) : null;
+      if (hasBookmarks(existing)) {
+        logOp(
+          "settingsBackupSync",
+          "push-skipped-empty-guard",
+          "local-bookmarks-empty-but-nas-has-bookmarks",
+        );
+        return false;
+      }
+    } catch (err) {
+      logOp("settingsBackupSync", "push-guard-check-error", "既存バックアップの検証に失敗(続行)", {
+        error: err,
+      });
+    }
+  }
+
   return _write(path, SETTINGS_BACKUP_FILENAME, json);
 }
 
