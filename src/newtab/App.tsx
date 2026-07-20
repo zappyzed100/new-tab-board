@@ -93,7 +93,8 @@ import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
-import { bumpDriveGeneration } from "../lib/drive/driveGeneration";
+import { bumpDriveGeneration, readDriveGeneration } from "../lib/drive/driveGeneration";
+import { pullActiveFromDrive, resolveDriveAction } from "../lib/drive/driveActiveSync";
 import { logOp } from "../lib/runtime/log";
 import {
   copyNotesToDriveDateFolder,
@@ -300,7 +301,12 @@ export function App() {
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
     void loadLocalData().then((local) =>
-      saveLocalData({ ...local, notes: next, nasGeneration: nasGenRef.current }),
+      saveLocalData({
+        ...local,
+        notes: next,
+        nasGeneration: nasGenRef.current,
+        driveGeneration: driveGenRef.current, // Drive発のpullでも世代を落とさない
+      }),
     );
   }
   // NASへの「push」本体(世代同期tickのpush分岐と、「今すぐNASへ書き出し」ボタンの両方から
@@ -360,11 +366,13 @@ export function App() {
     }
   }
 
-  async function runNasSyncTick() {
+  /** NAS側の世代同期tick。**NASが正本として機能したか**を返す(パス未設定/世代を読めない=false)。
+   * 戻り値はDrive側のpullを抑止するために使う(ユーザー決定・2026-07-20: NAS優先)。 */
+  async function runNasSyncTick(): Promise<boolean> {
     const path = await getNasFolderPath();
-    if (!path) return; // NAS未設定なら同期しない
+    if (!path) return false; // NAS未設定なら同期しない
     const nasGen = await readNasGeneration(path);
-    if (nasGen === null) return; // 未接続/失敗は静かに次回へ
+    if (nasGen === null) return false; // 未接続/失敗は静かに次回へ
     const decision = decideActiveSync(nasGenRef.current, nasGen, nasOwnerRef.current);
     if (decision === "pull") {
       const pulled = await pullActiveFromNas();
@@ -376,11 +384,43 @@ export function App() {
     } else if (decision === "push") {
       await pushNasActiveNow();
     }
+    return true;
   }
-  // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runNasSyncTickは
+
+  /** Drive側の世代同期tick。判定規則はNASと同一(decideActiveSyncを共有——同じ規則を二重に
+   * 書かない)。そのうえでresolveDriveActionがNAS優先の調整を掛ける(規則の本体と根拠は同関数)。 */
+  async function runDriveSyncTick(nasAuthoritative: boolean): Promise<void> {
+    const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
+    setDriveConnected(token !== null); // 5分毎に必ず通る唯一の経路なので接続状態の観測点にする
+    if (!token) return;
+    const driveGen = await readDriveGeneration(token);
+    if (driveGen === null) return; // 読めない=未接続扱いで次回へ
+    const decision = resolveDriveAction(
+      decideActiveSync(driveGenRef.current, driveGen, driveOwnerRef.current),
+      nasAuthoritative,
+    );
+    if (decision === "pull") {
+      const pulled = await pullActiveFromDrive(token);
+      if (pulled) {
+        driveGenRef.current = driveGen;
+        driveOwnerRef.current = false; // pull後は受動(次の人間の編集で再びbump)
+        applyPulledNotes(pulled);
+      }
+    } else if (decision === "push") {
+      await pushDriveActiveNow(token);
+    }
+  }
+
+  /** NAS→Driveの順に同期する。NASが正本として機能した時はDriveのpullを抑止する。 */
+  async function runSyncTick(): Promise<void> {
+    const nasHandled = await runNasSyncTick();
+    await runDriveSyncTick(nasHandled);
+  }
+
+  // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runSyncTickは
   // 全て ref/安定setterで現在値を読むため依存に含めなくてよい——本リポの他effectと同じ流儀)。
   useEffect(() => {
-    const interval = setInterval(() => void runNasSyncTick(), NAS_SYNC_INTERVAL_MS);
+    const interval = setInterval(() => void runSyncTick(), NAS_SYNC_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
   // ロード直後(notesが初めて入った時)に1回だけ初期同期する(pullで最新を取り込む)。
@@ -388,7 +428,7 @@ export function App() {
   useEffect(() => {
     if (!notes || initialSyncDoneRef.current) return;
     initialSyncDoneRef.current = true;
-    void runNasSyncTick();
+    void runSyncTick();
   }, [notes]);
 
   // Google Drive の active/ を現在の非空ノートへ突き合わせて消えたものを削除する(ユーザー指示)。
@@ -413,10 +453,16 @@ export function App() {
   );
   useSignatureDebouncedEffect(noteSig, 5000, (sig) => {
     if (sig === driveReconciledSigRef.current) return; // 突合済みの集合→Drive一覧すら叩かない
+    // **所有権が無いなら突合しない**(2026-07-20・多端末対応の安全ゲート)。突合はローカルに
+    // 無いDriveファイルを削除するため、まだ相手のノートを取り込んでいない2台目で走ると
+    // 「相手のノートを消す」動作になる。所有権はこのセッションで人間が編集した時にだけ立ち
+    // (markUserEdit)、pullで受動へ戻る——NAS側の「所有者だけが書く」規則と同じ。
+    // 5分毎のtick(runDriveSyncTick)がpush判定でpushDriveActiveNow経由の突合を行うので、
+    // ここを見送っても削除は取りこぼされない(こちらは削除を早く反映するための近道)。
+    if (!driveOwnerRef.current) return;
     void (async () => {
       try {
         const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
-        setDriveConnected(token !== null); // 定期的に走る唯一の経路なので接続状態の観測点にする
         if (!token) return;
         // 発火時点の最新のノートを使う(署名だけを依存にしたためクロージャのnotesは古くなる)。
         await reconcileDriveActive(notesRef.current ?? [], token);

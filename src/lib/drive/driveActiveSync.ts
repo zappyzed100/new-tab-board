@@ -18,8 +18,25 @@ import {
 } from "./drive";
 import { ACTIVE_FOLDER_PATH } from "./driveSync";
 import { markdownToNote } from "../externalIO/nasArchive";
+import type { SyncDecision } from "../externalIO/nasActiveSync";
 import { logOp } from "../runtime/log";
 import type { Note } from "../../types";
+
+/** NAS優先の合成判定(ユーザー決定・2026-07-20)。decideActiveSyncが出したDrive側の判定を、
+ * 「NASが正本として機能したか」で調整する。
+ *
+ * NASとDriveはどちらも「最終操作者優先で集合を丸ごと置き換える」方式のため、両方でpullが
+ * 走ると互いに上書きし合う(ping-pong)。そこで**pullはNASに一本化**し、Drive側のpullは
+ * NASが使えなかった時だけ行う。pushは抑止しない——Driveはスマホから閲覧するミラーでもあり、
+ * 止めると出先で見る内容が古くなる。NASが正本の時にpushしても、送る内容はNAS由来の正しい
+ * 集合なので競合しない。 */
+export function resolveDriveAction(
+  driveDecision: SyncDecision,
+  nasAuthoritative: boolean,
+): SyncDecision {
+  if (driveDecision === "pull" && nasAuthoritative) return "noop";
+  return driveDecision;
+}
 
 export type DrivePullDeps = {
   resolveFolderPath?: typeof resolveFolderPath;
