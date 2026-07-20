@@ -86,6 +86,7 @@ import {
   noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
+  resolveSecondaryAction,
 } from "../lib/externalIO/nasActiveSync";
 import { bumpNasGeneration, readNasGeneration } from "../lib/externalIO/nasNativeHost";
 import { getNasFolderPath } from "../lib/storage/db";
@@ -94,7 +95,7 @@ import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { bumpDriveGeneration, readDriveGeneration } from "../lib/drive/driveGeneration";
-import { pullActiveFromDrive, resolveDriveAction } from "../lib/drive/driveActiveSync";
+import { pullActiveFromDrive } from "../lib/drive/driveActiveSync";
 import { logOp } from "../lib/runtime/log";
 import {
   copyNotesToDriveDateFolder,
@@ -366,14 +367,17 @@ export function App() {
     }
   }
 
-  /** NAS側の世代同期tick。**NASが正本として機能したか**を返す(パス未設定/世代を読めない=false)。
-   * 戻り値はDrive側のpullを抑止するために使う(ユーザー決定・2026-07-20: NAS優先)。 */
-  async function runNasSyncTick(): Promise<boolean> {
+  /** NAS側の世代同期tick。**二次側**なので、Driveが正本として機能した回はpullを抑止する
+   * (規則の本体と根拠は resolveSecondaryAction)。 */
+  async function runNasSyncTick(driveAuthoritative: boolean): Promise<void> {
     const path = await getNasFolderPath();
-    if (!path) return false; // NAS未設定なら同期しない
+    if (!path) return; // NAS未設定なら同期しない
     const nasGen = await readNasGeneration(path);
-    if (nasGen === null) return false; // 未接続/失敗は静かに次回へ
-    const decision = decideActiveSync(nasGenRef.current, nasGen, nasOwnerRef.current);
+    if (nasGen === null) return; // 未接続/失敗は静かに次回へ
+    const decision = resolveSecondaryAction(
+      decideActiveSync(nasGenRef.current, nasGen, nasOwnerRef.current),
+      driveAuthoritative,
+    );
     if (decision === "pull") {
       const pulled = await pullActiveFromNas();
       if (pulled) {
@@ -384,21 +388,17 @@ export function App() {
     } else if (decision === "push") {
       await pushNasActiveNow();
     }
-    return true;
   }
 
-  /** Drive側の世代同期tick。判定規則はNASと同一(decideActiveSyncを共有——同じ規則を二重に
-   * 書かない)。そのうえでresolveDriveActionがNAS優先の調整を掛ける(規則の本体と根拠は同関数)。 */
-  async function runDriveSyncTick(nasAuthoritative: boolean): Promise<void> {
+  /** Drive側の世代同期tick。**Driveが正本として機能したか**を返す(未接続/世代を読めない=false)。
+   * 戻り値はNAS側のpullを抑止するために使う(ユーザー決定・2026-07-20: **Drive優先**)。 */
+  async function runDriveSyncTick(): Promise<boolean> {
     const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
     setDriveConnected(token !== null); // 5分毎に必ず通る唯一の経路なので接続状態の観測点にする
-    if (!token) return;
+    if (!token) return false;
     const driveGen = await readDriveGeneration(token);
-    if (driveGen === null) return; // 読めない=未接続扱いで次回へ
-    const decision = resolveDriveAction(
-      decideActiveSync(driveGenRef.current, driveGen, driveOwnerRef.current),
-      nasAuthoritative,
-    );
+    if (driveGen === null) return false; // 読めない=未接続扱いで次回へ
+    const decision = decideActiveSync(driveGenRef.current, driveGen, driveOwnerRef.current);
     if (decision === "pull") {
       const pulled = await pullActiveFromDrive(token);
       if (pulled) {
@@ -409,12 +409,15 @@ export function App() {
     } else if (decision === "push") {
       await pushDriveActiveNow(token);
     }
+    return true;
   }
 
-  /** NAS→Driveの順に同期する。NASが正本として機能した時はDriveのpullを抑止する。 */
+  /** Drive→NASの順に同期する。**Driveが正本**(ユーザー決定・2026-07-20)——Driveが機能した回は
+   * NAS側のpullを抑止する。当初はNAS優先で配線したが、NASのnative hostが動いていない環境が
+   * 常態で、Drive側のpullが恒常的に抑止されて2台目に何も降りてこなかったため反転した。 */
   async function runSyncTick(): Promise<void> {
-    const nasHandled = await runNasSyncTick();
-    await runDriveSyncTick(nasHandled);
+    const driveHandled = await runDriveSyncTick();
+    await runNasSyncTick(driveHandled);
   }
 
   // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runSyncTickは
