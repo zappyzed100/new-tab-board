@@ -1,6 +1,7 @@
 // pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」実装)の単体テスト
 import { describe, expect, it, vi } from "vitest";
-import { pickSharedFolderViaOAuth } from "./pickerOAuth";
+import manifest from "../../../public/manifest.json";
+import { getPickerClientId, pickSharedFolderViaOAuth } from "./pickerOAuth";
 
 const REDIRECT_BASE = "https://ext-id.chromiumapp.org/";
 
@@ -101,5 +102,20 @@ describe("pickSharedFolderViaOAuth", () => {
     expect(url.searchParams.get("allow_folder_selection")).toBe("true");
     expect(url.searchParams.get("redirect_uri")).toBe(REDIRECT_BASE);
     expect(arg.interactive).toBe(true);
+  });
+});
+
+describe("getPickerClientId", () => {
+  // PickerはlaunchWebAuthFlow + https://<id>.chromiumapp.org/リダイレクトを使うため、
+  // 「Chrome拡張機能」型クライアント(=manifest.jsonのoauth2.client_id。メインログインが
+  // chrome.identity.getAuthTokenで使う)とは原理的に非互換。かつて両者はgetOAuthClientId()で
+  // 同一IDを共有しており、2026-07-20にメインログイン側を差し替えた際、この分離を怠ると
+  // Pickerが確実に壊れる関係にあった——その結合が復活しないよう固定する。
+  it("manifest.jsonのoauth2.client_id(Chrome拡張機能型)とは別のIDを返す", () => {
+    expect(getPickerClientId()).not.toBe(manifest.oauth2.client_id);
+  });
+
+  it("「ウェブアプリケーション」型クライアントIDを返す(空でない)", () => {
+    expect(getPickerClientId()).toMatch(/\.apps\.googleusercontent\.com$/);
   });
 });

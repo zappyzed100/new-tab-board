@@ -33,7 +33,7 @@ import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
-import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
+import { getAuthToken, getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { resetDriveFolderCache } from "../../../lib/drive/drive";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import { pickSharedFolderViaOAuth } from "../../../lib/drive/pickerOAuth";
@@ -86,8 +86,15 @@ export function DataPanel({
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
   const [batteryConfigSet, setBatteryConfigSet] = useState(false);
+  // Drive接続状態。Drive連携の失敗は全経路が「トークンが無ければ静かに何もしない」設計のため
+  // 完全に無症状で、2026-07-18〜20には丸2日間まるごと停止していたのに誰も気づけなかった
+  // (googleAuth.tsのヘッダー参照)。接続できているかを常に目視できるようにする。
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
+    // 突合effectと同じ方針)。falseなら「未接続」を出し、ユーザーが自分で再接続を選べる。
+    void getAuthToken(false).then((token) => setDriveConnected(token !== null));
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
@@ -114,6 +121,7 @@ export function DataPanel({
   }
   async function handleConnectDrive() {
     const { token, error } = await getAuthTokenWithError(true);
+    setDriveConnected(token !== null); // 再接続の成否をボタン表示へ即反映する
     onMessage(
       token
         ? "Googleアカウントに接続しました(以後は自動でDriveへバックアップされます)"
@@ -333,13 +341,21 @@ export function DataPanel({
         {/* 設定系ボタンとして配列の一番右に配置(ユーザー指示)。 */}
         <Button
           type="button"
-          variant="soft"
+          // 未接続はDrive連携が全停止している状態——soft(他の設定ボタンと同じ見た目)だと
+          // 埋もれて気づけないため、色で浮かせる(2026-07-20の2日間無症状停止を受けて)。
+          variant={driveConnected === false ? "solid" : "soft"}
+          color={driveConnected === false ? "orange" : undefined}
           data-testid="data-connect-drive"
-          title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+          data-drive-connected={driveConnected === null ? "unknown" : String(driveConnected)}
+          title={
+            driveConnected === false
+              ? "Driveへ未接続です。ノートの同期・削除の反映が停止しています。押して再接続してください"
+              : "Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+          }
           onClick={() => void handleConnectDrive()}
         >
           <SettingsIcon size={14} aria-hidden="true" />
-          GDrive設定
+          GDrive設定{driveConnected === false ? "(未接続)" : ""}
         </Button>
         <Button
           type="button"

@@ -12,17 +12,10 @@
     "type": "module"
   },
   "icons": { "128": "icon128.png" },
-  "permissions": [
-    "storage",
-    "identity",
-    "alarms",
-    "notifications",
-    "offscreen",
-    "nativeMessaging"
-  ],
+  "permissions": ["storage", "identity", "alarms", "notifications", "offscreen", "nativeMessaging"],
   "host_permissions": ["https://generativelanguage.googleapis.com/*"],
   "oauth2": {
-    "client_id": "872015431238-8ul2vrsn7crorkdqsh1s6f47hffejdnb.apps.googleusercontent.com",
+    "client_id": "872015431238-vg60jk6hs16vfn4v8foul7koi0143809.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/drive.file",
       "https://www.googleapis.com/auth/calendar.readonly"

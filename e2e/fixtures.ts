@@ -39,9 +39,7 @@ export const test = base.extend<{
     await startupPage.waitForFunction(async () => {
       // NO-LOG: 隔離E2Eプロファイルの初期保存完了を待つfixture内の観察で、本番I/Oではない。
       const stored = await chrome.storage.local.get("localData");
-      return (
-        (stored.localData as { notes?: unknown[] } | undefined)?.notes?.length === 3
-      );
+      return (stored.localData as { notes?: unknown[] } | undefined)?.notes?.length === 3;
     });
     for (const page of context.pages()) {
       await page.goto("about:blank").catch(() => {});
