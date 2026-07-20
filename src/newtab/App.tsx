@@ -10,12 +10,14 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronUp,
+  CloudOff,
   Keyboard,
   Search,
   StickyNote,
   Tag,
   Wrench,
 } from "lucide-react";
+import { useSignatureDebouncedEffect } from "./useSignatureDebouncedEffect";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
@@ -147,6 +149,11 @@ export function App() {
   // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
   // ショートカットボタンより後ろに置く——ユーザー指摘)。
   const [dataPanelMessage, setDataPanelMessage] = useState<string | null>(null);
+  // Drive接続状態(null=未判定)。Drive連携の失敗は全経路が「トークンが無ければ静かに何もしない」
+  // 設計のため完全に無症状で、2026-07-18〜20には丸2日間まるごと停止していたのに誰も気づけな
+  // かった(googleAuth.tsのヘッダー参照)。**折りたたみ式のDataPanel内に置くと、開くまで警告が
+  // 出ず早期警告にならない**ため、Appが持ってヘッダー(常時表示)へ出す。
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
   // スマホのバッテリー低下警告(GAS Web App中継)が鳴動中か(ユーザー指示: New Tab Boardに
@@ -388,28 +395,37 @@ export function App() {
   // 本文アップロードは各ペインのuseDriveSync、日付フォルダへの日次コピーは background.ts が担う。
   // Drive未接続(トークン無し)なら静かに何もしない。ここも集合が変わった時だけ叩く(同期回数削減)。
   const driveReconciledSigRef = useRef<string>("");
-  useEffect(() => {
-    if (!notes) return;
-    const sig = notes
-      .filter((n) => n.content.trim() !== "")
-      .map((n) => n.id)
-      .sort()
-      .join(",");
-    if (sig === driveReconciledSigRef.current) return; // 集合不変→Drive一覧すら叩かない
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
-          if (!token) return;
-          await reconcileDriveActive(notes, token);
-          driveReconciledSigRef.current = sig; // 突合できた集合だけ記録(未接続時は次回再試行)
-        } catch {
-          // Drive同期の突合失敗はUIを止めない(次の集合変化で再試行される)。
-        }
-      })();
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [notes]);
+  // 突合の要否は「非空ノートのid集合」だけで決まる。デバウンスはuseSignatureDebouncedEffectに
+  // 任せる——以前はこのeffectの依存が`notes`で、本文の1文字入力やdriveFileId/lastSyncedAtの
+  // 書き戻しのような**集合が変わらない更新**でも再実行され、クリーンアップで保留中の5秒タイマーを
+  // 消したうえで「集合不変」と判断して早期returnし、**新しいタイマーを張らないまま突合が永久に
+  // 流れる**穴があった(2026-07-20に発見。詳細と回帰テストは同フック参照)。
+  const noteSig = useMemo(
+    () =>
+      notes
+        ? notes
+            .filter((n) => n.content.trim() !== "")
+            .map((n) => n.id)
+            .sort()
+            .join(",")
+        : null,
+    [notes],
+  );
+  useSignatureDebouncedEffect(noteSig, 5000, (sig) => {
+    if (sig === driveReconciledSigRef.current) return; // 突合済みの集合→Drive一覧すら叩かない
+    void (async () => {
+      try {
+        const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
+        setDriveConnected(token !== null); // 定期的に走る唯一の経路なので接続状態の観測点にする
+        if (!token) return;
+        // 発火時点の最新のノートを使う(署名だけを依存にしたためクロージャのnotesは古くなる)。
+        await reconcileDriveActive(notesRef.current ?? [], token);
+        driveReconciledSigRef.current = sig; // 突合できた集合だけ記録(未接続時は次回再試行)
+      } catch {
+        // Drive同期の突合失敗はUIを止めない(次の集合変化で再試行される)。
+      }
+    })();
+  });
 
   // スペシャル(⭐)を Google Drive の special/<folder>/<id>.md へ書き出す(ユーザー指示。NAS側は
   // 同期tickの pushSpecialToNas が担う)。スペシャル(ノートのstar/folder/本文 or 凍結項目)が
@@ -1174,6 +1190,24 @@ export function App() {
                         <ChevronDown size={14} aria-hidden="true" />
                       )}
                     </Button>
+                    {/* Drive未接続の警告。折りたたまれるDataPanelの中ではなくここ(常時表示)に
+                        出すのが要点——2026-07-18〜20はDrive連携が丸2日停止していたのに何の
+                        表示も無く気づけなかった。押すとDataPanelが開き「GDrive設定」へ誘導する。
+                        接続中・未判定(null)のときは何も出さない(平常時に雑音を足さない)。 */}
+                    {driveConnected === false ? (
+                      <Button
+                        type="button"
+                        variant="solid"
+                        color="orange"
+                        size="2"
+                        data-testid="drive-disconnected-warning"
+                        title="Google Driveへ未接続です。ノートの同期とDrive上の削除反映が停止しています。押すとデータ操作パネルが開くので「GDrive設定」から再接続してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <CloudOff size={14} aria-hidden="true" />
+                        Drive未接続
+                      </Button>
+                    ) : null}
                     {/* ヘルプ系は使用頻度が低いため、日常操作のボタンより右に置く(ユーザー指示)。 */}
                     <Button
                       type="button"
@@ -1200,6 +1234,8 @@ export function App() {
                 onBackupToDrive={() => void handleBackupToDrive()}
                 onRestoreFromNas={() => void handleRestoreFromNas()}
                 onPushNasActiveNow={pushNasActiveNow}
+                driveConnected={driveConnected}
+                onDriveConnectionChange={setDriveConnected}
               />
             ) : null}
 

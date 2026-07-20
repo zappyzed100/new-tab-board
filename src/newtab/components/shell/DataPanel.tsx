@@ -59,6 +59,11 @@ type Props = {
   /** 現在開いているノートを即座にNASのactive/と今日の日付フォルダへ反映する
    * (ユーザー指示: 「今すぐNASへ書き出し」でも通常のtickを待たずに反映してほしい)。 */
   onPushNasActiveNow: () => Promise<void>;
+  /** Drive接続状態(null=未判定)。Appが持つ——このパネルは折りたたまれるため、ここで
+   * 状態を持つと開くまで未接続に気づけず早期警告にならない(App.tsxのdriveConnected参照)。 */
+  driveConnected: boolean | null;
+  /** 接続状態が判明/変化したときにAppへ知らせる(「GDrive設定」での再接続結果を即反映する)。 */
+  onDriveConnectionChange: (connected: boolean) => void;
 };
 
 export function DataPanel({
@@ -69,6 +74,8 @@ export function DataPanel({
   onBackupToDrive,
   onRestoreFromNas,
   onPushNasActiveNow,
+  driveConnected,
+  onDriveConnectionChange,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -86,15 +93,10 @@ export function DataPanel({
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
   const [batteryConfigSet, setBatteryConfigSet] = useState(false);
-  // Drive接続状態。Drive連携の失敗は全経路が「トークンが無ければ静かに何もしない」設計のため
-  // 完全に無症状で、2026-07-18〜20には丸2日間まるごと停止していたのに誰も気づけなかった
-  // (googleAuth.tsのヘッダー参照)。接続できているかを常に目視できるようにする。
-  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
-
   useEffect(() => {
     // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
-    // 突合effectと同じ方針)。falseなら「未接続」を出し、ユーザーが自分で再接続を選べる。
-    void getAuthToken(false).then((token) => setDriveConnected(token !== null));
+    // 突合effectと同じ方針)。結果はAppへ返す(常時表示の警告バッジもこの値で出る)。
+    void getAuthToken(false).then((token) => onDriveConnectionChange(token !== null));
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
@@ -121,7 +123,7 @@ export function DataPanel({
   }
   async function handleConnectDrive() {
     const { token, error } = await getAuthTokenWithError(true);
-    setDriveConnected(token !== null); // 再接続の成否をボタン表示へ即反映する
+    onDriveConnectionChange(token !== null); // 再接続の成否を警告バッジ/ボタン表示へ即反映する
     onMessage(
       token
         ? "Googleアカウントに接続しました(以後は自動でDriveへバックアップされます)"
