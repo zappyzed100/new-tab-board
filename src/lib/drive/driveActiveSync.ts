@@ -34,7 +34,13 @@ export type DrivePullDeps = {
  * ノートidは**appPropertiesのnoteIdを正本にする**(front matterのidではなく)。markdownToNote は
  * front matter に id が無ければ乱数を振るため、それをそのまま採ると pull のたびに別ノート扱いに
  * なり、盤面に同じノートが増殖したうえ Drive 側のファイル突合(noteIdで探す)とも食い違う。
- * Drive にはファイル属性として確実な noteId があるので、そちらで上書きする。 */
+ * Drive にはファイル属性として確実な noteId があるので、そちらで上書きする。
+ *
+ * **同じnoteIdのファイルが複数あっても、返すNote[]のidは必ず一意にする**(2026-07-20の実害)。
+ * syncNoteToDriveの同時実行レースでDrive上に同一noteIdのファイルが2つでき、そこからpullすると
+ * **同じidのNoteが2件**生まれていた。updateNoteはid一致の全ノートを書き換える(notes.ts)ため、
+ * 片方への編集がもう片方にも入り、「ノートAのタイトル・idのまま本文だけノートBのもの」という
+ * 壊れ方をした。重複時はupdated_atが新しいものを残す(最終操作者優先——世代同期と同じ規則)。 */
 export async function pullActiveFromDrive(
   token: string,
   deps: DrivePullDeps = {},
@@ -47,14 +53,32 @@ export async function pullActiveFromDrive(
     logOp("driveActiveSync", "pull-start", `path=${ACTIVE_FOLDER_PATH.join("/")}`);
     const folderId = await _resolve(ACTIVE_FOLDER_PATH, token, deps.fetchImpl);
     const files = await _list(folderId, token, deps.fetchImpl); // noteIdを持つファイルだけ(todos.txtは除外)
-    const notes: Note[] = [];
+    const byNoteId = new Map<string, Note>();
     for (const [i, file] of files.entries()) {
       const md = await _download(file.id, token, deps.fetchImpl);
       const note = markdownToNote(md, i);
-      notes.push({ ...note, id: file.noteId, driveFileId: file.id });
+      const candidate: Note = { ...note, id: file.noteId, driveFileId: file.id };
+      const existing = byNoteId.get(file.noteId);
+      if (!existing) {
+        byNoteId.set(file.noteId, candidate);
+        continue;
+      }
+      // 同一noteIdのファイルが複数——updated_atが新しい方を採る(最終操作者優先)。
+      // updated_atが無い/同値なら先勝ちで安定させる(pullのたびに結果が入れ替わらないように)。
+      const keepCandidate = (candidate.updatedAt ?? 0) > (existing.updatedAt ?? 0);
+      logOp(
+        "driveActiveSync",
+        "pull-duplicate-noteid",
+        `noteId=${file.noteId} keptFileId=${keepCandidate ? file.id : existing.driveFileId} droppedFileId=${keepCandidate ? existing.driveFileId : file.id}`,
+      );
+      if (keepCandidate) byNoteId.set(file.noteId, candidate);
     }
-    notes.sort((a, b) => a.order - b.order);
-    logOp("driveActiveSync", "pull-done", `folderId=${folderId} notes=${notes.length}`);
+    const notes = [...byNoteId.values()].sort((a, b) => a.order - b.order);
+    logOp(
+      "driveActiveSync",
+      "pull-done",
+      `folderId=${folderId} files=${files.length} notes=${notes.length}`,
+    );
     return notes;
   } catch (err) {
     logOp("driveActiveSync", "pull-error", "", { error: err });

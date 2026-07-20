@@ -682,6 +682,7 @@
 - type SyncResult
 - type SyncDeps
 - function syncNoteToDrive
+- function resetDriveSyncState
 
 ### `src/lib/drive/googleAuth.ts`
 - function getOAuthClientId
