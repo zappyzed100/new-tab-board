@@ -1,0 +1,126 @@
+// driveActiveSync.test.ts — Drive active/ からの世代pullの単体テスト
+// 実Drive APIは叩かない(resolve/list/downloadを全てDIで差し替える — 本フォルダの既存方針)。
+import { describe, expect, it, vi } from "vitest";
+import { pullActiveFromDrive, resolveDriveAction } from "./driveActiveSync";
+
+/** noteToMarkdownが出すのと同じ形の front matter + 本文を組む。 */
+function md(opts: { id?: string; title: string; order?: number; body: string }): string {
+  const lines = ["---"];
+  if (opts.id) lines.push(`id: ${opts.id}`);
+  lines.push(`title: ${opts.title}`);
+  if (opts.order !== undefined) lines.push(`order: ${opts.order}`);
+  lines.push("---", "", opts.body);
+  return lines.join("\n");
+}
+
+function deps(files: { id: string; noteId: string; content: string }[]) {
+  return {
+    resolveFolderPath: vi.fn(async () => "folder-1"),
+    listNoteFilesInFolder: vi.fn(async () => files.map((f) => ({ id: f.id, noteId: f.noteId }))),
+    downloadFileContent: vi.fn(async (fileId: string) => {
+      const found = files.find((f) => f.id === fileId);
+      if (!found) throw new Error(`unexpected fileId ${fileId}`);
+      return found.content;
+    }),
+  };
+}
+
+describe("pullActiveFromDrive", () => {
+  it("active/のファイルをNote[]へ復元する", async () => {
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps([
+        { id: "f1", noteId: "n1", content: md({ id: "n1", title: "メモA", body: "本文A" }) },
+      ]) as never,
+    );
+    expect(notes).not.toBeNull();
+    expect(notes).toHaveLength(1);
+    expect(notes?.[0].title).toBe("メモA");
+    expect(notes?.[0].content).toBe("本文A");
+  });
+
+  it("ノートidはappPropertiesのnoteIdを正本にする(front matterにidが無くても増殖しない)", async () => {
+    // markdownToNoteはid欠落時に乱数を振る。それを採ると pullのたびに別ノート扱いになり、
+    // 盤面で増殖したうえDrive側のnoteId突合とも食い違う——必ずnoteIdで上書きする。
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps([
+        { id: "f1", noteId: "real-id", content: md({ title: "id無し", body: "本文" }) },
+      ]) as never,
+    );
+    expect(notes?.[0].id).toBe("real-id");
+  });
+
+  it("driveFileIdを埋める(次のpushで同じファイルを更新できるように)", async () => {
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps([
+        { id: "file-abc", noteId: "n1", content: md({ id: "n1", title: "t", body: "b" }) },
+      ]) as never,
+    );
+    expect(notes?.[0].driveFileId).toBe("file-abc");
+  });
+
+  it("front matterのorder昇順に並べる(列挙順に依存しない)", async () => {
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps([
+        { id: "f1", noteId: "n1", content: md({ id: "n1", title: "後", order: 5, body: "b1" }) },
+        { id: "f2", noteId: "n2", content: md({ id: "n2", title: "先", order: 1, body: "b2" }) },
+      ]) as never,
+    );
+    expect(notes?.map((n) => n.title)).toEqual(["先", "後"]);
+  });
+
+  it("active/が空ならから配列を返す(nullではない——「Driveに1件も無い」は正当な状態)", async () => {
+    const notes = await pullActiveFromDrive("tok", deps([]) as never);
+    expect(notes).toEqual([]);
+  });
+
+  it("フォルダ解決に失敗したらnull(未接続扱いで呼び出し側は何もしない)", async () => {
+    const notes = await pullActiveFromDrive("tok", {
+      resolveFolderPath: vi.fn(async () => {
+        throw new Error("HTTP 401");
+      }),
+    } as never);
+    expect(notes).toBeNull();
+  });
+
+  it("1ファイルのダウンロードに失敗したらnull(部分的な集合でタブを上書きしない)", async () => {
+    // 部分結果でpullすると、落ちたファイルのノートが「削除された」と誤認され、
+    // 次のpushで実際にDriveから消える——中途半端な集合は決して返さない。
+    const notes = await pullActiveFromDrive("tok", {
+      resolveFolderPath: vi.fn(async () => "folder-1"),
+      listNoteFilesInFolder: vi.fn(async () => [
+        { id: "f1", noteId: "n1" },
+        { id: "f2", noteId: "n2" },
+      ]),
+      downloadFileContent: vi.fn(async (fileId: string) => {
+        if (fileId === "f2") throw new Error("HTTP 500");
+        return md({ id: "n1", title: "t", body: "b" });
+      }),
+    } as never);
+    expect(notes).toBeNull();
+  });
+});
+
+describe("resolveDriveAction", () => {
+  // NAS優先(ユーザー決定・2026-07-20)。両方でpullが走ると最終操作者優先の上書き合戦になる。
+  it("NASが正本ならDriveのpullをnoopへ落とす", () => {
+    expect(resolveDriveAction("pull", true)).toBe("noop");
+  });
+
+  it("NASが使えないならDriveのpullをそのまま通す(唯一の同期経路になる)", () => {
+    expect(resolveDriveAction("pull", false)).toBe("pull");
+  });
+
+  it("pushはNASの状態にかかわらず抑止しない(Driveはスマホ閲覧用のミラーでもあるため)", () => {
+    expect(resolveDriveAction("push", true)).toBe("push");
+    expect(resolveDriveAction("push", false)).toBe("push");
+  });
+
+  it("noopはそのまま", () => {
+    expect(resolveDriveAction("noop", true)).toBe("noop");
+    expect(resolveDriveAction("noop", false)).toBe("noop");
+  });
+});

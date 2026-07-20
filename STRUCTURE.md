@@ -162,6 +162,8 @@
 - `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 - `src/lib/drive/driveActiveMirror.test.ts` — driveActiveMirror.test.ts — active/ の突き合わせ削除と日付フォルダ格納の単体テスト
 - `src/lib/drive/driveActiveMirror.ts` — driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
+- `src/lib/drive/driveActiveSync.test.ts` — driveActiveSync.test.ts — Drive active/ からの世代pullの単体テスト
+- `src/lib/drive/driveActiveSync.ts` — driveActiveSync.ts — Drive active/ とタブの世代同期のpull側(NAS側 nasActiveSync.ts の鏡像)。
 - `src/lib/drive/driveGeneration.test.ts` — driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
 - `src/lib/drive/driveGeneration.ts` — driveGeneration.ts — Drive版の世代カウンタ(native-host/nas_bridge.pyのread/bump-generationと対)。
 - `src/lib/drive/driveSpecial.test.ts` — driveSpecial.test.ts — Driveのspecial/書き出し・フォルダ内突き合わせ削除の単体テスト
@@ -284,6 +286,8 @@
 - `src/newtab/styles/components.css`
 - `src/newtab/styles/layout.css`
 - `src/newtab/styles/tokens.css`
+- `src/newtab/useSignatureDebouncedEffect.test.ts` — useSignatureDebouncedEffect.test.ts — 署名デバウンスeffectの単体テスト
+- `src/newtab/useSignatureDebouncedEffect.ts` — useSignatureDebouncedEffect.ts — 「値が実際に変わった時だけデバウンスして走らせる」effect
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
@@ -643,6 +647,7 @@
 - function getOrCreateFolder
 - function resolveFolderPath
 - function deleteDriveFile
+- function downloadFileContent
 - function listNoteFilesInFolder
 - function findFileForNote
 - function uploadNote
@@ -654,6 +659,11 @@
 - function copyNotesToDriveDateFolder
 - type PushTodosDeps
 - function pushTodosToDriveActive
+
+### `src/lib/drive/driveActiveSync.ts`
+- function resolveDriveAction
+- type DrivePullDeps
+- function pullActiveFromDrive
 
 ### `src/lib/drive/driveGeneration.ts`
 - function readDriveGeneration
@@ -1054,6 +1064,9 @@
 
 ### `src/newtab/components/shell/TodoList.tsx`
 - function TodoList
+
+### `src/newtab/useSignatureDebouncedEffect.ts`
+- function useSignatureDebouncedEffect
 
 ### `src/types.ts`
 - type Bookmark

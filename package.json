@@ -33,6 +33,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
+    "@testing-library/react": "^16.3.2",
     "@types/chrome": "^0.2.2",
     "@types/diff-match-patch": "^1.0.36",
     "@types/markdown-it": "^14.1.2",
@@ -43,6 +44,7 @@
     "eslint": "^10.6.0",
     "fake-indexeddb": "^6.2.5",
     "globals": "^17.7.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
