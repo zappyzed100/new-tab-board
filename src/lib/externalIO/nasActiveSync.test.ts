@@ -5,6 +5,7 @@ import {
   noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
+  resolveSecondaryAction,
 } from "./nasActiveSync";
 import { noteToMarkdown } from "./nasArchive";
 import { contentHash } from "../gemini/tagging";
@@ -224,4 +225,26 @@ describe("pushActiveToNas", () => {
       expect(writeNoteToNasStructure).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("resolveSecondaryAction", () => {
+  // NAS/Driveはどちらも「最終操作者優先の集合置き換え」のため、両方でpullが走ると
+  // 互いに上書きし合う。pullは正本側へ一本化する(どちらを正本にするかは呼び出し側)。
+  it("正本側が機能していれば二次側のpullをnoopへ落とす", () => {
+    expect(resolveSecondaryAction("pull", true)).toBe("noop");
+  });
+
+  it("正本側が使えなければ二次側のpullを通す(唯一の同期経路になる)", () => {
+    expect(resolveSecondaryAction("pull", false)).toBe("pull");
+  });
+
+  it("pushは正本側の状態にかかわらず抑止しない(二次側もミラーとして見られるため)", () => {
+    expect(resolveSecondaryAction("push", true)).toBe("push");
+    expect(resolveSecondaryAction("push", false)).toBe("push");
+  });
+
+  it("noopはそのまま", () => {
+    expect(resolveSecondaryAction("noop", true)).toBe("noop");
+    expect(resolveSecondaryAction("noop", false)).toBe("noop");
+  });
 });

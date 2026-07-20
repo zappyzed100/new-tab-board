@@ -62,6 +62,25 @@ export function decideActiveSync(localGen: number, nasGen: number, owner: boolea
   return "noop";
 }
 
+/** 二次側(正本でない方)の判定を調整する。NAS/Driveはどちらも「最終操作者優先で集合を丸ごと
+ * 置き換える」方式のため、**両方でpullが走ると互いに上書きし合う**(ping-pong)。そこでpullは
+ * 正本側へ一本化し、二次側のpullはその回に正本側が機能しなかった時だけ通す。
+ *
+ * pushは抑止しない——二次側も「そのミラーを見る用途」があり(Driveならスマホからの閲覧、
+ * NASならローカルのアーカイブ/全文索引)、止めると片方だけ古くなる。正本側が機能している時に
+ * 二次側へpushしても、送る内容は正本由来の正しい集合なので競合しない。
+ *
+ * どちらを正本にするかは呼び出し側が決める(ユーザー決定・2026-07-20: **Drive優先**。
+ * 当初はNAS優先で配線したが、NASのnative hostが動いていない環境が常態で、
+ * Drive側のpullが恒常的に抑止されて2台目に何も降りてこなかったため反転した)。 */
+export function resolveSecondaryAction(
+  decision: SyncDecision,
+  primaryAuthoritative: boolean,
+): SyncDecision {
+  if (decision === "pull" && primaryAuthoritative) return "noop";
+  return decision;
+}
+
 export type PullDeps = {
   getNasFolderPath?: () => Promise<string | undefined>;
   readNasActive?: typeof readNasActive;

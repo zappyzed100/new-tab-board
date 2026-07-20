@@ -1,7 +1,7 @@
 // driveActiveSync.test.ts — Drive active/ からの世代pullの単体テスト
 // 実Drive APIは叩かない(resolve/list/downloadを全てDIで差し替える — 本フォルダの既存方針)。
 import { describe, expect, it, vi } from "vitest";
-import { pullActiveFromDrive, resolveDriveAction } from "./driveActiveSync";
+import { pullActiveFromDrive } from "./driveActiveSync";
 
 /** noteToMarkdownが出すのと同じ形の front matter + 本文を組む。 */
 function md(opts: { id?: string; title: string; order?: number; body: string }): string {
@@ -101,26 +101,5 @@ describe("pullActiveFromDrive", () => {
       }),
     } as never);
     expect(notes).toBeNull();
-  });
-});
-
-describe("resolveDriveAction", () => {
-  // NAS優先(ユーザー決定・2026-07-20)。両方でpullが走ると最終操作者優先の上書き合戦になる。
-  it("NASが正本ならDriveのpullをnoopへ落とす", () => {
-    expect(resolveDriveAction("pull", true)).toBe("noop");
-  });
-
-  it("NASが使えないならDriveのpullをそのまま通す(唯一の同期経路になる)", () => {
-    expect(resolveDriveAction("pull", false)).toBe("pull");
-  });
-
-  it("pushはNASの状態にかかわらず抑止しない(Driveはスマホ閲覧用のミラーでもあるため)", () => {
-    expect(resolveDriveAction("push", true)).toBe("push");
-    expect(resolveDriveAction("push", false)).toBe("push");
-  });
-
-  it("noopはそのまま", () => {
-    expect(resolveDriveAction("noop", true)).toBe("noop");
-    expect(resolveDriveAction("noop", false)).toBe("noop");
   });
 });
