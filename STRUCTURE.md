@@ -287,6 +287,8 @@
 - `src/newtab/styles/components.css`
 - `src/newtab/styles/layout.css`
 - `src/newtab/styles/tokens.css`
+- `src/newtab/useForegroundSync.test.ts` — useForegroundSync.test.ts — 前景復帰で同期をキックするhookの単体テスト
+- `src/newtab/useForegroundSync.ts` — useForegroundSync.ts — タブが前景に戻った時に同期を1回キックするReact hook
 - `src/newtab/useSignatureDebouncedEffect.test.ts` — useSignatureDebouncedEffect.test.ts — 署名デバウンスeffectの単体テスト
 - `src/newtab/useSignatureDebouncedEffect.ts` — useSignatureDebouncedEffect.ts — 「値が実際に変わった時だけデバウンスして走らせる」effect
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
@@ -680,6 +682,7 @@
 - type SyncResult
 - type SyncDeps
 - function syncNoteToDrive
+- function resetDriveSyncState
 
 ### `src/lib/drive/googleAuth.ts`
 - function getOAuthClientId
@@ -1065,6 +1068,9 @@
 
 ### `src/newtab/components/shell/TodoList.tsx`
 - function TodoList
+
+### `src/newtab/useForegroundSync.ts`
+- function useForegroundSync
 
 ### `src/newtab/useSignatureDebouncedEffect.ts`
 - function useSignatureDebouncedEffect

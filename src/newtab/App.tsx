@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useSignatureDebouncedEffect } from "./useSignatureDebouncedEffect";
+import { useForegroundSync } from "./useForegroundSync";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
@@ -119,6 +120,11 @@ const SearchPanel = lazy(() =>
 
 // タブ↔NAS active の世代同期の間隔(ユーザー指示: activeで5分毎に最新データと連携)。
 const NAS_SYNC_INTERVAL_MS = 300_000;
+
+// タブが前景に戻った時の同期の最小間隔(ユーザー指示・2026-07-20: タブ新規作成時・タブ操作時に
+// Driveからactiveを取得したい)。visibilitychangeとfocusは同時に来ることがあり、タブを行き来
+// するだけでDrive APIを連打しかねないため、この間隔でまとめて1回に落とす。
+const FOREGROUND_SYNC_MIN_INTERVAL_MS = 30_000;
 
 // ノートボードの列数(1列あたり概ね280px、最大3列)。実測masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
@@ -426,6 +432,10 @@ export function App() {
     const interval = setInterval(() => void runSyncTick(), NAS_SYNC_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
+  // 開きっぱなしのタブへ戻ってきた時にも取り込む(ユーザー指示・2026-07-20)。新しいタブを
+  // 開いた直後は下の初回effectが担うので、こちらはタブ/ウィンドウの切り替えで戻る経路を拾う。
+  // 5分tickを待たずに他端末の変更が見えるようにするのが狙い。
+  useForegroundSync(() => void runSyncTick(), FOREGROUND_SYNC_MIN_INTERVAL_MS, clockNow);
   // ロード直後(notesが初めて入った時)に1回だけ初期同期する(pullで最新を取り込む)。
   const initialSyncDoneRef = useRef(false);
   useEffect(() => {

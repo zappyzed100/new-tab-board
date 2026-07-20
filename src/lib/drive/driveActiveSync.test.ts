@@ -103,3 +103,46 @@ describe("pullActiveFromDrive", () => {
     expect(notes).toBeNull();
   });
 });
+
+describe("pullActiveFromDrive — 同一noteIdの重複ファイル", () => {
+  // 実害の型(2026-07-20): syncNoteToDriveの同時実行レースでDrive上に同一noteIdのファイルが
+  // 2つでき、そこからpullすると同じidのNoteが2件生まれた。updateNoteはid一致の全ノートを
+  // 書き換える(notes.ts)ため、片方への編集がもう片方にも入り「ノートAのタイトル・idのまま
+  // 本文だけノートBのもの」という壊れ方をした。
+  const dup = (updatedA: string, updatedB: string) => [
+    {
+      id: "f-old",
+      noteId: "same-id",
+      content: `---\nid: same-id\ntitle: 古い\nupdated_at: ${updatedA}\n---\n\n古い本文`,
+    },
+    {
+      id: "f-new",
+      noteId: "same-id",
+      content: `---\nid: same-id\ntitle: 新しい\nupdated_at: ${updatedB}\n---\n\n新しい本文`,
+    },
+  ];
+
+  it("回帰: 同じidのNoteを2件返さない", async () => {
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps(dup("2026-07-20T05:00:00.000Z", "2026-07-20T16:00:00.000Z")) as never,
+    );
+    expect(notes).toHaveLength(1);
+    expect(new Set(notes?.map((n) => n.id)).size).toBe(1);
+  });
+
+  it("重複時はupdated_atが新しい方を残す(最終操作者優先)", async () => {
+    const notes = await pullActiveFromDrive(
+      "tok",
+      deps(dup("2026-07-20T05:00:00.000Z", "2026-07-20T16:00:00.000Z")) as never,
+    );
+    expect(notes?.[0].content).toBe("新しい本文");
+    expect(notes?.[0].driveFileId).toBe("f-new");
+  });
+
+  it("列挙順が逆でも新しい方を残す(files.listの順序に依存しない)", async () => {
+    const reversed = dup("2026-07-20T05:00:00.000Z", "2026-07-20T16:00:00.000Z").reverse();
+    const notes = await pullActiveFromDrive("tok", deps(reversed) as never);
+    expect(notes?.[0].content).toBe("新しい本文");
+  });
+});
