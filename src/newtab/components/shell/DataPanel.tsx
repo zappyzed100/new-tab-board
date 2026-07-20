@@ -33,7 +33,7 @@ import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
 import { probeNasPath } from "../../../lib/externalIO/nasNativeHost";
-import { getAuthTokenWithError } from "../../../lib/drive/googleAuth";
+import { getAuthToken, getAuthTokenWithError } from "../../../lib/drive/googleAuth";
 import { resetDriveFolderCache } from "../../../lib/drive/drive";
 import { restoreJsonBackupFromDrive } from "../../../lib/drive/jsonBackupSync";
 import { pickSharedFolderViaOAuth } from "../../../lib/drive/pickerOAuth";
@@ -59,6 +59,11 @@ type Props = {
   /** 現在開いているノートを即座にNASのactive/と今日の日付フォルダへ反映する
    * (ユーザー指示: 「今すぐNASへ書き出し」でも通常のtickを待たずに反映してほしい)。 */
   onPushNasActiveNow: () => Promise<void>;
+  /** Drive接続状態(null=未判定)。Appが持つ——このパネルは折りたたまれるため、ここで
+   * 状態を持つと開くまで未接続に気づけず早期警告にならない(App.tsxのdriveConnected参照)。 */
+  driveConnected: boolean | null;
+  /** 接続状態が判明/変化したときにAppへ知らせる(「GDrive設定」での再接続結果を即反映する)。 */
+  onDriveConnectionChange: (connected: boolean) => void;
 };
 
 export function DataPanel({
@@ -69,6 +74,8 @@ export function DataPanel({
   onBackupToDrive,
   onRestoreFromNas,
   onPushNasActiveNow,
+  driveConnected,
+  onDriveConnectionChange,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -86,8 +93,10 @@ export function DataPanel({
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
   const [batteryConfigSet, setBatteryConfigSet] = useState(false);
-
   useEffect(() => {
+    // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
+    // 突合effectと同じ方針)。結果はAppへ返す(常時表示の警告バッジもこの値で出る)。
+    void getAuthToken(false).then((token) => onDriveConnectionChange(token !== null));
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
@@ -114,6 +123,7 @@ export function DataPanel({
   }
   async function handleConnectDrive() {
     const { token, error } = await getAuthTokenWithError(true);
+    onDriveConnectionChange(token !== null); // 再接続の成否を警告バッジ/ボタン表示へ即反映する
     onMessage(
       token
         ? "Googleアカウントに接続しました(以後は自動でDriveへバックアップされます)"
@@ -333,13 +343,21 @@ export function DataPanel({
         {/* 設定系ボタンとして配列の一番右に配置(ユーザー指示)。 */}
         <Button
           type="button"
-          variant="soft"
+          // 未接続はDrive連携が全停止している状態——soft(他の設定ボタンと同じ見た目)だと
+          // 埋もれて気づけないため、色で浮かせる(2026-07-20の2日間無症状停止を受けて)。
+          variant={driveConnected === false ? "solid" : "soft"}
+          color={driveConnected === false ? "orange" : undefined}
           data-testid="data-connect-drive"
-          title="Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+          data-drive-connected={driveConnected === null ? "unknown" : String(driveConnected)}
+          title={
+            driveConnected === false
+              ? "Driveへ未接続です。ノートの同期・削除の反映が停止しています。押して再接続してください"
+              : "Googleアカウントに接続する(以後は自動でDriveへバックアップされます)"
+          }
           onClick={() => void handleConnectDrive()}
         >
           <SettingsIcon size={14} aria-hidden="true" />
-          GDrive設定
+          GDrive設定{driveConnected === false ? "(未接続)" : ""}
         </Button>
         <Button
           type="button"

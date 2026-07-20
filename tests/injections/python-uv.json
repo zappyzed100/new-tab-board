@@ -47,9 +47,7 @@
     {
       "rule": "test-calls-solver-direct",
       "severity": "HARD",
-      "requires": [
-        "SOLVER_DIRECT_CALL_PATTERNS"
-      ],
+      "requires": ["SOLVER_DIRECT_CALL_PATTERNS"],
       "path": "tests/test_dod_probe_solver.py",
       "content": "# test_dod_probe_solver.py — DoD注入（自動生成・自動削除）\n\n\ndef test_probe():\n    result = solve([1, 2])\n    assert result is not None\n"
     },
@@ -57,10 +55,7 @@
       "rule": "fix-without-test",
       "severity": "HARD",
       "stage": "commit",
-      "requires": [
-        "TEST_PATH_PATTERNS",
-        "INLINE_TEST_PATTERNS"
-      ],
+      "requires": ["TEST_PATH_PATTERNS", "INLINE_TEST_PATTERNS"],
       "msg": "fix: dod probe（テスト非同梱の検証用）",
       "path": "src/dod_probe_fix.py",
       "content": "# dod_probe_fix.py — DoD注入（自動生成・自動削除）\nX = 1\n"
@@ -69,9 +64,7 @@
       "rule": "feat-without-plan",
       "severity": "HARD",
       "stage": "commit",
-      "requires": [
-        "PLAN_LAYER_ROOTS"
-      ],
+      "requires": ["PLAN_LAYER_ROOTS"],
       "msg": "feat: dod probe（設計根拠非同梱の検証用）",
       "path": "src/dod_probe_plan/mod.py",
       "content": "# mod.py — DoD注入（自動生成・自動削除）\nX = 1\n"
@@ -80,10 +73,7 @@
       "rule": "feat-without-test",
       "severity": "SOFT",
       "stage": "commit",
-      "requires": [
-        "TEST_PATH_PATTERNS",
-        "INLINE_TEST_PATTERNS"
-      ],
+      "requires": ["TEST_PATH_PATTERNS", "INLINE_TEST_PATTERNS"],
       "msg": "feat: dod probe2（テスト非同梱の検証用）",
       "path": "src/dod_probe_feat.py",
       "content": "# dod_probe_feat.py — DoD注入（自動生成・自動削除）\nX = 1\n"

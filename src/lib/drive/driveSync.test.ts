@@ -1,6 +1,6 @@
 // driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
 import { describe, expect, it, vi } from "vitest";
-import { activeFilenameFor, syncNoteToDrive } from "./driveSync";
+import { activeFilenameFor, resetDriveSyncState, syncNoteToDrive } from "./driveSync";
 import { noteToMarkdown } from "../externalIO/nasArchive";
 import type { Note } from "../../types";
 
@@ -110,5 +110,59 @@ describe("syncNoteToDrive", () => {
       uploadNote: vi.fn().mockRejectedValue(new Error("network down")),
     });
     expect(result).toEqual({ status: "error" });
+  });
+});
+
+describe("同一ノートの同時同期(重複ファイル生成の防止)", () => {
+  // 実害の型(2026-07-20): 「既存を探す→無ければ作る」はcheck-then-actのため、複数ペイン/
+  // タブ/前景復帰の同期が同時に走ると両方が「無い」と判断してPOSTし、同一noteIdのファイルが
+  // Drive上に2つできた。findFileForNoteはfiles[0]しか返さないので片方は永久に取り残され、
+  // さらにそこからpullすると同じidのNoteが2件生まれて本文が混ざる。
+  function makeDeps() {
+    let created = 0;
+    const findFileForNote = vi.fn(async () => null); // Drive上にはまだ無い(検索は常に空)
+    const uploadNote = vi.fn(async (_n, _t, existingFileId: string | null) => {
+      if (!existingFileId) created += 1;
+      return "file-1";
+    });
+    return {
+      created: () => created,
+      deps: {
+        getAuthToken: vi.fn(async () => "tok"),
+        resolveFolderPath: vi.fn(async () => "active-folder"),
+        findFileForNote,
+        uploadNote,
+      } as never,
+      uploadNote,
+    };
+  }
+
+  it("回帰: 同じノートを同時に同期しても新規作成は1回だけ", async () => {
+    const { deps, created, uploadNote } = makeDeps();
+    resetDriveSyncState();
+    await Promise.all([
+      syncNoteToDrive(note, 1, false, deps),
+      syncNoteToDrive(note, 2, false, deps),
+      syncNoteToDrive(note, 3, false, deps),
+    ]);
+    expect(uploadNote).toHaveBeenCalledTimes(3); // 3回とも上げるが…
+    expect(created()).toBe(1); // …新規作成は1回だけ(残りは既存の更新)
+  });
+
+  it("回帰: 連続した同期でもDrive検索の結果整合を待たず既存IDを引く", async () => {
+    // 検索は常に空を返す(作成直後のファイルが検索に出ない状態の再現)。それでも
+    // メモリキャッシュがあるため2回目は新規作成にならない。
+    const { deps, created } = makeDeps();
+    resetDriveSyncState();
+    await syncNoteToDrive(note, 1, false, deps);
+    await syncNoteToDrive(note, 2, false, deps);
+    expect(created()).toBe(1);
+  });
+
+  it("空ノートは直列化チェーンに乗せずskipped-emptyを返す", async () => {
+    const { deps } = makeDeps();
+    resetDriveSyncState();
+    const result = await syncNoteToDrive({ ...note, content: "  " }, 1, false, deps);
+    expect(result).toEqual({ status: "skipped-empty" });
   });
 });

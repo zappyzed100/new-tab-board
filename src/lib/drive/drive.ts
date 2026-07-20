@@ -226,6 +226,24 @@ export async function deleteDriveFile(
   logOp("drive", "delete", `fileId=${fileId}`);
 }
 
+/** ファイル本文をそのまま取得する(世代pull用。active/の.txtの中身は noteToMarkdown が出した
+ * front matter + Markdown なので、呼び出し側は markdownToNote で Note へ戻せる)。 */
+export async function downloadFileContent(
+  fileId: string,
+  token: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<string> {
+  const res = await fetchImpl(`${FILES_URL}/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    logOp("drive", "download-error", `fileId=${fileId} status=${res.status}`);
+    throw new Error(`Driveダウンロード失敗: HTTP ${res.status}`);
+  }
+  logOp("drive", "download", `fileId=${fileId}`);
+  return await res.text();
+}
+
 /** フォルダ配下の、noteId(appProperties)を持つファイルを列挙する({fileId, noteId}の配列)。
  * Drive APIの`appProperties has {...}`句は`value='...'`の完全一致しか受け付けず`!=`は
  * 使えない(2026-07-16実機確認: `value!=''`を送るとHTTP 400 Bad Requestになるバグだった)。

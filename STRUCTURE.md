@@ -162,6 +162,8 @@
 - `src/lib/drive/drive.ts` — drive.ts — Google Drive API v3クライアント(最小権限drive.fileでノート現行内容のみミラー。SPEC.md §4.2)
 - `src/lib/drive/driveActiveMirror.test.ts` — driveActiveMirror.test.ts — active/ の突き合わせ削除と日付フォルダ格納の単体テスト
 - `src/lib/drive/driveActiveMirror.ts` — driveActiveMirror.ts — Google Drive の app/New Tab Board/active/ を「編集中のノート一覧」に
+- `src/lib/drive/driveActiveSync.test.ts` — driveActiveSync.test.ts — Drive active/ からの世代pullの単体テスト
+- `src/lib/drive/driveActiveSync.ts` — driveActiveSync.ts — Drive active/ とタブの世代同期のpull側(NAS側 nasActiveSync.ts の鏡像)。
 - `src/lib/drive/driveGeneration.test.ts` — driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
 - `src/lib/drive/driveGeneration.ts` — driveGeneration.ts — Drive版の世代カウンタ(native-host/nas_bridge.pyのread/bump-generationと対)。
 - `src/lib/drive/driveSpecial.test.ts` — driveSpecial.test.ts — Driveのspecial/書き出し・フォルダ内突き合わせ削除の単体テスト
@@ -176,6 +178,7 @@
 - `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
 - `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」実装)の単体テスト
 - `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装。
+- `src/lib/drive/useDriveSync.test.ts` — useDriveSync.test.ts — ノート編集をdebounceしてDrive同期をキックするhookの単体テスト
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
@@ -284,6 +287,10 @@
 - `src/newtab/styles/components.css`
 - `src/newtab/styles/layout.css`
 - `src/newtab/styles/tokens.css`
+- `src/newtab/useForegroundSync.test.ts` — useForegroundSync.test.ts — 前景復帰で同期をキックするhookの単体テスト
+- `src/newtab/useForegroundSync.ts` — useForegroundSync.ts — タブが前景に戻った時に同期を1回キックするReact hook
+- `src/newtab/useSignatureDebouncedEffect.test.ts` — useSignatureDebouncedEffect.test.ts — 署名デバウンスeffectの単体テスト
+- `src/newtab/useSignatureDebouncedEffect.ts` — useSignatureDebouncedEffect.ts — 「値が実際に変わった時だけデバウンスして走らせる」effect
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
 - `src/shims.d.ts` — shims.d.ts — 型定義を持たないパッケージのアンビエント宣言
 - `src/types.ts` — types.ts — アプリ全体で共有するデータモデル(SPEC.md §5)
@@ -645,6 +652,7 @@
 - function getOrCreateFolder
 - function resolveFolderPath
 - function deleteDriveFile
+- function downloadFileContent
 - function listNoteFilesInFolder
 - function findFileForNote
 - function uploadNote
@@ -656,6 +664,10 @@
 - function copyNotesToDriveDateFolder
 - type PushTodosDeps
 - function pushTodosToDriveActive
+
+### `src/lib/drive/driveActiveSync.ts`
+- type DrivePullDeps
+- function pullActiveFromDrive
 
 ### `src/lib/drive/driveGeneration.ts`
 - function readDriveGeneration
@@ -672,6 +684,7 @@
 - type SyncResult
 - type SyncDeps
 - function syncNoteToDrive
+- function resetDriveSyncState
 
 ### `src/lib/drive/googleAuth.ts`
 - function getOAuthClientId
@@ -768,6 +781,7 @@
 - function noteSaveFingerprint
 - type SyncDecision
 - function decideActiveSync
+- function resolveSecondaryAction
 - type PullDeps
 - function pullActiveFromNas
 - type ClaimOwnershipDeps
@@ -1060,6 +1074,12 @@
 
 ### `src/newtab/components/shell/TodoList.tsx`
 - function TodoList
+
+### `src/newtab/useForegroundSync.ts`
+- function useForegroundSync
+
+### `src/newtab/useSignatureDebouncedEffect.ts`
+- function useSignatureDebouncedEffect
 
 ### `src/types.ts`
 - type Bookmark
