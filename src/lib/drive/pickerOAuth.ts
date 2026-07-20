@@ -23,27 +23,11 @@
 // drive.file単体に絞る——Picker専用フローの制約: 他スコープと同時要求不可)、新規クライアント
 // は使わない(2026-07-16 設計変更)。
 import { logOp } from "../runtime/log";
+import { getOAuthClientId } from "./googleAuth";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const PICKER_SCOPE = "https://www.googleapis.com/auth/drive.file";
-
-/** Picker専用のOAuthクライアントID(「ウェブアプリケーション」型)。
- *
- * 以前はmanifest.jsonのoauth2.client_idをgoogleAuth.tsのgetOAuthClientId()経由で共有していたが、
- * 2026-07-20にメインログインをchrome.identity.getAuthTokenへ戻した際、manifest側のclient_idは
- * 「Chrome拡張機能」型へ差し替わった(googleAuth.tsのヘッダー参照)。**「Chrome拡張機能」型は
- * https://<id>.chromiumapp.org/リダイレクトと原理的に非互換**(本ファイル冒頭に記録した
- * redirect_uri_mismatch/GeneralOAuthFlowの制約)のため、launchWebAuthFlowを使うこのPickerフローが
- * manifest側のIDを引き継ぐと確実に壊れる。よってPickerは従来の「ウェブアプリケーション」型
- * クライアントを定数として保持し続ける(承認済みリダイレクトURIに上記chromiumapp.orgを登録済み)。
- * client_idは秘密情報ではない(client_secretは使わない——冒頭の設計判断を参照)。 */
-const PICKER_CLIENT_ID = "872015431238-8ul2vrsn7crorkdqsh1s6f47hffejdnb.apps.googleusercontent.com";
-
-/** Pickerフローが使うOAuthクライアントID(「ウェブアプリケーション」型)を返す。 */
-export function getPickerClientId(): string {
-  return PICKER_CLIENT_ID;
-}
 
 export type PickedFolder = { id: string; name: string | null };
 
@@ -108,15 +92,15 @@ export type PickerOAuthDeps = {
 };
 
 /** Picker「デスクトップ・モバイル向けフロー」を開き、ユーザーが選んだフォルダの{id,name}を返す
- * (キャンセル/失敗はnull)。response_type=token(インプリシットフロー)で「ウェブアプリケーション」型
- * クライアント(PICKER_CLIENT_ID)を使い、drive.fileスコープ単体で要求する(ユーザー設計・2026-07-16。
- * メインログインとのclient_id共有は2026-07-20に解消——PICKER_CLIENT_IDのコメント参照)。 */
+ * (キャンセル/失敗はnull)。response_type=token(インプリシットフロー)でメインログインと
+ * 同じ「ウェブアプリケーション」型クライアントを使い回し、drive.fileスコープ単体で要求する
+ * (ユーザー設計・2026-07-16)。 */
 export async function pickSharedFolderViaOAuth(
   deps: PickerOAuthDeps = {},
 ): Promise<PickedFolder | null> {
   const _launch = deps.launchWebAuthFlow ?? ((d) => chrome.identity.launchWebAuthFlow(d));
   const _getRedirectURL = deps.getRedirectURL ?? (() => chrome.identity.getRedirectURL());
-  const _getClientId = deps.getClientId ?? getPickerClientId;
+  const _getClientId = deps.getClientId ?? getOAuthClientId;
   const _fetch = deps.fetchImpl ?? fetch;
 
   const redirectUri = _getRedirectURL();
