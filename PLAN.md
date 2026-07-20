@@ -57,9 +57,15 @@ Native Messaging・HTTPを介して疎結合に連携する。
 
 ## ロードマップ
 
-- Drive側にも世代同期のpull経路を追加する（現状は単一端末運用のため未着手。
-  `driveGeneration.ts`に土台のカウンタのみ用意済み——NAS側の`decideActiveSync`相当の
-  push/pull判定ロジックは無い）。
+- Drive側にも世代同期のpull経路を追加する（着手中・2026-07-20）。pull本体
+  `driveActiveSync.ts`の`pullActiveFromDrive`を実装済み。判定は**NAS側の`decideActiveSync`を
+  そのまま再利用する**（同じ規則を二重に書かない）。世代カウンタは`driveGeneration.ts`が既存。
+  この方式を採る理由は**削除の伝播にtombstoneが要らない**こと——pullは「Drive上のactive/が
+  正本」としてノート集合を置き換えるため、片方で消したノートは相手側でも自然に消え、
+  Note型に削除マーカーを足さずに済む。
+  残りは配線（tick+初回pull+編集時bump）と、`reconcileDriveActive`をpush判定の下へ移すこと。
+  **後者は安全上の必須事項**: 現状reconcileはノート集合が変わるたび無条件に走り、ローカルに
+  無いDriveファイルを消すため、まだ相手のノートを持っていない2台目が相手のノートを削除する。
 - 日次アーカイブ(`date_notes`)を全文検索・タグ検索の対象にも含めるか検討する
   （現状は期間検索でのみアーカイブを合流させている）。
 
@@ -75,7 +81,9 @@ Native Messaging・HTTPを介して疎結合に連携する。
 - [ ] gas/battery-webhook.gs を script.google.com へデプロイする `next`
 - [ ] スマホ側の自動化アプリ（Tasker/ショートカット）でバッテリー低下時のPOSTを設定する `next`
 - [ ] NAS/Google Driveを手動削除した後、再送信で正しく復元されるか実機確認する `backlog`
-- [ ] マルチデバイス対応時、Drive側にもpush/pull判定ロジックを追加する `backlog`
+- [ ] マルチデバイス対応時、Drive側にもpush/pull判定ロジックを追加する `in_progress`
+- [ ] Drive世代同期をApp.tsxへ配線する（tick+初回pull+編集時bump） `next`
+- [ ] `reconcileDriveActive`をpush判定の下へ移す（2台目が相手のノートを消す事故の防止） `next`
 
 ## 設計判断の記録（過去の主な設計判断・新規ディレクトリの根拠）
 
