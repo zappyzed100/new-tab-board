@@ -8,7 +8,7 @@ import {
   pushActiveToNas,
   resolveSecondaryAction,
 } from "./nasActiveSync";
-import { noteToMarkdown } from "./nasArchive";
+import { noteToMarkdown, todosToMarkdown } from "./nasArchive";
 import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
 
@@ -177,6 +177,27 @@ describe("pullActiveFromNas", () => {
       }),
     ).toBeNull();
   });
+
+  it(
+    "active/todos.txt(kind: todos・id無し)はノート化しない——さもないと空タイトルの" +
+      "「(名称未設定)」幻ノートが order=0 で左上に湧き、updatedAt 無し同士で競合コピーを生む" +
+      "(2026-07-22 是正。Drive 側 pullActiveFromDrive は noteId 持ちだけを列挙して同じ問題を回避)",
+    async () => {
+      const realNote = noteToMarkdown(note({ id: "real-1", title: "買い物メモ", content: "牛乳" }));
+      const todos = todosToMarkdown([{ id: "t1", text: "掃除", done: false, order: 0 }]);
+      // handle_read_active はファイル名順に .txt を全部返す(todos.txt はASCIIで日本語より前=index0)。
+      const readNasActive = vi.fn().mockResolvedValue([
+        { filename: "todos.txt", content: todos },
+        { filename: "買い物メモ (real-1).txt", content: realNote },
+      ]);
+      const notes = await pullActiveFromNas({
+        getNasFolderPath: async () => "Z:\\NAS",
+        readNasActive,
+      });
+      expect(notes?.map((n) => n.id)).toEqual(["real-1"]); // todos.txt由来の幻ノートは含めない
+      expect(notes?.some((n) => n.title === "")).toBe(false);
+    },
+  );
 });
 
 describe("pushActiveToNas", () => {

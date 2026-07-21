@@ -130,6 +130,26 @@ export function markdownToNote(md: string, fallbackOrder = 0): Note {
   return note;
 }
 
+/** active/ 直下の .txt を pull する際、**ノートファイルだけ**を選り分ける判定。
+ * ノートは noteToMarkdown が必ず front matter に `id:` を書く。一方 `active/todos.txt`
+ * (`todosToMarkdown` は `kind: todos` だけで id を持たない)のような非ノートファイルも
+ * active/ 直下に同居するため、これを markdownToNote に通すと **id 無し→乱数id・title 無し→空**
+ * の「(名称未設定)」幻ノートが毎回生成され、order=0 で一番左上に出る/updatedAt 無し(=時刻0)
+ * 同士で競合コピーを生む実害があった(2026-07-22 是正)。Drive 側の pullActiveFromDrive は
+ * appProperties.noteId を持つファイルだけを列挙して同じ問題を最初から回避しており(driveActiveSync.ts)、
+ * NAS 側にだけこの選り分けが無かった。front matter に非空の `id:` があるものだけを true とする。 */
+export function isNoteMarkdown(md: string): boolean {
+  if (!md.startsWith("---")) return false;
+  const end = md.indexOf("\n---", 3);
+  if (end === -1) return false;
+  const block = md.slice(3, end);
+  return block.split("\n").some((line) => {
+    const idx = line.indexOf(":");
+    if (idx === -1) return false;
+    return line.slice(0, idx).trim() === "id" && line.slice(idx + 1).trim() !== "";
+  });
+}
+
 /** ノート1件を正本 notes/<id>.md としてNASへ書き出す。NAS未設定/到達不可は静かにfalse。 */
 export async function writeNoteMarkdownToNas(note: Note, deps: NasDeps = {}): Promise<boolean> {
   const _getNasFolderPath = deps.getNasFolderPath ?? getNasFolderPath;

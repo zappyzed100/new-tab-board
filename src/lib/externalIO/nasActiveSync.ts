@@ -6,6 +6,7 @@
 import { bumpNasGeneration, readNasActive } from "./nasNativeHost";
 import { getNasFolderPath } from "../storage/db";
 import {
+  isNoteMarkdown,
   markdownToNote,
   noteToMarkdown,
   reconcileActiveNotesOnNas,
@@ -92,8 +93,13 @@ export async function pullActiveFromNas(deps: PullDeps = {}): Promise<Note[] | n
   if (!path) return null;
   const files = await (deps.readNasActive ?? readNasActive)(path);
   if (files === null) return null;
+  // active/ 直下には todos.txt 等の非ノート .txt も同居する。ノート(front matter に id:)
+  // だけを取り込む——さもないと id 無し=乱数id・title 無し=空の「(名称未設定)」幻ノートが
+  // 毎回生成され、order=0 で左上に出る/時刻0同士で競合コピーを生む(2026-07-22 是正。
+  // Drive 側 pullActiveFromDrive が noteId 持ちだけを列挙するのと同じ選り分け)。
+  const noteFiles = files.filter((f) => isNoteMarkdown(f.content));
   // ファイル名順の index を fallback order にしつつ、front matter の order で最終的に並べる。
-  const notes = files.map((f, i) => markdownToNote(f.content, i));
+  const notes = noteFiles.map((f, i) => markdownToNote(f.content, i));
   notes.sort((a, b) => a.order - b.order);
   return notes;
 }

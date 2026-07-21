@@ -803,6 +803,7 @@
 ### `src/lib/externalIO/nasArchive.ts`
 - function noteToMarkdown
 - function markdownToNote
+- function isNoteMarkdown
 - function writeNoteMarkdownToNas
 - function activeNasFilenameFor
 - function writeNoteToNasStructure
