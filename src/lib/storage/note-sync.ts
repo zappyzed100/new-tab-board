@@ -21,8 +21,42 @@ function stableHash(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function sameNote(a: Note, b: Note): boolean {
-  return persistedNoteJson(a) === persistedNoteJson(b);
+/** NAS/DriveのMarkdown往復で保持される、ユーザーが競合として確認すべきフィールドだけを比較する。
+ * `taggedHash`等のローカル専用メタデータや false/undefined の表現差で競合コピーを作らない。 */
+function sameSyncedNote(a: Note, b: Note): boolean {
+  const comparable = (note: Note) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    tags: note.tags ?? [],
+    createdAt: note.createdAt ?? null,
+    updatedAt: note.updatedAt ?? null,
+    order: note.order,
+    pinned: !!note.pinned,
+    done: !!note.done,
+    special: !!note.special,
+    specialFolder: note.specialFolder ?? null,
+    sourceNoteId: note.sourceNoteId ?? null,
+    generatedBy: note.generatedBy ?? null,
+  });
+  return JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
+}
+
+/** 旧判定がローカル専用メタデータ差だけで作った偽の競合コピーを安全に除去する。
+ * 本文・タグ・配置等に差がある本物の競合コピーは残す。 */
+function deduplicateRedundantConflictCopies(notes: Note[]): Note[] {
+  const byId = new Map(notes.map((note) => [note.id, note]));
+  return notes.filter((note) => {
+    const match = /^(.*)-conflict-[a-z0-9]+$/.exec(note.id);
+    if (!match) return true;
+    const original = byId.get(match[1]);
+    if (!original || note.title !== `${original.title} (競合コピー)`) return true;
+    return !sameSyncedNote(original, {
+      ...note,
+      id: original.id,
+      title: original.title,
+    });
+  });
 }
 
 function conflictCopy(note: Note, originalId: string): Note {
@@ -103,7 +137,7 @@ export function mergeNoteCollections(
       else {
         winner = local;
         if (
-          !sameNote(local, remote) &&
+          !sameSyncedNote(local, remote) &&
           !(isGeneratedEmptyPlaceholder(local) && isGeneratedEmptyPlaceholder(remote))
         ) {
           conflict = conflictCopy(remote, id);
@@ -122,7 +156,9 @@ export function mergeNoteCollections(
 
   return {
     notes: deduplicateGeneratedPlaceholders(
-      [...mergedById.values()].sort((a, b) => a.order - b.order),
+      deduplicateRedundantConflictCopies([...mergedById.values()]).sort(
+        (a, b) => a.order - b.order,
+      ),
     ),
     tombstones,
   };

@@ -1,6 +1,7 @@
 // note-sync.test.ts — ノート和集合マージと削除tombstoneの回帰テスト
 import { describe, expect, it } from "vitest";
 import type { Note } from "../../types";
+import { markdownToNote, noteToMarkdown } from "../externalIO/nasArchive";
 import { mergeNoteCollections, stampChangedNotes, updateTombstonesForMutation } from "./note-sync";
 
 function note(id: string, content: string, updatedAt: number): Note {
@@ -28,6 +29,39 @@ describe("mergeNoteCollections", () => {
     const local = { ...note("same", "", 10), title: "ノートA", order: 0 };
     const remote = { ...local, order: 2 };
     expect(mergeNoteCollections([local], [remote]).notes).toEqual([local]);
+  });
+
+  it("NAS/DriveのMarkdown往復で落ちるローカル専用メタデータを競合と誤判定しない", () => {
+    const local: Note = {
+      ...note("n1", "保存済み本文", 20),
+      title: "保存済みノート",
+      tags: [],
+      done: false,
+      special: false,
+      taggedHash: "local-only-hash",
+      driveFileId: "drive-file",
+      lastSyncedAt: 30,
+    };
+    const restored = markdownToNote(noteToMarkdown(local));
+
+    expect(mergeNoteCollections([local], [restored]).notes).toEqual([local]);
+  });
+
+  it("既に保存された偽の競合コピーだけを畳み、本文が違う本物の競合は残す", () => {
+    const original = { ...note("n1", "同じ本文", 20), title: "元ノート", taggedHash: "local" };
+    const redundant = {
+      ...note("n1-conflict-abc", "同じ本文", 20),
+      title: "元ノート (競合コピー)",
+    };
+    const realConflict = {
+      ...note("n1-conflict-def", "別の本文", 20),
+      title: "元ノート (競合コピー)",
+    };
+
+    expect(mergeNoteCollections([original, redundant, realConflict], []).notes).toEqual([
+      original,
+      realConflict,
+    ]);
   });
 
   it("stale保存で別タイトルの自動空ノートが増えても3件へ畳む", () => {
