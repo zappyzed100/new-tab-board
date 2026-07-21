@@ -1,9 +1,7 @@
-// useDriveSync.test.ts — ノート編集をdebounceしてDrive同期をキックするhookの単体テスト
-// 実時間を待たずvi.useFakeTimersで進める(テスト内sleepは禁止 — AGENTS.md §8)。
-// Reactフックの実行にはDOMが要るためjsdom環境で走らせる。
+// useDriveSync.test.ts — ペイン側Drive同期hook(自動周期はbackgroundへ集約)の単体テスト
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const syncNoteToDrive = vi.fn();
 vi.mock("./driveSync", () => ({
@@ -11,10 +9,8 @@ vi.mock("./driveSync", () => ({
   ACTIVE_FOLDER_PATH: ["app", "New Tab Board", "active"],
 }));
 
-import { useDriveSync } from "./useDriveSync";
 import type { Note } from "../../types";
-
-const DEBOUNCE_MS = 300_000;
+import { useDriveSync } from "./useDriveSync";
 
 function note(overrides: Partial<Note> = {}): Note {
   return {
@@ -28,7 +24,6 @@ function note(overrides: Partial<Note> = {}): Note {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers();
   syncNoteToDrive.mockReset();
   syncNoteToDrive.mockResolvedValue({
     status: "synced",
@@ -37,66 +32,35 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("useDriveSync", () => {
-  it("debounce経過後にアップロードする", () => {
-    renderHook(({ n }) => useDriveSync(n, () => {}), { initialProps: { n: note() } });
+  it("マウントや編集だけでは通信しない(5分周期はbackgroundの1本)", () => {
+    const { rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
+      initialProps: { n: note() },
+    });
+    rerender({ n: note({ content: "編集後", tags: ["仕事"] }) });
     expect(syncNoteToDrive).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(1);
   });
 
-  it("回帰: タグだけが変わっても再同期する(本文は不変)", () => {
-    // 実害の型(ユーザー報告・2026-07-20「5分たってタグが生成されてもGDriveが更新されない」)。
-    // 依存が[note.content, note.id]だった頃は、Geminiの自動タグ付けがtags/titleだけを変えても
-    // effectが再発火せず、本文編集のタイマーがタグ生成より先に発火したケースでは
-    // タグがDriveへ永久に上がらなかった。
-    const { rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
+  it("明示同期では最新ノートを即時アップロードする", async () => {
+    const onSynced = vi.fn();
+    const { result, rerender } = renderHook(({ n }) => useDriveSync(n, onSynced), {
       initialProps: { n: note() },
     });
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(1);
+    rerender({ n: note({ content: "最新本文", tags: ["設計"] }) });
 
-    rerender({ n: note({ tags: ["仕事", "設計"] }) }); // 本文は同じ・タグだけ付いた
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(2);
-    const uploaded = syncNoteToDrive.mock.calls[1][0] as Note;
-    expect(uploaded.tags).toEqual(["仕事", "設計"]);
+    act(() => result.current.syncNow(false));
+    await waitFor(() => expect(syncNoteToDrive).toHaveBeenCalledTimes(1));
+    expect(syncNoteToDrive.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ content: "最新本文", tags: ["設計"] }),
+    );
+    expect(onSynced).toHaveBeenCalledWith("file-1", 1);
   });
 
-  it("回帰: タイトルだけが変わっても再同期する(Geminiがタイトルを付ける経路)", () => {
-    const { rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
+  it("background同期のlastSyncedAtが反映されたら同期済表示にする", () => {
+    const { result, rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
       initialProps: { n: note() },
     });
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    rerender({ n: note({ title: "AIが付けたタイトル" }) });
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(2);
-  });
-
-  it("保存に影響しない変化(order)では再同期しない(並べ替えで全ノートが再送されるのを避ける)", () => {
-    const { rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
-      initialProps: { n: note() },
-    });
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(1);
-    rerender({ n: note({ order: 7 }) });
-    vi.advanceTimersByTime(DEBOUNCE_MS);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(1);
-  });
-
-  it("debounce中に再度変化すれば待ち直す(最後の状態で1回だけ送る)", () => {
-    const { rerender } = renderHook(({ n }) => useDriveSync(n, () => {}), {
-      initialProps: { n: note() },
-    });
-    vi.advanceTimersByTime(DEBOUNCE_MS - 1000);
-    rerender({ n: note({ content: "本文2" }) });
-    vi.advanceTimersByTime(DEBOUNCE_MS - 1000);
-    expect(syncNoteToDrive).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1000);
-    expect(syncNoteToDrive).toHaveBeenCalledTimes(1);
+    rerender({ n: note({ lastSyncedAt: 100 }) });
+    expect(result.current.status).toBe("synced");
   });
 });

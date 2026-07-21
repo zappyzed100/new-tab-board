@@ -98,6 +98,11 @@ export type Todo = {
 
 export type LocalData = {
   notes: Note[];
+  /** chrome.storage.onChangedで自己書き込みを識別するタブ/worker単位ID。同期データの意味は持たない。 */
+  storageWriterId?: string;
+  /** ノート削除の同期記録(noteId→削除時刻)。Drive active/にファイルが無いことだけでは
+   * 削除と判断せず、このtombstoneが対象ノート以上に新しい時だけ削除を伝播する。 */
+  noteTombstones?: Record<string, number>;
   todos?: Todo[];
   nextEventCache?: {
     title: string;

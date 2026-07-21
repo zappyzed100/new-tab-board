@@ -2,8 +2,8 @@
 
 ## Google Drive のノートミラーは2系統(役割が別物)
 
-1. **per-note active ミラー**(`driveSync.ts` + `useDriveSync.ts` + `drive.ts`)
-   各ペインが自分のノートを debounce して Drive の **`app/New Tab Board/active/`** フォルダへ
+1. **per-note active ミラー**(`driveSync.ts` + `driveSafeSync.ts` + `drive.ts`)
+   backgroundの5分アラームがノートを安全マージして Drive の **`app/New Tab Board/active/`** フォルダへ
    1ノート=1ファイル(中身はMarkdown+front matter)で上げる。ペインの「同期済」バッジはこれ。
    ファイル内容は NAS の `active/<タイトル> (id8桁).txt` と完全一致(2026-07-13)。**ファイル名は
    Driveのactiveフォルダに限り `<タイトル> (idの先頭8桁).txt`**(`activeFilenameFor`。ユーザー指示:
@@ -17,6 +17,13 @@
    ブックマーク/ノート/設定/TODO を1つのJSONにして上げる(データ管理の「☁️ Driveへ退避/復元」)。
 
 この2つは別物。「退避/復元」ボタン=②、ペインの同期=①。
+
+## Drive同期は和集合+tombstone方式(2026-07-22)
+
+旧世代同期の「remote activeで盤面全体を置換」は廃止。`driveSafeSync.ts`がローカル/remote activeを
+ID単位で和集合にし、`sync/v2/tombstones/<noteId>.json`の明示削除だけを反映する。activeに無いこと
+自体は削除理由にならない。`reconcileDriveActive`はこのマージ後だけ呼ぶ。5分周期はbackgroundの
+`drive-note-sync`に一本化し、`useDriveSync`はCmd/Ctrl+Sの明示同期と状態表示のみを担う。
 
 ## active/ ミラーの3つの約束(ユーザー指示・2026-07-13)
 

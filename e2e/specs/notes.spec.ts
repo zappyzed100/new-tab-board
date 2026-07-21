@@ -3,6 +3,30 @@
 // リネーム/削除はペイン側で行う——それらの回帰は notes-board.spec.ts が担う。
 import { expect, test } from "../fixtures";
 
+test("同一PCの別タブへノート編集と削除が即時反映される", async ({ context, newTabUrl }) => {
+  const firstTab = await context.newPage();
+  const secondTab = await context.newPage();
+  await Promise.all([firstTab.goto(newTabUrl), secondTab.goto(newTabUrl)]);
+  await Promise.all([
+    expect(firstTab.getByTestId("app-root")).toBeVisible(),
+    expect(secondTab.getByTestId("app-root")).toBeVisible(),
+  ]);
+
+  const firstPane = firstTab.locator('[data-testid^="note-editor-area-"]').first();
+  const paneTestId = await firstPane.getAttribute("data-testid");
+  if (!paneTestId) throw new Error("先頭ノートのtestidを取得できません");
+  await firstPane.locator(".cm-content").click();
+  await firstTab.keyboard.type("タブ間即時同期テスト");
+
+  await expect(secondTab.getByTestId(paneTestId).locator(".cm-content")).toContainText(
+    "タブ間即時同期テスト",
+  );
+
+  const noteId = paneTestId.replace("note-editor-area-", "");
+  await firstTab.getByTestId(`delete-note-${noteId}`).click();
+  await expect(secondTab.getByTestId(paneTestId)).toHaveCount(0);
+});
+
 test("ダークモード時、ノート本文のカーソル色が黒固定にならずテーマに追従する", async ({
   context,
   newTabUrl,

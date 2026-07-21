@@ -4,6 +4,7 @@ import { logOp } from "../runtime/log";
 
 const SYNC_KEY = "syncData";
 const LOCAL_KEY = "localData";
+const STORAGE_WRITER_ID = crypto.randomUUID();
 
 /** 初回起動時のタグ候補の既定値(ユーザー指示: distから取ってきた時点で既に入っているように)。
  * GitHub全リポジトリ(zappyzed100)のREADMEだけを読んで、繰り返し登場する技術/ドメインから
@@ -113,5 +114,28 @@ export async function loadLocalData(): Promise<LocalShape> {
 }
 
 export async function saveLocalData(data: LocalShape): Promise<void> {
-  await writeArea("local", LOCAL_KEY, data);
+  await writeArea("local", LOCAL_KEY, { ...data, storageWriterId: STORAGE_WRITER_ID });
+}
+
+/** 同一PCの別タブがlocalDataを保存した通知を購読する。UI層がchrome.storageへ直接触れないためのseam。 */
+export function subscribeLocalData(listener: (data: LocalShape) => void): () => void {
+  if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
+    const onChanged = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+      if (areaName !== "local") return;
+      const next = changes[LOCAL_KEY]?.newValue as LocalShape | undefined;
+      if (!next) return;
+      // chrome.storage.onChangedは書き込んだ当のタブにも届くため、writer IDで確実に除外する。
+      if (next.storageWriterId === STORAGE_WRITER_ID) return;
+      listener(next);
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }
+
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== `local:${LOCAL_KEY}` || !event.newValue) return;
+    listener(JSON.parse(event.newValue) as LocalShape);
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
 }

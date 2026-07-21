@@ -6,6 +6,7 @@ import {
   loadSyncData,
   saveLocalData,
   saveSyncData,
+  subscribeLocalData,
 } from "./storage";
 
 function stubChromeStorage() {
@@ -96,6 +97,30 @@ describe("chrome.storage が使える場合", () => {
       saveSyncData({ bookmarks: [], appLaunches: [], settings: DEFAULT_SETTINGS }),
     ).rejects.toThrow("quota exceeded");
   });
+
+  it("localData変更通知を購読し、解除できる", () => {
+    type Listener = (changes: Record<string, { newValue?: unknown }>, areaName: string) => void;
+    let storageListener: Listener | undefined;
+    vi.stubGlobal("chrome", {
+      storage: {
+        onChanged: {
+          addListener: (listener: Listener) => {
+            storageListener = listener;
+          },
+          removeListener: (listener: Listener) => {
+            if (storageListener === listener) storageListener = undefined;
+          },
+        },
+      },
+    });
+    const received: unknown[] = [];
+    const unsubscribe = subscribeLocalData((data) => received.push(data));
+
+    storageListener?.({ localData: { newValue: { notes: [] } } }, "local");
+    expect(received).toEqual([{ notes: [] }]);
+    unsubscribe();
+    expect(storageListener).toBeUndefined();
+  });
 });
 
 describe("chrome.storage が無い場合(localStorageフォールバック)", () => {
@@ -114,7 +139,7 @@ describe("chrome.storage が無い場合(localStorageフォールバック)", ()
     });
 
     await saveLocalData({ notes: [] });
-    expect(await loadLocalData()).toEqual({ notes: [] });
+    expect(await loadLocalData()).toEqual(expect.objectContaining({ notes: [] }));
   });
 
   it("何も保存されていなければ既定値を返す", async () => {

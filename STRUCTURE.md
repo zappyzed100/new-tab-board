@@ -166,6 +166,8 @@
 - `src/lib/drive/driveActiveSync.ts` — driveActiveSync.ts — Drive active/ とタブの世代同期のpull側(NAS側 nasActiveSync.ts の鏡像)。
 - `src/lib/drive/driveGeneration.test.ts` — driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
 - `src/lib/drive/driveGeneration.ts` — driveGeneration.ts — Drive版の世代カウンタ(native-host/nas_bridge.pyのread/bump-generationと対)。
+- `src/lib/drive/driveSafeSync.test.ts` — driveSafeSync.test.ts — Drive安全同期が片側だけのノートを保持し明示削除だけを反映する回帰
+- `src/lib/drive/driveSafeSync.ts` — driveSafeSync.ts — DriveとローカルをノートID単位で和集合マージし明示削除だけを伝播する
 - `src/lib/drive/driveSpecial.test.ts` — driveSpecial.test.ts — Driveのspecial/書き出し・フォルダ内突き合わせ削除の単体テスト
 - `src/lib/drive/driveSpecial.ts` — driveSpecial.ts — スペシャル(⭐)を Google Drive の app/New Tab Board/special/<folder>/<id>.md へ
 - `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
@@ -178,7 +180,7 @@
 - `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
 - `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」実装)の単体テスト
 - `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装。
-- `src/lib/drive/useDriveSync.test.ts` — useDriveSync.test.ts — ノート編集をdebounceしてDrive同期をキックするhookの単体テスト
+- `src/lib/drive/useDriveSync.test.ts` — useDriveSync.test.ts — ペイン側Drive同期hook(自動周期はbackgroundへ集約)の単体テスト
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
@@ -257,6 +259,8 @@
 - `src/lib/shortcuts/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
 - `src/lib/storage/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/storage/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
+- `src/lib/storage/note-sync.test.ts` — note-sync.test.ts — ノート和集合マージと削除tombstoneの回帰テスト
+- `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
@@ -673,6 +677,10 @@
 - function readDriveGeneration
 - function bumpDriveGeneration
 
+### `src/lib/drive/driveSafeSync.ts`
+- type DriveSafeSyncDeps
+- function syncDriveNotesSafely
+
 ### `src/lib/drive/driveSpecial.ts`
 - type SpecialDriveDeps
 - function pushSpecialToDrive
@@ -1002,12 +1010,21 @@
 - function getAllPastedImages
 - function deletePastedImage
 
+### `src/lib/storage/note-sync.ts`
+- type NoteTombstones
+- type NoteMergeResult
+- function mergeTombstones
+- function mergeNoteCollections
+- function updateTombstonesForMutation
+- function stampChangedNotes
+
 ### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS
 - function loadSyncData
 - function saveSyncData
 - function loadLocalData
 - function saveLocalData
+- function subscribeLocalData
 
 ### `src/newtab/App.tsx`
 - function App

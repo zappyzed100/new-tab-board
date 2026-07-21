@@ -9,6 +9,7 @@ import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
+import { syncDriveNotesSafely } from "../lib/drive/driveSafeSync";
 import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
@@ -26,12 +27,17 @@ const DAILY_INTERVAL_MINUTES = 60;
 const BATTERY_POLL_ALARM_NAME = "battery-poll";
 const BATTERY_POLL_INTERVAL_MINUTES = 60;
 const BATTERY_NOTIFICATION_ID = "battery-low-notification";
+// ノートのDrive同期は各New Tabではなくservice workerの1本へ集約する。5分ごとに
+// ノートID単位の和集合マージを行い、結果はchrome.storage経由で開いているタブへ配信される。
+const DRIVE_SYNC_ALARM_NAME = "drive-note-sync";
+const DRIVE_SYNC_INTERVAL_MINUTES = 5;
 
 chrome.runtime.onInstalled.addListener(() => {
   logOp("background", "installed", "extension service worker started");
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
   chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
+  chrome.alarms.create(DRIVE_SYNC_ALARM_NAME, { periodInMinutes: DRIVE_SYNC_INTERVAL_MINUTES });
   void runDailyMaintenance(); // 起動直後にも未実行なら補完する(前日分の取りこぼし防止)。
 });
 
@@ -39,6 +45,7 @@ chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
   chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
+  chrome.alarms.create(DRIVE_SYNC_ALARM_NAME, { periodInMinutes: DRIVE_SYNC_INTERVAL_MINUTES });
   void runDailyMaintenance();
 });
 
@@ -47,7 +54,30 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === PRE_EVENT_ALARM_NAME) void fireAlarm();
   if (alarm.name === DAILY_ALARM_NAME) void runDailyMaintenance();
   if (alarm.name === BATTERY_POLL_ALARM_NAME) void pollBatteryStatus();
+  if (alarm.name === DRIVE_SYNC_ALARM_NAME) void runDriveNoteSync();
 });
+
+async function runDriveNoteSync(): Promise<void> {
+  const token = await getAuthToken(false);
+  if (!token) return;
+  try {
+    const local = await loadLocalData();
+    const result = await syncDriveNotesSafely(
+      local.notes,
+      local.noteTombstones ?? {},
+      token,
+      clockNow(),
+    );
+    if (!result) return;
+    await saveLocalData({
+      ...local,
+      notes: result.notes,
+      noteTombstones: result.tombstones,
+    });
+  } catch (err) {
+    logOp("background", "drive-note-sync-error", "", { error: err });
+  }
+}
 
 chrome.notifications.onButtonClicked.addListener((notificationId) => {
   if (notificationId === NOTIFICATION_ID) void stopAlarm();
