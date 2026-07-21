@@ -41,6 +41,7 @@ import {
 } from "../lib/storage/storage";
 import {
   mergeNoteCollections,
+  preserveProtectedNote,
   stampChangedNotes,
   updateTombstonesForMutation,
   type NoteTombstones,
@@ -211,6 +212,10 @@ export function App() {
   const storageRevisionRef = useRef(0);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
+  // 同期tick/購読(マウント時クロージャ)が「今ユーザーが選んで編集中のノートid」を読むための鏡。
+  // これを preserveProtectedNote へ渡し、起動直後に選んだノートを同期処理が動かす/消すのを防ぐ。
+  const activeNoteIdRef = useRef<string | null>(null);
+  activeNoteIdRef.current = activeNoteId;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
   const specialItemsRef = useRef<SpecialItem[]>([]);
   specialItemsRef.current = specialItems;
@@ -239,6 +244,12 @@ export function App() {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
+  }
+
+  /** 同期の再適用(pull/マージ/購読)から守るべき「編集中ノートid」。ユーザーが自分で選んだ時
+   * だけ返す——起動直後の自動選択(notes[0])はまだ「編集中」ではないので保護しない。 */
+  function protectedNoteId(): string | null {
+    return userSelectedNoteRef.current ? activeNoteIdRef.current : null;
   }
 
   useEffect(() => {
@@ -273,7 +284,8 @@ export function App() {
       if (revision < storageRevisionRef.current) return;
       storageRevisionRef.current = revision;
       const currentNotes = notesRef.current;
-      const next = incoming.notes ?? [];
+      // 別タブの確定revisionでも、こちらで編集中のノートは動かさない/消さない/上書きしない。
+      const next = preserveProtectedNote(incoming.notes ?? [], currentNotes, protectedNoteId());
       noteTombstonesRef.current = incoming.noteTombstones ?? {};
       if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
         setNotes(next);
@@ -322,7 +334,9 @@ export function App() {
   }
 
   function applySafelySyncedNotes(notesFromSync: Note[], tombstones: NoteTombstones) {
-    const next = ensureTrailingEmptyNotes(notesFromSync, TRAILING_EMPTY_NOTES, clockNow());
+    // 起動直後に選んで編集中のノートは、同期結果に動かされ/消され/上書きされないよう最優先で守る。
+    const guarded = preserveProtectedNote(notesFromSync, notesRef.current ?? [], protectedNoteId());
+    const next = ensureTrailingEmptyNotes(guarded, TRAILING_EMPTY_NOTES, clockNow());
     noteTombstonesRef.current = tombstones;
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
