@@ -86,6 +86,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/data-panel-alarm.spec.ts` — data-panel-alarm.spec.ts — この端末でアラーム(予定前・バッテリー)を鳴らすかのトグルUIの回帰
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
@@ -166,6 +167,8 @@
 - `src/lib/drive/driveActiveSync.ts` — driveActiveSync.ts — Drive active/ とタブの世代同期のpull側(NAS側 nasActiveSync.ts の鏡像)。
 - `src/lib/drive/driveGeneration.test.ts` — driveGeneration.test.ts — driveGeneration.ts(Drive版の世代カウンタ)の単体テスト
 - `src/lib/drive/driveGeneration.ts` — driveGeneration.ts — Drive版の世代カウンタ(native-host/nas_bridge.pyのread/bump-generationと対)。
+- `src/lib/drive/driveSafeSync.test.ts` — driveSafeSync.test.ts — Drive安全同期が片側だけのノートを保持し明示削除だけを反映する回帰
+- `src/lib/drive/driveSafeSync.ts` — driveSafeSync.ts — DriveとローカルをノートID単位で和集合マージし明示削除だけを伝播する
 - `src/lib/drive/driveSpecial.test.ts` — driveSpecial.test.ts — Driveのspecial/書き出し・フォルダ内突き合わせ削除の単体テスト
 - `src/lib/drive/driveSpecial.ts` — driveSpecial.ts — スペシャル(⭐)を Google Drive の app/New Tab Board/special/<folder>/<id>.md へ
 - `src/lib/drive/driveSync.test.ts` — driveSync.test.ts — driveSync.ts(Drive同期オーケストレーション)の単体テスト
@@ -178,7 +181,7 @@
 - `src/lib/drive/jsonBackupSync.ts` — jsonBackupSync.ts — 全データJSONバックアップのDrive同期オーケストレーション(SPEC.md §4.7)
 - `src/lib/drive/pickerOAuth.test.ts` — pickerOAuth.test.ts — pickerOAuth.ts(Picker「デスクトップ・モバイル向けフロー」実装)の単体テスト
 - `src/lib/drive/pickerOAuth.ts` — pickerOAuth.ts — Google Picker「デスクトップ・モバイル向けフロー」のOAuth実装。
-- `src/lib/drive/useDriveSync.test.ts` — useDriveSync.test.ts — ノート編集をdebounceしてDrive同期をキックするhookの単体テスト
+- `src/lib/drive/useDriveSync.test.ts` — useDriveSync.test.ts — ペイン側Drive同期hook(自動周期はbackgroundへ集約)の単体テスト
 - `src/lib/drive/useDriveSync.ts` — useDriveSync.ts — ノート編集をdebounceしてDrive同期をキックするReact hook(SPEC.md §4.2)
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
@@ -257,6 +260,10 @@
 - `src/lib/shortcuts/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
 - `src/lib/storage/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/storage/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
+- `src/lib/storage/local-data-repository.test.ts` — local-data-repository.test.ts — 排他コミットとノート差分保存の構造的不変条件を検証する
+- `src/lib/storage/local-data-repository.ts` — local-data-repository.ts — localDataへのノート差分コミットと初期化を一元化するrepository
+- `src/lib/storage/note-sync.test.ts` — note-sync.test.ts — ノート和集合マージと削除tombstoneの回帰テスト
+- `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
@@ -434,6 +441,8 @@
 - def test_delete_file_rejects_path_traversal
 - def test_generation_starts_at_zero_and_bumps
 - def test_generation_fails_for_missing_base
+- def test_bump_generation_rejects_stale_expected
+- def test_read_generation_rounds_down_out_of_range_values
 - def test_read_active_returns_all_txt_with_content
 - def test_read_active_empty_when_no_active_dir
 - def test_write_file_creates_date_subfolders
@@ -671,6 +680,10 @@
 - function readDriveGeneration
 - function bumpDriveGeneration
 
+### `src/lib/drive/driveSafeSync.ts`
+- type DriveSafeSyncDeps
+- function syncDriveNotesSafely
+
 ### `src/lib/drive/driveSpecial.ts`
 - type SpecialDriveDeps
 - function pushSpecialToDrive
@@ -782,12 +795,16 @@
 - function resolveSecondaryAction
 - type PullDeps
 - function pullActiveFromNas
+- type ClaimOwnershipDeps
+- type ClaimOwnershipResult
+- function claimNasOwnership
 - type PushDeps
 - function pushActiveToNas
 
 ### `src/lib/externalIO/nasArchive.ts`
 - function noteToMarkdown
 - function markdownToNote
+- function isNoteMarkdown
 - function writeNoteMarkdownToNas
 - function activeNasFilenameFor
 - function writeNoteToNasStructure
@@ -812,6 +829,7 @@
 - function deleteFileFromNas
 - function rebuildNasIndex
 - function readNasGeneration
+- type BumpGenerationResult
 - function bumpNasGeneration
 - function readNasActive
 - function listNasTree
@@ -985,6 +1003,8 @@
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig
+- function getAlarmEnabled
+- function setAlarmEnabled
 - function getDriveFolderIds
 - function saveDriveFolderId
 - function clearDriveFolderIds
@@ -996,12 +1016,27 @@
 - function getAllPastedImages
 - function deletePastedImage
 
+### `src/lib/storage/local-data-repository.ts`
+- function initializeLocalData
+- function commitNoteMutation
+- function commitMergedNotes
+
+### `src/lib/storage/note-sync.ts`
+- type NoteTombstones
+- type NoteMergeResult
+- function mergeTombstones
+- function mergeNoteCollections
+- function updateTombstonesForMutation
+- function stampChangedNotes
+
 ### `src/lib/storage/storage.ts`
 - const DEFAULT_SETTINGS
 - function loadSyncData
 - function saveSyncData
 - function loadLocalData
-- function saveLocalData
+- function updateLocalData
+- function patchLocalData
+- function subscribeLocalData
 
 ### `src/newtab/App.tsx`
 - function App

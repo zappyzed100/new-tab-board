@@ -8,6 +8,7 @@ import {
   flushAllToNas,
   flushSnapshotToNas,
   getSnapshotBody,
+  isNoteMarkdown,
   markdownToNote,
   noteToMarkdown,
   readArchivedSnapshot,
@@ -499,6 +500,35 @@ describe("todosToMarkdown", () => {
 
   it("0件でもfront matterだけのMarkdownを返す", () => {
     expect(todosToMarkdown([])).toContain("kind: todos");
+  });
+});
+
+describe("isNoteMarkdown(active/ pullでノートだけを選り分ける)", () => {
+  it("front matterにid:を持つノートはtrue", () => {
+    const md = noteToMarkdown({
+      id: "n1",
+      title: "A",
+      content: "本文",
+      pinned: false,
+      order: 0,
+    } as Note);
+    expect(isNoteMarkdown(md)).toBe(true);
+  });
+
+  it(
+    "todos.txt(kind: todos・id無し)はfalse——これをノート化すると空タイトルの" +
+      "「(名称未設定)」幻ノートが生成される実害があった(2026-07-22 是正)",
+    () => {
+      expect(
+        isNoteMarkdown(todosToMarkdown([{ id: "t1", text: "掃除", done: false, order: 0 }])),
+      ).toBe(false);
+      expect(isNoteMarkdown(todosToMarkdown([]))).toBe(false);
+    },
+  );
+
+  it("front matterが無い素のテキストもfalse", () => {
+    expect(isNoteMarkdown("ただのメモ")).toBe(false);
+    expect(isNoteMarkdown("---\ntitle: 見出しだけ\n---\n本文")).toBe(false); // id無しはノート扱いしない
   });
 });
 

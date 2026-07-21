@@ -4,11 +4,13 @@ import { logOp } from "../lib/runtime/log";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
-import { loadLocalData, saveLocalData } from "../lib/storage/storage";
-import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
+import { loadLocalData, patchLocalData } from "../lib/storage/storage";
+import { commitMergedNotes } from "../lib/storage/local-data-repository";
+import { getAlarmEnabled, getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
+import { syncDriveNotesSafely } from "../lib/drive/driveSafeSync";
 import { now as clockNow } from "../lib/runtime/clock";
 
 const POLL_ALARM_NAME = "next-event-poll";
@@ -26,12 +28,17 @@ const DAILY_INTERVAL_MINUTES = 60;
 const BATTERY_POLL_ALARM_NAME = "battery-poll";
 const BATTERY_POLL_INTERVAL_MINUTES = 60;
 const BATTERY_NOTIFICATION_ID = "battery-low-notification";
+// ノートのDrive同期は各New Tabではなくservice workerの1本へ集約する。5分ごとに
+// ノートID単位の和集合マージを行い、結果はchrome.storage経由で開いているタブへ配信される。
+const DRIVE_SYNC_ALARM_NAME = "drive-note-sync";
+const DRIVE_SYNC_INTERVAL_MINUTES = 5;
 
 chrome.runtime.onInstalled.addListener(() => {
   logOp("background", "installed", "extension service worker started");
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
   chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
+  chrome.alarms.create(DRIVE_SYNC_ALARM_NAME, { periodInMinutes: DRIVE_SYNC_INTERVAL_MINUTES });
   void runDailyMaintenance(); // 起動直後にも未実行なら補完する(前日分の取りこぼし防止)。
 });
 
@@ -39,6 +46,7 @@ chrome.runtime.onStartup.addListener(() => {
   chrome.alarms.create(POLL_ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
   chrome.alarms.create(DAILY_ALARM_NAME, { periodInMinutes: DAILY_INTERVAL_MINUTES });
   chrome.alarms.create(BATTERY_POLL_ALARM_NAME, { periodInMinutes: BATTERY_POLL_INTERVAL_MINUTES });
+  chrome.alarms.create(DRIVE_SYNC_ALARM_NAME, { periodInMinutes: DRIVE_SYNC_INTERVAL_MINUTES });
   void runDailyMaintenance();
 });
 
@@ -47,7 +55,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === PRE_EVENT_ALARM_NAME) void fireAlarm();
   if (alarm.name === DAILY_ALARM_NAME) void runDailyMaintenance();
   if (alarm.name === BATTERY_POLL_ALARM_NAME) void pollBatteryStatus();
+  if (alarm.name === DRIVE_SYNC_ALARM_NAME) void runDriveNoteSync();
 });
+
+async function runDriveNoteSync(): Promise<void> {
+  const token = await getAuthToken(false);
+  if (!token) return;
+  try {
+    const local = await loadLocalData();
+    const result = await syncDriveNotesSafely(
+      local.notes,
+      local.noteTombstones ?? {},
+      token,
+      clockNow(),
+    );
+    if (!result) return;
+    await commitMergedNotes(result.notes, result.tombstones);
+  } catch (err) {
+    logOp("background", "drive-note-sync-error", "", { error: err });
+  }
+}
 
 chrome.notifications.onButtonClicked.addListener((notificationId) => {
   if (notificationId === NOTIFICATION_ID) void stopAlarm();
@@ -64,9 +91,7 @@ async function pollNextEvent(): Promise<void> {
   if (!token) return;
   try {
     const event = await fetchNextEvent(token);
-    const local = await loadLocalData();
-    await saveLocalData({
-      ...local,
+    await patchLocalData({
       nextEventCache: event
         ? { title: event.title, startsAt: event.startsAt, fetchedAt: clockNow() }
         : undefined,
@@ -126,7 +151,7 @@ async function runDailyMaintenance(): Promise<void> {
     logOp("background", "daily-sqlite-rebuild-error", "", { error: err });
   }
 
-  await saveLocalData({ ...local, lastDailyMaintenanceDay: today });
+  await patchLocalData({ lastDailyMaintenanceDay: today });
   logOp("background", "daily-maintenance", `day=${today}`);
 }
 
@@ -141,7 +166,7 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
   if (!event) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
     if (local.preEventAlarmFor !== undefined) {
-      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+      await patchLocalData({ preEventAlarmFor: undefined });
     }
     logOp("background", "pre-event-alarm-clear", "no next event");
     return;
@@ -153,13 +178,13 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
   if (when === null) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
     if (local.preEventAlarmFor !== undefined) {
-      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+      await patchLocalData({ preEventAlarmFor: undefined });
     }
     logOp("background", "pre-event-alarm-clear", `startsAt=${event.startsAt} (既に開始済み)`);
     return;
   }
   chrome.alarms.create(PRE_EVENT_ALARM_NAME, { when });
-  await saveLocalData({ ...local, preEventAlarmFor: event.startsAt });
+  await patchLocalData({ preEventAlarmFor: event.startsAt });
   logOp("background", "pre-event-alarm-schedule", `when=${when}`);
 }
 
@@ -169,8 +194,13 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
 // 閉じる(片方の「停止」でもう片方の音まで止まらないようにする)。
 
 async function fireAlarm(): Promise<void> {
-  const local = await loadLocalData();
-  await saveLocalData({ ...local, alarmActive: true });
+  // この端末でアラームが無効なら、音も通知も出さない(ユーザー指示: 複数PCで同時に鳴るのを避ける。
+  // 完全抑止=停止ボタン用の alarmActive も立てない)。Calendar読み取りは冪等なので発火だけ止める。
+  if (!(await getAlarmEnabled())) {
+    logOp("background", "fire-alarm-skip", "alarm disabled on this device");
+    return;
+  }
+  await patchLocalData({ alarmActive: true });
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
@@ -195,7 +225,7 @@ async function stopAlarm(): Promise<void> {
     await chrome.offscreen.closeDocument();
   }
   chrome.notifications.clear(NOTIFICATION_ID);
-  await saveLocalData({ ...local, alarmActive: false });
+  await patchLocalData({ alarmActive: false });
   logOp("background", "stop-alarm", "pre-event alarm stopped");
 }
 
@@ -205,6 +235,10 @@ async function stopAlarm(): Promise<void> {
  * chrome側で発火済み閾値を覚える必要がない——ユーザー指摘で2026-07-18に変更)。
  * 未設定/未接続/既に消費済みは静かにスキップする。 */
 async function pollBatteryStatus(): Promise<void> {
+  // この端末でアラームが無効なら、GASを読みにいかない(fetchBatteryStatusはconsume-on-read=
+  // 読んだ時点でGAS側が削除するため、無効な端末が先に読むと有効な端末が警告を取り逃す。
+  // fireBatteryAlarm側でなく、消費する前のここで止めるのが要点)。
+  if (!(await getAlarmEnabled())) return;
   const config = await getBatteryWebhookConfig();
   if (!config) return;
   const status = await fetchBatteryStatus(config.url, config.token);
@@ -213,8 +247,7 @@ async function pollBatteryStatus(): Promise<void> {
 }
 
 async function fireBatteryAlarm(level: number): Promise<void> {
-  const local = await loadLocalData();
-  await saveLocalData({ ...local, batteryAlarmActive: true });
+  await patchLocalData({ batteryAlarmActive: true });
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
@@ -239,6 +272,6 @@ async function stopBatteryAlarm(): Promise<void> {
     await chrome.offscreen.closeDocument();
   }
   chrome.notifications.clear(BATTERY_NOTIFICATION_ID);
-  await saveLocalData({ ...local, batteryAlarmActive: false });
+  await patchLocalData({ batteryAlarmActive: false });
   logOp("background", "stop-battery-alarm", "battery alarm stopped");
 }

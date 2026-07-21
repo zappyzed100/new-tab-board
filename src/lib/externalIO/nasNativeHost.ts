@@ -55,6 +55,7 @@ type GenerationResult = {
   type: "generation-result";
   ok: boolean;
   generation?: number;
+  stale?: boolean;
   error?: string;
 };
 /** read-active の1件(active/<id>.md のファイル名とmd内容)。pull(タブ上書き)で使う。 */
@@ -188,14 +189,32 @@ export async function readNasGeneration(
   return null;
 }
 
-/** 世代番号を+1して新値をもらう(操作開始時に所有権を得る)。未接続/失敗はnull。 */
+/** bumpNasGeneration の結果。ok:true=所有権取得成功(新世代)。ok:false,stale:true=CAS不一致
+ * (呼び出し側のexpectedがもう古い。現在世代を返すのでまずpullしてから再試行する)。 */
+export type BumpGenerationResult =
+  | { ok: true; generation: number }
+  | { ok: false; stale: true; generation: number }
+  | { ok: false; stale: false };
+
+/** 世代番号を、呼び出し側が知っている現在値(expected)と一致する場合のみ+1する(CAS)。
+ * 操作開始時に所有権を得るために呼ぶ。通信自体の失敗(host未導入等)はnull。
+ *
+ * **無条件bumpから変更した理由(2026-07-19)**: 複数タブが同時に開いていると、タブAが
+ * ノートを削除してbump→push(NASへ反映)した直後、まだAの削除をpullしていないタブBが
+ * 何か別の編集をしても無条件bumpでは所有権を奪えてしまい、次のpushでBの持つ古い
+ * (削除前の)ノート一覧がNASへ丸ごと書き戻されていた(ユーザー報告「消しても消しても
+ * ノートが復活する」)。呼び出し側(App.tsx)はstale応答を受けたらpullActiveFromNasで
+ * まずローカルを最新化してから、次の編集で改めてbumpを試みる。 */
 export async function bumpNasGeneration(
   path: string,
+  expected: number,
   connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
-): Promise<number | null> {
-  const result = await callHost({ type: "bump-generation", path }, connectNative);
-  if (result?.type === "generation-result" && result.ok) return result.generation ?? 0;
-  return null;
+): Promise<BumpGenerationResult | null> {
+  const result = await callHost({ type: "bump-generation", path, expected }, connectNative);
+  if (result?.type !== "generation-result") return null;
+  if (result.ok) return { ok: true, generation: result.generation ?? 0 };
+  if (result.stale) return { ok: false, stale: true, generation: result.generation ?? 0 };
+  return { ok: false, stale: false };
 }
 
 /** active/ 直下の .md を全部(ファイル名+内容)読む(pull=タブをNAS activeで上書き)。失敗はnull。 */

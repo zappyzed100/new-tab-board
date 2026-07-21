@@ -3,9 +3,10 @@
 //   - 操作開始時: bump-generation で新世代=所有権を得る(nasOwner=true, localGen=新世代)。
 //   - NASの世代 == 自分の世代 かつ 所有者: push(activeを上書き + 日付へ追記 + 消えたものを削除)。
 //   - NASの世代 > 自分の世代: pull(NAS activeでタブのノートを上書き。最終操作者優先——ユーザー指示)。
-import { readNasActive } from "./nasNativeHost";
+import { bumpNasGeneration, readNasActive } from "./nasNativeHost";
 import { getNasFolderPath } from "../storage/db";
 import {
+  isNoteMarkdown,
   markdownToNote,
   noteToMarkdown,
   reconcileActiveNotesOnNas,
@@ -92,10 +93,50 @@ export async function pullActiveFromNas(deps: PullDeps = {}): Promise<Note[] | n
   if (!path) return null;
   const files = await (deps.readNasActive ?? readNasActive)(path);
   if (files === null) return null;
+  // active/ 直下には todos.txt 等の非ノート .txt も同居する。ノート(front matter に id:)
+  // だけを取り込む——さもないと id 無し=乱数id・title 無し=空の「(名称未設定)」幻ノートが
+  // 毎回生成され、order=0 で左上に出る/時刻0同士で競合コピーを生む(2026-07-22 是正。
+  // Drive 側 pullActiveFromDrive が noteId 持ちだけを列挙するのと同じ選り分け)。
+  const noteFiles = files.filter((f) => isNoteMarkdown(f.content));
   // ファイル名順の index を fallback order にしつつ、front matter の order で最終的に並べる。
-  const notes = files.map((f, i) => markdownToNote(f.content, i));
+  const notes = noteFiles.map((f, i) => markdownToNote(f.content, i));
   notes.sort((a, b) => a.order - b.order);
   return notes;
+}
+
+export type ClaimOwnershipDeps = {
+  getNasFolderPath?: () => Promise<string | undefined>;
+  bumpNasGeneration?: typeof bumpNasGeneration;
+  pullActiveFromNas?: typeof pullActiveFromNas;
+};
+
+export type ClaimOwnershipResult =
+  | { kind: "no-nas" }
+  | { kind: "network-error" }
+  | { kind: "claimed"; generation: number }
+  | { kind: "stale"; generation: number; pulledNotes: Note[] | null };
+
+/** 操作開始時にNAS世代の所有権を得ようとする(markUserEditから呼ぶ)。CAS(bumpNasGeneration)が
+ * stale(呼び出し側のlocalGenがもう古い=他タブが既に世代を進めていた)を返したら、無条件で
+ * 所有権を主張せず、まずpullしてNASの最新状態を取り込む。
+ *
+ * **これが無いと起きていた実害(2026-07-19是正)**: タブAがノートを削除してbump→push
+ * した直後、まだAの削除をpullしていないタブBが何か別の編集をすると、旧実装(無条件bump)
+ * ではBも無条件で所有権を得てしまい、次のpushでBが持つ古い(削除前の)ノート一覧が
+ * NASへ丸ごと書き戻される——Aの削除がロールバックされ「消しても消してもノートが
+ * 復活する」という不具合になっていた。 */
+export async function claimNasOwnership(
+  localGen: number,
+  deps: ClaimOwnershipDeps = {},
+): Promise<ClaimOwnershipResult> {
+  const path = await (deps.getNasFolderPath ?? getNasFolderPath)();
+  if (!path) return { kind: "no-nas" };
+  const result = await (deps.bumpNasGeneration ?? bumpNasGeneration)(path, localGen);
+  if (result === null) return { kind: "network-error" };
+  if (result.ok) return { kind: "claimed", generation: result.generation };
+  if (!result.stale) return { kind: "network-error" }; // stale以外の失敗(パスエラー等)
+  const pulledNotes = await (deps.pullActiveFromNas ?? pullActiveFromNas)();
+  return { kind: "stale", generation: result.generation, pulledNotes };
 }
 
 export type PushDeps = {

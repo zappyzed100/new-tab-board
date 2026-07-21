@@ -1,13 +1,14 @@
 // nasActiveSync.test.ts — 世代同期の判定/push/pull の単体テスト
 import { describe, expect, it, vi } from "vitest";
 import {
+  claimNasOwnership,
   decideActiveSync,
   noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
   resolveSecondaryAction,
 } from "./nasActiveSync";
-import { noteToMarkdown } from "./nasArchive";
+import { noteToMarkdown, todosToMarkdown } from "./nasArchive";
 import { contentHash } from "../gemini/tagging";
 import type { Note } from "../../types";
 
@@ -27,6 +28,70 @@ describe("decideActiveSync", () => {
   });
   it("自分が先行(nasGen<localGen)はnoop", () => {
     expect(decideActiveSync(5, 4, true)).toBe("noop");
+  });
+});
+
+describe("claimNasOwnership", () => {
+  it("NAS未設定ならno-nas(何もbumpしない)", async () => {
+    const bumpNasGeneration = vi.fn();
+    const result = await claimNasOwnership(3, {
+      getNasFolderPath: async () => undefined,
+      bumpNasGeneration,
+    });
+    expect(result).toEqual({ kind: "no-nas" });
+    expect(bumpNasGeneration).not.toHaveBeenCalled();
+  });
+
+  it("bumpが通信失敗(null)ならnetwork-error", async () => {
+    const result = await claimNasOwnership(3, {
+      getNasFolderPath: async () => "Z:\\NAS",
+      bumpNasGeneration: async () => null,
+    });
+    expect(result).toEqual({ kind: "network-error" });
+  });
+
+  it("bump成功(expected一致)ならclaimed・新世代を返す", async () => {
+    const bumpNasGeneration = vi.fn().mockResolvedValue({ ok: true, generation: 4 });
+    const result = await claimNasOwnership(3, {
+      getNasFolderPath: async () => "Z:\\NAS",
+      bumpNasGeneration,
+    });
+    expect(result).toEqual({ kind: "claimed", generation: 4 });
+    expect(bumpNasGeneration).toHaveBeenCalledWith("Z:\\NAS", 3);
+  });
+
+  it(
+    "bumpがstale(他タブが既に世代を進めていた)なら所有権を主張せずpullし、" +
+      "pull結果と現在世代を返す(2026-07-19是正: 削除復活バグの核心テスト。" +
+      "旧実装(無条件bump)ではここでも所有権を得てしまい、次のpushで削除前の" +
+      "ノート一覧がNASへ書き戻されていた)",
+    async () => {
+      const pulledNotes = [
+        { id: "b", title: "B", content: "本文B", pinned: false, order: 0 },
+      ] as Note[];
+      const bumpNasGeneration = vi
+        .fn()
+        .mockResolvedValue({ ok: false, stale: true, generation: 7 });
+      const pullActiveFromNas = vi.fn().mockResolvedValue(pulledNotes);
+      const result = await claimNasOwnership(5, {
+        getNasFolderPath: async () => "Z:\\NAS",
+        bumpNasGeneration,
+        pullActiveFromNas,
+      });
+      expect(result).toEqual({ kind: "stale", generation: 7, pulledNotes });
+      expect(pullActiveFromNas).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("staleでpullも失敗(null)なら pulledNotes: null を返す(呼び出し側は世代を進めず次tickへ委ねる)", async () => {
+    const bumpNasGeneration = vi.fn().mockResolvedValue({ ok: false, stale: true, generation: 7 });
+    const pullActiveFromNas = vi.fn().mockResolvedValue(null);
+    const result = await claimNasOwnership(5, {
+      getNasFolderPath: async () => "Z:\\NAS",
+      bumpNasGeneration,
+      pullActiveFromNas,
+    });
+    expect(result).toEqual({ kind: "stale", generation: 7, pulledNotes: null });
   });
 });
 
@@ -112,6 +177,27 @@ describe("pullActiveFromNas", () => {
       }),
     ).toBeNull();
   });
+
+  it(
+    "active/todos.txt(kind: todos・id無し)はノート化しない——さもないと空タイトルの" +
+      "「(名称未設定)」幻ノートが order=0 で左上に湧き、updatedAt 無し同士で競合コピーを生む" +
+      "(2026-07-22 是正。Drive 側 pullActiveFromDrive は noteId 持ちだけを列挙して同じ問題を回避)",
+    async () => {
+      const realNote = noteToMarkdown(note({ id: "real-1", title: "買い物メモ", content: "牛乳" }));
+      const todos = todosToMarkdown([{ id: "t1", text: "掃除", done: false, order: 0 }]);
+      // handle_read_active はファイル名順に .txt を全部返す(todos.txt はASCIIで日本語より前=index0)。
+      const readNasActive = vi.fn().mockResolvedValue([
+        { filename: "todos.txt", content: todos },
+        { filename: "買い物メモ (real-1).txt", content: realNote },
+      ]);
+      const notes = await pullActiveFromNas({
+        getNasFolderPath: async () => "Z:\\NAS",
+        readNasActive,
+      });
+      expect(notes?.map((n) => n.id)).toEqual(["real-1"]); // todos.txt由来の幻ノートは含めない
+      expect(notes?.some((n) => n.title === "")).toBe(false);
+    },
+  );
 });
 
 describe("pushActiveToNas", () => {

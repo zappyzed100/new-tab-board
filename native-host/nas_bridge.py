@@ -104,15 +104,24 @@ def handle_delete_file(message: dict) -> dict:
 # 整数1つで持つ。ブラウザは「操作開始時に bump-generation で新世代=所有権を得て」、以後 active を
 # 上書きしてよいのは NAS の世代==自分の世代のときだけ。NASの方が大きい=他セッションが新しい→pull。
 GENERATION_REL = os.path.join("data", "generation.txt")
+# JSのNumber.MAX_SAFE_INTEGER(2^53-1)を下回る安全な上限。世代ファイルが手で壊された/
+# 異常値が書き込まれた場合、無限精度のPython intでは桁あふれしないが、拡張側(TypeScript)の
+# numberが精度を失う前に0へ丸めて復旧させる(ユーザー指摘: 際限なく増える整数を無警戒に
+# 信用するのは危ない)。5分毎のbumpを前提にしても到達に8000億年以上かかる値のため、
+# 通常運用でこの丸めが発動することはない。
+_MAX_SANE_GENERATION = 10**15
 
 
 def _read_generation(base: str) -> int:
-    """NAS上の現在の世代番号を読む(ファイル未作成・壊れは 0 とみなす)。"""
+    """NAS上の現在の世代番号を読む(ファイル未作成・壊れ・負値・非現実的な巨大値は0とみなす)。"""
     try:
         with open(_safe_target(base, GENERATION_REL), "r", encoding="utf-8") as f:
-            return int(f.read().strip() or "0")
+            value = int(f.read().strip() or "0")
     except (OSError, ValueError):
         return 0
+    if value < 0 or value > _MAX_SANE_GENERATION:
+        return 0
+    return value
 
 
 def handle_read_generation(message: dict) -> dict:
@@ -127,14 +136,27 @@ def handle_read_generation(message: dict) -> dict:
 
 
 def handle_bump_generation(message: dict) -> dict:
-    """世代番号を+1して新値を返す(ブラウザが操作開始時に呼び所有権を得る)。読取→+1→書込。"""
+    """世代番号を、呼び出し側が知っている現在値(expected)と一致する場合のみ+1して返す
+    (CAS: compare-and-swap。2026-07-19是正)。
+
+    旧実装は無条件の読取→+1→書込だった——複数タブが同時に開いていると、タブAが
+    ノートを削除してbump(所有権取得)→push(NASへ反映)した直後に、まだAの削除を
+    知らない(pullしていない)タブBが何か別の編集をしても無条件でbumpに成功して
+    所有権を奪ってしまい、次のpushでBが持つ古い(削除前の)ノート一覧がNASへ丸ごと
+    書き戻される実害があった(ユーザー報告「消しても消してもノートが復活する」)。
+    expectedが現在値と不一致(=呼び出し側がまだ最新のNAS状態を取り込めていない)なら
+    stale失敗を返し、拡張側はまずpullしてから再試行する契約にする。"""
     try:
         base = message["path"]
         if not os.path.isdir(base):
             raise FileNotFoundError(f"base folder not found: {base!r}")
+        expected = message["expected"]
+        current = _read_generation(base)
+        if current != expected:
+            return {"type": "generation-result", "ok": False, "stale": True, "generation": current}
         target = _safe_target(base, GENERATION_REL)
         os.makedirs(os.path.dirname(target), exist_ok=True)
-        new_gen = _read_generation(base) + 1
+        new_gen = current + 1
         with open(target, "w", encoding="utf-8") as f:
             f.write(str(new_gen))
         return {"type": "generation-result", "ok": True, "generation": new_gen}

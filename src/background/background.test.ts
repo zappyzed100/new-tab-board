@@ -10,10 +10,11 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
-import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
+import { getAlarmEnabled, getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
+import { syncDriveNotesSafely } from "../lib/drive/driveSafeSync";
 import type { LocalData } from "../types";
 
 vi.mock("../lib/drive/googleAuth", () => ({ getAuthToken: vi.fn() }));
@@ -21,10 +22,12 @@ vi.mock("../lib/nextEvent/calendar", () => ({ fetchNextEvent: vi.fn() }));
 vi.mock("../lib/storage/db", () => ({
   getNasFolderPath: vi.fn(),
   getBatteryWebhookConfig: vi.fn(),
+  getAlarmEnabled: vi.fn(),
 }));
 vi.mock("../lib/externalIO/nasNativeHost", () => ({ rebuildNasIndex: vi.fn() }));
 vi.mock("../lib/externalIO/batteryStatus", () => ({ fetchBatteryStatus: vi.fn() }));
 vi.mock("../lib/drive/driveActiveMirror", () => ({ copyNotesToDriveDateFolder: vi.fn() }));
+vi.mock("../lib/drive/driveSafeSync", () => ({ syncDriveNotesSafely: vi.fn() }));
 
 const FIXED_NOW = 1_700_000_000_000;
 const POLL_ALARM_NAME = "next-event-poll";
@@ -33,6 +36,7 @@ const DAILY_ALARM_NAME = "daily-maintenance";
 const BATTERY_POLL_ALARM_NAME = "battery-poll";
 const NOTIFICATION_ID = "pre-event-notification";
 const BATTERY_NOTIFICATION_ID = "battery-low-notification";
+const DRIVE_SYNC_ALARM_NAME = "drive-note-sync";
 
 // background.ts の dayKey / previousDayMs と同じローカル日付計算(TZに依らず一致する)。
 const TODAY_KEY = (() => {
@@ -134,6 +138,8 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.stubGlobal("window", { __TIME_FREEZE__: FIXED_NOW });
+  // 既定はアラーム有効(現状挙動)。無効時の挙動は各テストで false に上書きする。
+  vi.mocked(getAlarmEnabled).mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -157,6 +163,10 @@ describe("インストール/起動", () => {
       name: BATTERY_POLL_ALARM_NAME,
       opts: { periodInMinutes: 60 },
     });
+    expect(fake.calls.alarmsCreate).toContainEqual({
+      name: DRIVE_SYNC_ALARM_NAME,
+      opts: { periodInMinutes: 5 },
+    });
   });
 
   it("onStartupでも同じポーリング用アラームを作成する", () => {
@@ -171,6 +181,27 @@ describe("インストール/起動", () => {
       name: BATTERY_POLL_ALARM_NAME,
       opts: { periodInMinutes: 60 },
     });
+  });
+});
+
+describe("drive-note-sync アラーム", () => {
+  it("5分周期で安全マージし、結果をlocalDataへ保存する", async () => {
+    const localNote = { id: "local", title: "L", content: "L", pinned: false, order: 0 };
+    const remoteNote = { id: "remote", title: "R", content: "R", pinned: false, order: 1 };
+    const fake = makeFakeChrome({ localData: { notes: [localNote], noteTombstones: {} } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    vi.mocked(syncDriveNotesSafely).mockResolvedValue({
+      notes: [localNote, remoteNote],
+      tombstones: { gone: 10 },
+    });
+
+    handlers.onAlarm({ name: DRIVE_SYNC_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(syncDriveNotesSafely).toHaveBeenCalledWith([localNote], {}, "token-abc", FIXED_NOW);
+    expect((fake.store.localData as LocalData).notes).toEqual([localNote, remoteNote]);
+    expect((fake.store.localData as LocalData).noteTombstones).toEqual({ gone: 10 });
   });
 });
 
@@ -369,6 +400,24 @@ describe("pre-event-alarm アラーム(発火/停止)", () => {
     expect((fake.store.localData as LocalData).alarmActive).toBe(false);
   });
 
+  it(
+    "この端末でアラームが無効(getAlarmEnabled=false)なら、音も通知も出さずalarmActiveも立てない" +
+      "(ユーザー指示: 複数PCで同時に鳴るのを避ける・完全抑止)",
+    async () => {
+      vi.mocked(getAlarmEnabled).mockResolvedValue(false);
+      const fake = makeFakeChrome({ localData: { notes: [] } });
+      vi.stubGlobal("chrome", fake.chromeStub);
+
+      handlers.onAlarm({ name: PRE_EVENT_ALARM_NAME });
+      await flushMicrotasks();
+
+      expect(fake.calls.offscreenCreate).toHaveLength(0);
+      expect(fake.calls.notificationsCreate).toEqual([]);
+      // alarmActiveを立てない=停止ボタンも出さない(完全抑止)。localData自体書き換えない。
+      expect((fake.store.localData as LocalData).alarmActive).toBeUndefined();
+    },
+  );
+
   it("new-tab側からのstop-pre-event-alarmメッセージでも同様に停止する", async () => {
     const fake = makeFakeChrome({ localData: { notes: [], alarmActive: true } });
     vi.stubGlobal("chrome", fake.chromeStub);
@@ -407,6 +456,23 @@ describe("battery-poll アラーム(スマホのバッテリー低下警告・GA
     expect(fetchBatteryStatus).not.toHaveBeenCalled();
     expect(fake.calls.notificationsCreate).toEqual([]);
   });
+
+  it(
+    "この端末でアラームが無効なら、fetchBatteryStatusを呼ばない(consume-on-readで先に消費すると" +
+      "有効な端末が警告を取り逃すため、消費前に止めるのが要点)",
+    async () => {
+      vi.mocked(getAlarmEnabled).mockResolvedValue(false);
+      vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });
+      const fake = makeFakeChrome({ localData: { notes: [] } });
+      vi.stubGlobal("chrome", fake.chromeStub);
+
+      handlers.onAlarm({ name: BATTERY_POLL_ALARM_NAME });
+      await flushMicrotasks();
+
+      expect(fetchBatteryStatus).not.toHaveBeenCalled();
+      expect(fake.calls.notificationsCreate).toEqual([]);
+    },
+  );
 
   it("未接続/未報告(null)なら静かにスキップする", async () => {
     vi.mocked(getBatteryWebhookConfig).mockResolvedValue({ url: "https://x", token: "tok" });

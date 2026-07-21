@@ -11,6 +11,8 @@ import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
 import {
   BatteryWarning,
+  Bell,
+  BellOff,
   CloudDownload,
   CloudUpload,
   FileText,
@@ -21,10 +23,12 @@ import {
   Upload,
 } from "lucide-react";
 import {
+  getAlarmEnabled,
   getBatteryWebhookConfig,
   getGeminiApiKey,
   getNasFolderPath,
   saveDriveFolderId,
+  setAlarmEnabled,
   setBatteryWebhookConfig,
   setGeminiApiKey,
   setNasFolderPath,
@@ -93,6 +97,9 @@ export function DataPanel({
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
   const [batteryConfigSet, setBatteryConfigSet] = useState(false);
+  // この端末でアラーム(予定前・バッテリー)を鳴らすか。**端末ローカル設定**(db.ts。settings
+  // backup/復元で他PCへ伝播しない)。既定=鳴らす。複数PCで同時に鳴るのを避けたい端末でオフにする。
+  const [alarmOn, setAlarmOn] = useState(true);
   useEffect(() => {
     // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
     // 突合effectと同じ方針)。結果はAppへ返す(常時表示の警告バッジもこの値で出る)。
@@ -107,7 +114,19 @@ export function DataPanel({
         setBatteryConfigSet(true);
       }
     });
+    void getAlarmEnabled().then(setAlarmOn);
   }, []);
+
+  async function handleToggleAlarm() {
+    const next = !alarmOn;
+    await setAlarmEnabled(next);
+    setAlarmOn(next);
+    onMessage(
+      next
+        ? "この端末でアラーム(予定前・バッテリー)を鳴らします"
+        : "この端末ではアラームを鳴らしません(音も通知も出しません。他PCには影響しません)",
+    );
+  }
 
   async function handleSaveGeminiKey() {
     const key = geminiKeyInput.trim();
@@ -449,6 +468,23 @@ export function DataPanel({
             </Button>
           </>
         ) : null}
+        {/* アラーム(予定前・バッテリー)を この端末で 鳴らすか。複数PCで同時に鳴るのを避けたい
+            端末でオフにする。端末ローカル設定(db.ts)なので他PCへは伝播しない。 */}
+        <Button
+          type="button"
+          variant={alarmOn ? "soft" : "solid"}
+          color={alarmOn ? undefined : "red"}
+          data-testid="data-toggle-alarm"
+          title="この端末で予定前アラーム・バッテリー警告の音/通知を出すか(複数PCで同時に鳴るのを避けたいときにオフ。この端末だけに効き、他PCには影響しません)"
+          onClick={() => void handleToggleAlarm()}
+        >
+          {alarmOn ? (
+            <Bell size={14} aria-hidden="true" />
+          ) : (
+            <BellOff size={14} aria-hidden="true" />
+          )}
+          {alarmOn ? "アラーム: この端末で鳴らす" : "アラーム: この端末では鳴らさない"}
+        </Button>
       </div>
     </Flex>
   );

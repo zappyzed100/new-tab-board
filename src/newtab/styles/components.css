@@ -166,6 +166,12 @@
   font-size: var(--note-font-size, 13px);
 }
 
+/* CM6の既定文字色をブラウザ任せにするとダークテーマでも黒のまま残り、本文DOMは存在するのに
+   背景へ溶けて見えなくなる。エディタ本文をアプリのテーマ文字色へ明示的に追従させる。 */
+[data-testid="notepad-editor"] .cm-content {
+  color: var(--text);
+}
+
 [data-testid="notepad-editor"] .cm-scroller {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   flex: 1;

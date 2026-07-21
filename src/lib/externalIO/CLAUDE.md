@@ -40,6 +40,17 @@ md(YAML front matter: id/title/tags/created_at/updated_at、AI要約は source_n
 (native-host/build_index.py)と規則を合わせる。索引(SQLite)は native-host 側で .md/.txt から
 **日次**再生成する(`background.ts` の runDailyMaintenance)。
 
+**active/ 直下にはノート以外の .txt も同居する——pull は必ずノートだけ選り分ける**
+(2026-07-22 是正): `active/todos.txt`(`writeTodosToNasActive`。front matter は `kind: todos` で
+**id を持たない**)がノートと同じ `active/` 直下にある。`pullActiveFromNas` はここを `.txt` 全部
+`markdownToNote` に通していたため、id 無し=乱数id・title 無し=空の「(名称未設定)」幻ノートが
+毎回 order=0(ASCII名の todos.txt が日本語タイトルより前に並ぶ)で左上に生成され、しかも
+updatedAt を持たない(=時刻0)ため内容が食い違うと `mergeNoteCollections` が競合コピーを量産して
+いた。**front matter に非空の id: を持つファイルだけ**を `isNoteMarkdown`(`nasArchive.ts`)で
+取り込む。Drive 側 `pullActiveFromDrive` は appProperties.noteId 持ちだけを列挙して最初から
+同じ選り分けをしている——**active/ に新たな非ノートファイルを足すときは、この pull フィルタが
+効くこと(=id を持たないファイルであること)を必ず確認する**。
+
 **active/ だけ拡張子が.txt(日付フォルダ・special/は.md据え置き)**(ユーザー指示・2026-07-16):
 スマホのDriveアプリ/ホーム画面ショートカット経由でactive/を直接閲覧する用途(README「擬似持ち出し」
 節参照)で、.mdより.txtの方がテキストビューア/アプリでの開封性が高いための変更。**中身の形式

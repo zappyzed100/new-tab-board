@@ -4,6 +4,7 @@ import {
   deletePastedImage,
   deleteSnapshot,
   geminiUsageDateKey,
+  getAlarmEnabled,
   getAllIndexEntries,
   getAllPastedImages,
   getAllSnapshots,
@@ -18,6 +19,7 @@ import {
   putPastedImage,
   putSnapshot,
   recordGeminiUsage,
+  setAlarmEnabled,
   setBatteryWebhookConfig,
   setNasFolderPath,
 } from "./db";
@@ -120,6 +122,19 @@ describe("バッテリー低下警告のGAS Web App接続設定", () => {
       url: "https://script.google.com/macros/s/xxx/exec",
       token: "secret-token",
     });
+  });
+});
+
+describe("この端末でアラームを鳴らすか(端末ローカル設定)", () => {
+  it("未設定は既定=true(鳴らす。現状挙動を維持)", async () => {
+    expect(await getAlarmEnabled()).toBe(true);
+  });
+
+  it("false/true を保存して往復できる", async () => {
+    await setAlarmEnabled(false);
+    expect(await getAlarmEnabled()).toBe(false);
+    await setAlarmEnabled(true);
+    expect(await getAlarmEnabled()).toBe(true);
   });
 });
 

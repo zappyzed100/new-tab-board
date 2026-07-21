@@ -17,7 +17,6 @@ import {
   Tag,
   Wrench,
 } from "lucide-react";
-import { useSignatureDebouncedEffect } from "./useSignatureDebouncedEffect";
 import { useForegroundSync } from "./useForegroundSync";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
 import { Clock } from "./components/shell/Clock";
@@ -32,7 +31,25 @@ import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { TagCandidatesPanel } from "./components/shell/TagCandidatesPanel";
 import { sortedBookmarks } from "../lib/entities/bookmarks";
-import { loadLocalData, loadSyncData, saveLocalData, saveSyncData } from "../lib/storage/storage";
+import {
+  loadLocalData,
+  loadSyncData,
+  patchLocalData,
+  saveSyncData,
+  subscribeLocalData,
+  updateLocalData,
+} from "../lib/storage/storage";
+import {
+  mergeNoteCollections,
+  stampChangedNotes,
+  updateTombstonesForMutation,
+  type NoteTombstones,
+} from "../lib/storage/note-sync";
+import {
+  commitMergedNotes,
+  commitNoteMutation,
+  initializeLocalData,
+} from "../lib/storage/local-data-repository";
 import {
   addNote,
   addNoteAfter,
@@ -83,27 +100,20 @@ import {
   writeTodosToNasActive,
 } from "../lib/externalIO/nasArchive";
 import {
+  claimNasOwnership,
   decideActiveSync,
-  noteSaveFingerprint,
   pullActiveFromNas,
   pushActiveToNas,
   resolveSecondaryAction,
 } from "../lib/externalIO/nasActiveSync";
-import { bumpNasGeneration, readNasGeneration } from "../lib/externalIO/nasNativeHost";
+import { readNasGeneration } from "../lib/externalIO/nasNativeHost";
 import { getNasFolderPath } from "../lib/storage/db";
 import { pullPendingFile } from "../lib/externalIO/nativeMessaging";
 import { useJsonBackupSync } from "../lib/drive/useJsonBackupSync";
 import { syncJsonBackupToDrive } from "../lib/drive/jsonBackupSync";
 import { getAuthToken } from "../lib/drive/googleAuth";
-import { bumpDriveGeneration, readDriveGeneration } from "../lib/drive/driveGeneration";
-import { pullActiveFromDrive } from "../lib/drive/driveActiveSync";
-import { logOp } from "../lib/runtime/log";
-import {
-  copyNotesToDriveDateFolder,
-  pushTodosToDriveActive,
-  reconcileDriveActive,
-} from "../lib/drive/driveActiveMirror";
-import { syncNoteToDrive } from "../lib/drive/driveSync";
+import { syncDriveNotesSafely } from "../lib/drive/driveSafeSync";
+import { copyNotesToDriveDateFolder, pushTodosToDriveActive } from "../lib/drive/driveActiveMirror";
 import { pushSpecialToDrive } from "../lib/drive/driveSpecial";
 import { useGlobalShortcuts } from "../lib/shortcuts/useGlobalShortcuts";
 import { forceSnapshot } from "../lib/history/useSnapshotScheduler";
@@ -181,6 +191,9 @@ export function App() {
   // 置換で本文を外部から書き換えた後、既に開いているエディタへ反映するには再マウントが要る
   // (NoteEditorPane.tsxのrestoreCounterと同じ理由)。
   const [replaceContentVersion, setReplaceContentVersion] = useState(0);
+  // 別タブ同期で本文が実際に変わったノートだけを再マウントする版数。全ペイン共通の版数を
+  // 進めると、別タブの空ノート補充や並び変更だけでも入力中のCM6が破棄されて文字が脱落する。
+  const [syncedContentVersions, setSyncedContentVersions] = useState<Record<string, number>>({});
   // 「🏷️ タグをふる」実行中フラグ(二重起動防止・ラベル切替)。
   const [tagging, setTagging] = useState(false);
   // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
@@ -194,12 +207,8 @@ export function App() {
   // ノートを読むための鏡(effectの依存を増やさずに現在値を参照する)。
   const nasGenRef = useRef(0);
   const nasOwnerRef = useRef(false);
-  // Drive版の世代カウンタ(ユーザー指示: NAS/Driveどちらかへの接続が失敗しても、接続できた
-  // 方の世代だけを進める)。driveOwnerRefはNASと違い「pullで受動に戻す」経路がまだ無いため、
-  // セッション中の最初の1回だけbumpする(将来Drive側にもpull経路を作る時にnasOwnerRefと
-  // 同じ扱いへ揃える)。
-  const driveGenRef = useRef(0);
-  const driveOwnerRef = useRef(false);
+  const noteTombstonesRef = useRef<NoteTombstones>({});
+  const storageRevisionRef = useRef(0);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
@@ -213,13 +222,8 @@ export function App() {
   specialFoldersRef.current = specialFolders;
   const syncRef = useRef<SyncState | null>(null);
   syncRef.current = sync;
-  // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
-  const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
   const nasSavedHashesRef = useRef<Record<string, string>>({});
-  // 「Driveへ退避」の即時active push専用の保存フィンガープリント(nasSavedHashesRefのDrive版。
-  // ユーザー指示: 変更が無いノートを送るな・ハッシュで確認しろ)。5分debounceの通常同期は見ない。
-  const driveActiveSavedHashesRef = useRef<Record<string, string>>({});
   // NAS special(⭐)の直近pushシグネチャ(driveSpecialSigRefと同じ発想)。pushSpecialToNasは
   // 全件突き合わせ書き込みでハッシュ差分を持たないため、これが無いと5分毎のpushのたびに
   // 内容不変でも⭐全件がNASへ無駄に再書き込みされていた(2026-07-16 是正)。
@@ -231,24 +235,6 @@ export function App() {
   // backupとは別に、NAS/Drive両方のactive/へも直近保存ハッシュ付きで書く)。
   const nasTodosSigRef = useRef<string>("");
   const driveTodosSigRef = useRef<string>("");
-  // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
-  // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
-  function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
-    return {
-      notes: notes ?? [],
-      todos,
-      nextEventCache,
-      alarmActive,
-      nasGeneration: nasGenRef.current,
-      driveGeneration: driveGenRef.current,
-      lastDailyMaintenanceDay: lastDailyMaintDayRef.current,
-      specialItems,
-      specialFolders,
-      nasSavedHashes: nasSavedHashesRef.current,
-      driveActiveSavedHashes: driveActiveSavedHashesRef.current,
-      ...overrides,
-    };
-  }
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
@@ -257,7 +243,7 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadSyncData(), loadLocalData()]).then(([syncData, localData]) => {
+    Promise.all([loadSyncData(), initializeLocalData(clockNow())]).then(([syncData, localData]) => {
       if (cancelled) return;
       setSync(syncData);
       setNotes(localData.notes);
@@ -267,16 +253,56 @@ export function App() {
       setAlarmActive(localData.alarmActive ?? false);
       setBatteryAlarmActive(localData.batteryAlarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
-      driveGenRef.current = localData.driveGeneration ?? 0;
-      lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
+      noteTombstonesRef.current = localData.noteTombstones ?? {};
+      storageRevisionRef.current = localData.storageRevision ?? 0;
       nasSavedHashesRef.current = localData.nasSavedHashes ?? {};
-      driveActiveSavedHashesRef.current = localData.driveActiveSavedHashes ?? {};
       setSpecialItems(localData.specialItems ?? []);
       setSpecialFolders(localData.specialFolders ?? []);
     });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // repositoryが確定したrevisionを画面へ反映するだけの読み取り専用購読。
+  // 以前はここで再マージしてsaveLocalDataし、複数タブが互いの通知へ書き返すループを作っていた。
+  useEffect(() => {
+    return subscribeLocalData((incoming) => {
+      if (!notesRef.current) return;
+      const revision = incoming.storageRevision ?? 0;
+      if (revision < storageRevisionRef.current) return;
+      storageRevisionRef.current = revision;
+      const currentNotes = notesRef.current;
+      const next = incoming.notes ?? [];
+      noteTombstonesRef.current = incoming.noteTombstones ?? {};
+      if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
+        setNotes(next);
+        // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
+        // 無関係な空ノートIDの収束通知でも入力中エディタを破棄するため、本文差分のあるIDだけ進める。
+        const currentContent = new Map(currentNotes.map((note) => [note.id, note.content]));
+        const changedContentIds = next
+          .filter(
+            (note) => currentContent.has(note.id) && currentContent.get(note.id) !== note.content,
+          )
+          .map((note) => note.id);
+        if (changedContentIds.length > 0) {
+          setSyncedContentVersions((versions) => {
+            const updated = { ...versions };
+            for (const id of changedContentIds) updated[id] = (updated[id] ?? 0) + 1;
+            return updated;
+          });
+        }
+        setActiveNoteId((cur) =>
+          cur && next.some((note) => note.id === cur) ? cur : (next[0]?.id ?? null),
+        );
+      }
+      setTodos(incoming.todos ?? []);
+      setNextEventCache(incoming.nextEventCache);
+      setAlarmActive(incoming.alarmActive ?? false);
+      setBatteryAlarmActive(incoming.batteryAlarmActive ?? false);
+      setSpecialItems(incoming.specialItems ?? []);
+      setSpecialFolders(incoming.specialFolders ?? []);
+    });
   }, []);
 
   // 新規タブページが開いたタイミングでNASフォルダの権限確認→有効なうちにフラッシュを
@@ -286,35 +312,21 @@ export function App() {
     void flushAllToNas();
   }, []);
 
-  // 常に末尾へ空ノートを3つ確保する(ユーザー指示: 付箋を貼るための余白。スプレッドシートの
-  // 末尾空行と同じ発想)。ensureTrailingEmptyNotesは不足時のみ新しい配列を返すため冪等——
-  // 補充が必要な時だけ更新し、無限ループにならない(補充後は trailing=3 で同一参照が返る)。
-  useEffect(() => {
-    if (!notes) return;
-    if (ensureTrailingEmptyNotes(notes, TRAILING_EMPTY_NOTES, clockNow()) !== notes) {
-      // 末尾空補充はプログラム的更新(人間の操作ではない)——世代所有権のbumpを起こさない。
-      updateNotes((prev) => ensureTrailingEmptyNotes(prev, TRAILING_EMPTY_NOTES, clockNow()), {
-        programmatic: true,
-      });
-    }
-  }, [notes]);
-
   // タブ↔NAS active の世代同期(ユーザー指示)。世代を突き合わせ、自分が所有者で同世代なら push
   // (active上書き+日付追記+削除突合)、NASが新しければ pull(NAS activeでノートを丸ごと上書き。
   // 最終操作者優先)。NAS未設定/未接続は静かにスキップ。全refで現在値を読むので依存は不要。
   function applyPulledNotes(pulled: Note[]) {
-    // pull はプログラム的更新(所有権bumpを起こさない)。末尾空3つを維持して置き換える。
-    const next = ensureTrailingEmptyNotes(pulled, TRAILING_EMPTY_NOTES, clockNow());
+    // NAS側も不在だけでは削除と判断せず、ローカルとの和集合にする。削除は共通tombstoneだけ。
+    const merged = mergeNoteCollections(notesRef.current ?? [], pulled, noteTombstonesRef.current);
+    applySafelySyncedNotes(merged.notes, merged.tombstones);
+  }
+
+  function applySafelySyncedNotes(notesFromSync: Note[], tombstones: NoteTombstones) {
+    const next = ensureTrailingEmptyNotes(notesFromSync, TRAILING_EMPTY_NOTES, clockNow());
+    noteTombstonesRef.current = tombstones;
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
-    void loadLocalData().then((local) =>
-      saveLocalData({
-        ...local,
-        notes: next,
-        nasGeneration: nasGenRef.current,
-        driveGeneration: driveGenRef.current, // Drive発のpullでも世代を落とさない
-      }),
-    );
+    void commitMergedNotes(next, tombstones);
   }
   // NASへの「push」本体(世代同期tickのpush分岐と、「今すぐNASへ書き出し」ボタンの両方から
   // 呼ぶ共通処理——ユーザー指示: ボタンでも即座にactive/日付フォルダへ反映してほしい)。
@@ -329,8 +341,7 @@ export function App() {
     const current = notesRef.current ?? [];
     const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
     nasSavedHashesRef.current = r.savedHashes;
-    const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
-    await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
+    await patchLocalData({ nasSavedHashes: r.savedHashes });
     // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
     // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
     // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
@@ -396,46 +407,38 @@ export function App() {
     }
   }
 
-  /** Drive側の世代同期tick。**Driveが正本として機能したか**を返す(未接続/世代を読めない=false)。
-   * 戻り値はNAS側のpullを抑止するために使う(ユーザー決定・2026-07-20: **Drive優先**)。 */
+  /** 初回表示時だけDriveの安全マージを補完する。定期実行はbackgroundの5分アラームが担う。 */
   async function runDriveSyncTick(): Promise<boolean> {
     const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
     setDriveConnected(token !== null); // 5分毎に必ず通る唯一の経路なので接続状態の観測点にする
     if (!token) return false;
-    const driveGen = await readDriveGeneration(token);
-    if (driveGen === null) return false; // 読めない=未接続扱いで次回へ
-    const decision = decideActiveSync(driveGenRef.current, driveGen, driveOwnerRef.current);
-    if (decision === "pull") {
-      const pulled = await pullActiveFromDrive(token);
-      if (pulled) {
-        driveGenRef.current = driveGen;
-        driveOwnerRef.current = false; // pull後は受動(次の人間の編集で再びbump)
-        applyPulledNotes(pulled);
-      }
-    } else if (decision === "push") {
-      await pushDriveActiveNow(token);
-    }
+    const result = await syncDriveNotesSafely(
+      notesRef.current ?? [],
+      noteTombstonesRef.current,
+      token,
+      clockNow(),
+    );
+    if (!result) return false;
+    applySafelySyncedNotes(result.notes, result.tombstones);
     return true;
   }
 
-  /** Drive→NASの順に同期する。**Driveが正本**(ユーザー決定・2026-07-20)——Driveが機能した回は
-   * NAS側のpullを抑止する。当初はNAS優先で配線したが、NASのnative hostが動いていない環境が
-   * 常態で、Drive側のpullが恒常的に抑止されて2台目に何も降りてこなかったため反転した。 */
+  /** 初回だけDrive安全マージ→NASの順で同期する。周期処理はそれぞれ別の単一経路へ分離済み。 */
   async function runSyncTick(): Promise<void> {
     const driveHandled = await runDriveSyncTick();
     await runNasSyncTick(driveHandled);
   }
 
-  // 5分毎の同期(マウント時に1本だけ張る。notes変更でintervalを作り直さない。runSyncTickは
-  // 全て ref/安定setterで現在値を読むため依存に含めなくてよい——本リポの他effectと同じ流儀)。
+  // NASの5分同期。Driveの5分同期はbackground service worker側に一本だけ張る。
   useEffect(() => {
-    const interval = setInterval(() => void runSyncTick(), NAS_SYNC_INTERVAL_MS);
+    // Driveの5分周期はbackground service workerへ集約済み。タブ側の周期処理はNASだけ。
+    const interval = setInterval(() => void runNasSyncTick(false), NAS_SYNC_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
   // 開きっぱなしのタブへ戻ってきた時にも取り込む(ユーザー指示・2026-07-20)。新しいタブを
   // 開いた直後は下の初回effectが担うので、こちらはタブ/ウィンドウの切り替えで戻る経路を拾う。
   // 5分tickを待たずに他端末の変更が見えるようにするのが狙い。
-  useForegroundSync(() => void runSyncTick(), FOREGROUND_SYNC_MIN_INTERVAL_MS, clockNow);
+  useForegroundSync(() => void runNasSyncTick(false), FOREGROUND_SYNC_MIN_INTERVAL_MS, clockNow);
   // ロード直後(notesが初めて入った時)に1回だけ初期同期する(pullで最新を取り込む)。
   const initialSyncDoneRef = useRef(false);
   useEffect(() => {
@@ -443,48 +446,6 @@ export function App() {
     initialSyncDoneRef.current = true;
     void runSyncTick();
   }, [notes]);
-
-  // Google Drive の active/ を現在の非空ノートへ突き合わせて消えたものを削除する(ユーザー指示)。
-  // 本文アップロードは各ペインのuseDriveSync、日付フォルダへの日次コピーは background.ts が担う。
-  // Drive未接続(トークン無し)なら静かに何もしない。ここも集合が変わった時だけ叩く(同期回数削減)。
-  const driveReconciledSigRef = useRef<string>("");
-  // 突合の要否は「非空ノートのid集合」だけで決まる。デバウンスはuseSignatureDebouncedEffectに
-  // 任せる——以前はこのeffectの依存が`notes`で、本文の1文字入力やdriveFileId/lastSyncedAtの
-  // 書き戻しのような**集合が変わらない更新**でも再実行され、クリーンアップで保留中の5秒タイマーを
-  // 消したうえで「集合不変」と判断して早期returnし、**新しいタイマーを張らないまま突合が永久に
-  // 流れる**穴があった(2026-07-20に発見。詳細と回帰テストは同フック参照)。
-  const noteSig = useMemo(
-    () =>
-      notes
-        ? notes
-            .filter((n) => n.content.trim() !== "")
-            .map((n) => n.id)
-            .sort()
-            .join(",")
-        : null,
-    [notes],
-  );
-  useSignatureDebouncedEffect(noteSig, 5000, (sig) => {
-    if (sig === driveReconciledSigRef.current) return; // 突合済みの集合→Drive一覧すら叩かない
-    // **所有権が無いなら突合しない**(2026-07-20・多端末対応の安全ゲート)。突合はローカルに
-    // 無いDriveファイルを削除するため、まだ相手のノートを取り込んでいない2台目で走ると
-    // 「相手のノートを消す」動作になる。所有権はこのセッションで人間が編集した時にだけ立ち
-    // (markUserEdit)、pullで受動へ戻る——NAS側の「所有者だけが書く」規則と同じ。
-    // 5分毎のtick(runDriveSyncTick)がpush判定でpushDriveActiveNow経由の突合を行うので、
-    // ここを見送っても削除は取りこぼされない(こちらは削除を早く反映するための近道)。
-    if (!driveOwnerRef.current) return;
-    void (async () => {
-      try {
-        const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
-        if (!token) return;
-        // 発火時点の最新のノートを使う(署名だけを依存にしたためクロージャのnotesは古くなる)。
-        await reconcileDriveActive(notesRef.current ?? [], token);
-        driveReconciledSigRef.current = sig; // 突合できた集合だけ記録(未接続時は次回再試行)
-      } catch {
-        // Drive同期の突合失敗はUIを止めない(次の集合変化で再試行される)。
-      }
-    })();
-  });
 
   // スペシャル(⭐)を Google Drive の special/<folder>/<id>.md へ書き出す(ユーザー指示。NAS側は
   // 同期tickの pushSpecialToNas が担う)。スペシャル(ノートのstar/folder/本文 or 凍結項目)が
@@ -557,7 +518,7 @@ export function App() {
     setAlarmActive(false);
     // background.tsのstopAlarm()を待たず、UI側でも即座に永続化する(30秒間隔の
     // 定期リフレッシュが古いalarmActive:trueを読み直して復活させるのを防ぐため)。
-    void loadLocalData().then((local) => saveLocalData({ ...local, alarmActive: false }));
+    void patchLocalData({ alarmActive: false });
   }
 
   function stopBatteryAlarm() {
@@ -565,7 +526,7 @@ export function App() {
       chrome.runtime.sendMessage({ type: "stop-battery-alarm" });
     }
     setBatteryAlarmActive(false);
-    void loadLocalData().then((local) => saveLocalData({ ...local, batteryAlarmActive: false }));
+    void patchLocalData({ batteryAlarmActive: false });
   }
 
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
@@ -711,57 +672,45 @@ export function App() {
   // 人間がノートを操作したら、NAS世代同期の所有権をこのセッションが得る(初回だけbump——ユーザー指示
   // 「人間が操作しNASと通信し始めるとき、新しい世代をもらう」)。NAS未設定なら何もしない。
   // pull(NASで上書き)やロード時の末尾空補充はプログラム的更新なのでここを通さない。
+  // bumpはCAS(claimNasOwnership。2026-07-19是正)——自分の知っている世代がもう古ければ
+  // (他タブが先にbump/pushしていたら)所有権を得ず、まずpullしてローカルを最新化する。
+  // 以前は無条件bumpだったため、他タブの削除をpullしていないタブが所有権を奪ってしまい、
+  // 次のpushで削除前の古いノート一覧がNASへ書き戻される(削除が復活する)実害があった。
   // Drive側も同じ考え方で独立にbumpする(ユーザー指示: 接続がうまく行った方の世代だけを
   // 進めることで抜けの無い情報受け渡しの土台にする)——NASが未設定/未接続でもDrive側は
   // 試みる(どちらか一方が失敗してももう一方は進む、が本来の狙いのため早期returnで
-  // まとめない)。
+  // まとめない)。Drive側はまだpullで戻す経路が無いため、CAS化は現状スコープ外
+  // (src/lib/drive/CLAUDE.md参照——将来マルチデバイス対応時に揃える)。
   function markUserEdit() {
     if (!nasOwnerRef.current) {
       nasOwnerRef.current = true; // 楽観的に所有者化(bump失敗時も次tickでpush可否を再判定)
       void (async () => {
-        const path = await getNasFolderPath();
-        if (!path) return; // NAS未設定なら世代同期は使わない(ローカルのみ)
-        const g = await bumpNasGeneration(path);
-        if (g !== null) {
-          nasGenRef.current = g;
-          const local = await loadLocalData();
-          await saveLocalData({ ...local, nasGeneration: g });
-        }
-      })();
-    }
-    if (!driveOwnerRef.current) {
-      driveOwnerRef.current = true;
-      logOp(
-        "driveGeneration",
-        "markUserEdit-drive-claim",
-        "first user edit this session — claiming ownership",
-      );
-      void (async () => {
-        const token = await getAuthToken(false); // 非対話——未接続ならnullで静かに終わる
-        if (!token) {
-          logOp(
-            "driveGeneration",
-            "markUserEdit-drive-no-token",
-            "non-interactive getAuthToken returned null",
-          );
+        const result = await claimNasOwnership(nasGenRef.current);
+        if (result.kind === "no-nas" || result.kind === "network-error") return;
+        if (result.kind === "claimed") {
+          nasGenRef.current = result.generation;
+          await patchLocalData({ nasGeneration: result.generation });
           return;
         }
-        const g = await bumpDriveGeneration(token);
-        if (g !== null) {
-          driveGenRef.current = g;
-          const local = await loadLocalData();
-          await saveLocalData({ ...local, driveGeneration: g });
+        // stale: 自分の知っている世代は既に古い(他タブが先にbump/pushしていた)。所有権の
+        // 主張を取り消し、pull結果があればローカルへ反映する(このタブの直前の編集は
+        // pull結果で上書きされ得る——複数タブがほぼ同時に競合編集した際のトレードオフだが、
+        // 少なくとも「古い状態がpushされて他タブの削除がロールバックされる」実害は防げる)。
+        nasOwnerRef.current = false;
+        if (result.pulledNotes) {
+          nasGenRef.current = result.generation;
+          applyPulledNotes(result.pulledNotes);
+          await patchLocalData({ nasGeneration: result.generation });
         }
+        // pull失敗時はnasGenRef.currentを進めない→次のtickのdecideActiveSyncが
+        // 「NASの方が新しい」と自然に判定してpullを再試行する。
       })();
     }
   }
 
-  function updateNotes(
-    update: Note[] | ((prev: Note[]) => Note[]),
-    opts?: { programmatic?: boolean },
-  ) {
-    // programmatic(末尾空補充・pull等の非ユーザー更新)以外は「人間の操作」として世代所有権を得る。
-    if (!opts?.programmatic) markUserEdit();
+  function updateNotes(update: Note[] | ((prev: Note[]) => Note[])) {
+    // pull/初期化はrepository専用経路を通るため、ここへ来る更新は人間の操作として扱う。
+    markUserEdit();
     // 常にsetNotesの関数型updaterを経由する(引数が配列であっても内部で関数化する)。
     // 「タブ追加ボタンを連打すると作ったノートが消える」バグの原因は、複数の呼び出しが
     // それぞれ古いclosure内のnotes(propsとして渡された時点のスナップショット)から
@@ -771,12 +720,26 @@ export function App() {
     // 失われない。
     setNotes((prev) => {
       const base = prev ?? [];
-      const nextNotes = typeof update === "function" ? update(base) : update;
-      // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
-      // (todos/nextEventCache/alarmActive/nasGeneration)を巻き込まないよう現在値を明示的に含めて
-      // 保存する(含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が
-      // 消えてしまう)。
-      void saveLocalData(buildLocalData({ notes: nextNotes }));
+      const rawNextNotes = typeof update === "function" ? update(base) : update;
+      const changedAt = clockNow();
+      const nextNotes = stampChangedNotes(base, rawNextNotes, changedAt);
+      noteTombstonesRef.current = updateTombstonesForMutation(
+        base,
+        nextNotes,
+        noteTombstonesRef.current,
+        changedAt,
+      );
+      // 永続化へ渡すのは全件スナップショットではなく、この操作のbefore/afterだけ。
+      // repositoryが排他ロック内で最新状態へ差分を適用する。
+      void commitNoteMutation(base, nextNotes, changedAt).then((committed) => {
+        const revision = committed.storageRevision ?? 0;
+        if (revision < storageRevisionRef.current) return;
+        storageRevisionRef.current = revision;
+        noteTombstonesRef.current = committed.noteTombstones ?? {};
+        // 自分の確定コミットではエディタ版数を進めない。本文はCM6が既に保持しており、
+        // repositoryが追加した末尾空ノート等の構造差分だけをReact stateへ取り込む。
+        setNotes(committed.notes);
+      });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
@@ -801,13 +764,13 @@ export function App() {
 
   function updateTodos(nextTodos: Todo[]) {
     setTodos(nextTodos);
-    void saveLocalData(buildLocalData({ todos: nextTodos }));
+    void patchLocalData({ todos: nextTodos });
   }
 
   // スペシャル(⭐)の凍結項目/フォルダを更新して永続化する(ユーザー指示)。
   function updateSpecialItems(next: SpecialItem[]) {
     setSpecialItems(next);
-    void saveLocalData(buildLocalData({ specialItems: next }));
+    void patchLocalData({ specialItems: next });
   }
   // ⭐トグル(ノートのspecialを反転)。
   function toggleSpecial(noteId: string) {
@@ -934,24 +897,16 @@ export function App() {
     // 書き込み前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: Driveへの
     // 書き込みが実行される前にタグ付けを済ませてほしい)。pushNasActiveNowと同じ理由。
     await tagAllNotes();
-    const current = notesRef.current ?? [];
     const now = clockNow();
-    const updates: Record<string, { driveFileId: string; lastSyncedAt: number }> = {};
-    for (const n of current) {
-      if (n.content.trim() === "" || n.junk) continue;
-      const fp = noteSaveFingerprint(n);
-      if (driveActiveSavedHashesRef.current[n.id] === fp) continue; // 変更なし→送らない
-      const result = await syncNoteToDrive(n, now, false);
-      if (result.status === "synced") {
-        updates[n.id] = { driveFileId: result.driveFileId, lastSyncedAt: result.lastSyncedAt };
-        driveActiveSavedHashesRef.current[n.id] = fp;
-      }
-    }
-    if (Object.keys(updates).length > 0) {
-      updateNotes((prev) => prev.map((n) => (updates[n.id] ? { ...n, ...updates[n.id] } : n)));
-    }
-    await reconcileDriveActive(current, token);
-    await copyNotesToDriveDateFolder(current, now, token);
+    const result = await syncDriveNotesSafely(
+      notesRef.current ?? [],
+      noteTombstonesRef.current,
+      token,
+      now,
+    );
+    if (!result) return;
+    applySafelySyncedNotes(result.notes, result.tombstones);
+    await copyNotesToDriveDateFolder(result.notes, now, token);
     // TODOはactive/todos.txtへも書く(ユーザー指示: 「二重管理でもいい」ので設定バックアップ
     // (jsonBackup)とは別にactive/へ直接反映する。NAS側と同じ発想)。
     const todosMd = todosToMarkdown(todosRef.current);
@@ -1038,13 +993,11 @@ export function App() {
     setSpecialItems(payload.specialItems);
     setSpecialFolders(payload.specialFolders);
     void saveSyncData(nextSync);
-    void saveLocalData(
-      buildLocalData({
-        todos: payload.todos,
-        specialItems: payload.specialItems,
-        specialFolders: payload.specialFolders,
-      }),
-    );
+    void patchLocalData({
+      todos: payload.todos,
+      specialItems: payload.specialItems,
+      specialFolders: payload.specialFolders,
+    });
     setDataPanelMessage("NASから復元しました(ノートは対象外——NASの世代同期が別途復元します)");
   }
 
@@ -1083,14 +1036,15 @@ export function App() {
     if (data.specialItems !== undefined) setSpecialItems(data.specialItems);
     if (data.specialFolders !== undefined) setSpecialFolders(data.specialFolders);
     void saveSyncData(data.sync);
-    void saveLocalData(
-      buildLocalData({
-        notes: data.notes,
-        todos: data.todos ?? todos,
-        specialItems: data.specialItems ?? specialItems,
-        specialFolders: data.specialFolders ?? specialFolders,
-      }),
-    );
+    const importedNotes = ensureTrailingEmptyNotes(data.notes, TRAILING_EMPTY_NOTES, clockNow());
+    void updateLocalData((current) => ({
+      ...current,
+      notes: importedNotes,
+      noteTombstones: {},
+      todos: data.todos ?? current.todos,
+      specialItems: data.specialItems ?? current.specialItems,
+      specialFolders: data.specialFolders ?? current.specialFolders,
+    }));
   }
 
   function openFileAsNote(
@@ -1471,7 +1425,9 @@ export function App() {
                               isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
                               autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                               manualSyncSignal={manualSyncSignal}
-                              replaceContentVersion={replaceContentVersion}
+                              replaceContentVersion={
+                                replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
+                              }
                               onNotesChange={updateNotes}
                               onSelectNote={selectNote}
                               onSelectNoteByTitle={selectNoteByTitle}
