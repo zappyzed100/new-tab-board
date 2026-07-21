@@ -2,7 +2,12 @@
 import { describe, expect, it } from "vitest";
 import type { Note } from "../../types";
 import { markdownToNote, noteToMarkdown } from "../externalIO/nasArchive";
-import { mergeNoteCollections, stampChangedNotes, updateTombstonesForMutation } from "./note-sync";
+import {
+  mergeNoteCollections,
+  preserveProtectedNote,
+  stampChangedNotes,
+  updateTombstonesForMutation,
+} from "./note-sync";
 
 function note(id: string, content: string, updatedAt: number): Note {
   return { id, title: id, content, pinned: false, order: 0, createdAt: 1, updatedAt };
@@ -111,6 +116,61 @@ describe("mergeNoteCollections", () => {
     expect(mergeNoteCollections([], [note("n1", "new", 30)], { n1: 20 }).notes[0].content).toBe(
       "new",
     );
+  });
+});
+
+describe("preserveProtectedNote(編集中ノートを同期から守る)", () => {
+  const placeholder = (id: string, title: string, order: number): Note => ({
+    id,
+    title,
+    content: "",
+    pinned: false,
+    order,
+  });
+
+  it("protectedIdがnullなら何もしない", () => {
+    const next = [note("a", "A", 10)];
+    expect(preserveProtectedNote(next, next, null)).toBe(next);
+  });
+
+  it("protectedIdがlocalに無ければ何もしない(起動時の自動選択は保護対象外)", () => {
+    const next = [note("a", "A", 10)];
+    expect(preserveProtectedNote(next, next, "missing")).toBe(next);
+  });
+
+  it("同期結果から消えた編集中ノートを、local版で復活させる(削除を防ぐ)", () => {
+    const local = [note("edit", "編集中", 10)];
+    const next: Note[] = []; // 同期がdedup/マージで落とした
+    const result = preserveProtectedNote(next, local, "edit");
+    expect(result.map((n) => n.id)).toEqual(["edit"]);
+  });
+
+  it("編集中ノートの本文はlocal(編集中の最新)が勝つ(remoteの上書きを防ぐ)", () => {
+    const local = [{ ...note("edit", "編集中の本文", 10), title: "T" }];
+    const next = [{ ...note("edit", "リモートの古い本文", 10), title: "T" }];
+    const result = preserveProtectedNote(next, local, "edit");
+    expect(result.find((n) => n.id === "edit")?.content).toBe("編集中の本文");
+  });
+
+  it(
+    "空placeholderを選んだ直後にdedupで別idの同名placeholderへ畳まれても、" +
+      "選んだ方(protectedId)を残し同名の勝者を退ける(選択が飛ばない)",
+    () => {
+      const local = [placeholder("mine", "ノートA", 0)];
+      const next = [placeholder("winner", "ノートA", 0)]; // dedupが別idを勝者にした
+      const result = preserveProtectedNote(next, local, "mine");
+      expect(result.map((n) => n.id)).toEqual(["mine"]);
+    },
+  );
+
+  it("編集中ノート以外の並び順・集合はそのまま(order昇順で返す)", () => {
+    const local = [{ ...note("edit", "編集中", 10), order: 5 }];
+    const next = [
+      { ...note("x", "X", 10), order: 1 },
+      { ...note("y", "Y", 10), order: 9 },
+    ];
+    const result = preserveProtectedNote(next, local, "edit");
+    expect(result.map((n) => n.id)).toEqual(["x", "edit", "y"]); // order 1,5,9
   });
 });
 

@@ -167,6 +167,34 @@ export function mergeNoteCollections(
   };
 }
 
+/** ユーザーが選んで**編集中**のノートを、同期の再適用(pull/マージ/placeholder畳み込み)から守る。
+ * 起動直後に速攻でノートを選んで編集を始めると、その後に届く各種同期処理がそのノートを
+ * 並べ替え・削除・内容上書きして「選択が飛ぶ/入力が消える」実害があった(ユーザー報告)。
+ * protectedId のノートは `local`(=編集中の最新ローカル状態)からそのまま採用し、同期結果の
+ * 該当ノートを置き換える(=動かさない・消さない・上書きしない=最優先)。
+ * 自動空ノート(placeholder)を選んだ直後に、dedupで別idの同名placeholderへ畳まれて選択が
+ * 飛ぶのも防ぐ——保護対象がまだ空placeholderなら、同名の空placeholderを退けて protectedId を残す。
+ * protectedId が null か、local に存在しなければ何もしない(=起動時の自動選択は保護しない)。 */
+export function preserveProtectedNote(
+  next: Note[],
+  local: Note[],
+  protectedId: string | null,
+): Note[] {
+  if (!protectedId) return next;
+  const localNote = local.find((note) => note.id === protectedId);
+  if (!localNote) return next;
+  const placeholder = isGeneratedEmptyPlaceholder(localNote);
+  const kept = next.filter((note) => {
+    if (note.id === protectedId) return false; // 保護対象は local 版で入れ直す(下で push)
+    // 保護対象がまだ空placeholderなら、dedupで勝った同名の空placeholderを退けて選択を保つ。
+    if (placeholder && note.title === localNote.title && isGeneratedEmptyPlaceholder(note)) {
+      return false;
+    }
+    return true;
+  });
+  return [...kept, localNote].sort((a, b) => a.order - b.order);
+}
+
 /** 編集後の配列との差分から削除tombstoneを作る。再作成/編集されたIDの古いtombstoneは外す。 */
 export function updateTombstonesForMutation(
   previous: Note[],

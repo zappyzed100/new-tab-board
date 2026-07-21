@@ -1026,6 +1026,7 @@
 - type NoteMergeResult
 - function mergeTombstones
 - function mergeNoteCollections
+- function preserveProtectedNote
 - function updateTombstonesForMutation
 - function stampChangedNotes
 
