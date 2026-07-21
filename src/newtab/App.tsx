@@ -185,6 +185,9 @@ export function App() {
   // 置換で本文を外部から書き換えた後、既に開いているエディタへ反映するには再マウントが要る
   // (NoteEditorPane.tsxのrestoreCounterと同じ理由)。
   const [replaceContentVersion, setReplaceContentVersion] = useState(0);
+  // 別タブ同期で本文が実際に変わったノートだけを再マウントする版数。全ペイン共通の版数を
+  // 進めると、別タブの空ノート補充や並び変更だけでも入力中のCM6が破棄されて文字が脱落する。
+  const [syncedContentVersions, setSyncedContentVersions] = useState<Record<string, number>>({});
   // 「🏷️ タグをふる」実行中フラグ(二重起動防止・ラベル切替)。
   const [tagging, setTagging] = useState(false);
   // 初回表示時はオムニバーへフォーカスしたい(検索にすぐ入れる新規タブらしい挙動)ので、
@@ -303,18 +306,32 @@ export function App() {
   useEffect(() => {
     return subscribeLocalData((incoming) => {
       if (!notesRef.current) return;
+      const currentNotes = notesRef.current;
       const merged = mergeNoteCollections(
-        notesRef.current,
+        currentNotes,
         incoming.notes ?? [],
         noteTombstonesRef.current,
         incoming.noteTombstones ?? {},
       );
       noteTombstonesRef.current = merged.tombstones;
       const next = ensureTrailingEmptyNotes(merged.notes, TRAILING_EMPTY_NOTES, clockNow());
-      if (JSON.stringify(next) !== JSON.stringify(notesRef.current)) {
+      if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
         setNotes(next);
-        // CM6は初期contentをマウント時にだけ読むため、別タブの本文変更時は再マウントさせる。
-        setReplaceContentVersion((version) => version + 1);
+        // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
+        // 無関係な空ノートIDの収束通知でも入力中エディタを破棄するため、本文差分のあるIDだけ進める。
+        const currentContent = new Map(currentNotes.map((note) => [note.id, note.content]));
+        const changedContentIds = next
+          .filter(
+            (note) => currentContent.has(note.id) && currentContent.get(note.id) !== note.content,
+          )
+          .map((note) => note.id);
+        if (changedContentIds.length > 0) {
+          setSyncedContentVersions((versions) => {
+            const updated = { ...versions };
+            for (const id of changedContentIds) updated[id] = (updated[id] ?? 0) + 1;
+            return updated;
+          });
+        }
         setActiveNoteId((cur) =>
           cur && next.some((note) => note.id === cur) ? cur : (next[0]?.id ?? null),
         );
@@ -1468,7 +1485,9 @@ export function App() {
                               isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
                               autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                               manualSyncSignal={manualSyncSignal}
-                              replaceContentVersion={replaceContentVersion}
+                              replaceContentVersion={
+                                replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
+                              }
                               onNotesChange={updateNotes}
                               onSelectNote={selectNote}
                               onSelectNoteByTitle={selectNoteByTitle}

@@ -25,6 +25,24 @@ describe("mergeNoteCollections", () => {
     expect(mergeNoteCollections([local], [remote]).notes).toHaveLength(1);
   });
 
+  it("別タブが生成した同名の自動空ノートは入力順に依存せず同じIDへ収束する", () => {
+    const tabA = ["A", "B", "C"].map((letter, order) => ({
+      ...note(`z-tab-${letter}`, "", 10),
+      title: `ノート${letter}`,
+      order,
+    }));
+    const tabB = ["A", "B", "C"].map((letter, order) => ({
+      ...note(`a-tab-${letter}`, "", 10),
+      title: `ノート${letter}`,
+      order,
+    }));
+
+    const fromA = mergeNoteCollections(tabA, tabB).notes.map((item) => item.id);
+    const fromB = mergeNoteCollections(tabB, tabA).notes.map((item) => item.id);
+    expect(fromA).toEqual(["a-tab-A", "a-tab-B", "a-tab-C"]);
+    expect(fromB).toEqual(fromA);
+  });
+
   it("同じIDの自動空ノートにメタデータ差があっても競合コピーを作らない", () => {
     const local = { ...note("same", "", 10), title: "ノートA", order: 0 };
     const remote = { ...local, order: 2 };

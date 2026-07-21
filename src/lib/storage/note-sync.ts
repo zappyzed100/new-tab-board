@@ -80,18 +80,21 @@ function isGeneratedEmptyPlaceholder(note: Note): boolean {
   );
 }
 
-/** staleな全体保存同士を和集合にした際、別IDで二重化した自動空ノートだけをタイトルで畳む。 */
+/** staleな全体保存同士を和集合にした際、別IDで二重化した自動空ノートだけをタイトルで畳む。
+ * 複数タブが空状態から同時起動すると各タブが別IDのA/B/Cを作るため、入力順(local優先)で
+ * 勝者を決めると各タブが自分のIDを書き戻し続ける。title→id順の決定的な勝者へ全タブを収束させる。 */
 function deduplicateGeneratedPlaceholders(notes: Note[]): Note[] {
-  const seenTitles = new Set<string>();
-  let placeholderCount = 0;
-  return notes.filter((note) => {
-    if (!isGeneratedEmptyPlaceholder(note)) return true;
-    if (seenTitles.has(note.title)) return false;
-    if (placeholderCount >= 3) return false;
-    seenTitles.add(note.title);
-    placeholderCount += 1;
-    return true;
-  });
+  const nonPlaceholders = notes.filter((note) => !isGeneratedEmptyPlaceholder(note));
+  const winners = new Map<string, Note>();
+  for (const note of notes) {
+    if (!isGeneratedEmptyPlaceholder(note)) continue;
+    const current = winners.get(note.title);
+    if (!current || note.id.localeCompare(current.id) < 0) winners.set(note.title, note);
+  }
+  const placeholders = [...winners.values()]
+    .sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id))
+    .slice(0, 3);
+  return [...nonPlaceholders, ...placeholders];
 }
 
 /** ローカル/リモートの削除記録はnoteIdごとの最大時刻を採る。記録が無いことは削除を意味しない。 */
