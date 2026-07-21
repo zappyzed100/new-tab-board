@@ -34,9 +34,10 @@ import { sortedBookmarks } from "../lib/entities/bookmarks";
 import {
   loadLocalData,
   loadSyncData,
-  saveLocalData,
+  patchLocalData,
   saveSyncData,
   subscribeLocalData,
+  updateLocalData,
 } from "../lib/storage/storage";
 import {
   mergeNoteCollections,
@@ -44,6 +45,11 @@ import {
   updateTombstonesForMutation,
   type NoteTombstones,
 } from "../lib/storage/note-sync";
+import {
+  commitMergedNotes,
+  commitNoteMutation,
+  initializeLocalData,
+} from "../lib/storage/local-data-repository";
 import {
   addNote,
   addNoteAfter,
@@ -201,12 +207,8 @@ export function App() {
   // ノートを読むための鏡(effectの依存を増やさずに現在値を参照する)。
   const nasGenRef = useRef(0);
   const nasOwnerRef = useRef(false);
-  // Drive版の世代カウンタ(ユーザー指示: NAS/Driveどちらかへの接続が失敗しても、接続できた
-  // 方の世代だけを進める)。driveOwnerRefはNASと違い「pullで受動に戻す」経路がまだ無いため、
-  // セッション中の最初の1回だけbumpする(将来Drive側にもpull経路を作る時にnasOwnerRefと
-  // 同じ扱いへ揃える)。
-  const driveGenRef = useRef(0);
   const noteTombstonesRef = useRef<NoteTombstones>({});
+  const storageRevisionRef = useRef(0);
   const notesRef = useRef<Note[] | null>(null);
   notesRef.current = notes;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
@@ -220,13 +222,8 @@ export function App() {
   specialFoldersRef.current = specialFolders;
   const syncRef = useRef<SyncState | null>(null);
   syncRef.current = sync;
-  // background.ts が書く lastDailyMaintenanceDay を、App の saveLocalData で消さないよう保持する。
-  const lastDailyMaintDayRef = useRef<string | undefined>(undefined);
   // NASへ最後に保存した各ノートのフィンガープリント(id→ハッシュ)。同じなら再保存しない。
   const nasSavedHashesRef = useRef<Record<string, string>>({});
-  // 「Driveへ退避」の即時active push専用の保存フィンガープリント(nasSavedHashesRefのDrive版。
-  // ユーザー指示: 変更が無いノートを送るな・ハッシュで確認しろ)。5分debounceの通常同期は見ない。
-  const driveActiveSavedHashesRef = useRef<Record<string, string>>({});
   // NAS special(⭐)の直近pushシグネチャ(driveSpecialSigRefと同じ発想)。pushSpecialToNasは
   // 全件突き合わせ書き込みでハッシュ差分を持たないため、これが無いと5分毎のpushのたびに
   // 内容不変でも⭐全件がNASへ無駄に再書き込みされていた(2026-07-16 是正)。
@@ -238,25 +235,6 @@ export function App() {
   // backupとは別に、NAS/Drive両方のactive/へも直近保存ハッシュ付きで書く)。
   const nasTodosSigRef = useRef<string>("");
   const driveTodosSigRef = useRef<string>("");
-  // localData の保存は全フィールドを1つのJSONで上書きするため、App が持つ現在値を集約して保存する
-  // (欠けたフィールドを消さないための単一の組み立て器)。呼び出し側は変わった分だけ overrides で渡す。
-  function buildLocalData(overrides: Partial<LocalData> = {}): LocalData {
-    return {
-      notes: notes ?? [],
-      noteTombstones: noteTombstonesRef.current,
-      todos,
-      nextEventCache,
-      alarmActive,
-      nasGeneration: nasGenRef.current,
-      driveGeneration: driveGenRef.current,
-      lastDailyMaintenanceDay: lastDailyMaintDayRef.current,
-      specialItems,
-      specialFolders,
-      nasSavedHashes: nasSavedHashesRef.current,
-      driveActiveSavedHashes: driveActiveSavedHashesRef.current,
-      ...overrides,
-    };
-  }
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
     userSelectedNoteRef.current = true;
@@ -265,56 +243,38 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadSyncData(), loadLocalData()]).then(([syncData, localData]) => {
+    Promise.all([loadSyncData(), initializeLocalData(clockNow())]).then(([syncData, localData]) => {
       if (cancelled) return;
-      const normalizedLocal = mergeNoteCollections(
-        localData.notes,
-        [],
-        localData.noteTombstones ?? {},
-      );
       setSync(syncData);
-      setNotes(normalizedLocal.notes);
+      setNotes(localData.notes);
       setTodos(localData.todos ?? []);
-      setActiveNoteId(normalizedLocal.notes[0]?.id ?? null);
+      setActiveNoteId(localData.notes[0]?.id ?? null);
       setNextEventCache(localData.nextEventCache);
       setAlarmActive(localData.alarmActive ?? false);
       setBatteryAlarmActive(localData.batteryAlarmActive ?? false);
       nasGenRef.current = localData.nasGeneration ?? 0; // 前回同期した世代を引き継ぐ
-      driveGenRef.current = localData.driveGeneration ?? 0;
-      noteTombstonesRef.current = normalizedLocal.tombstones;
-      lastDailyMaintDayRef.current = localData.lastDailyMaintenanceDay;
+      noteTombstonesRef.current = localData.noteTombstones ?? {};
+      storageRevisionRef.current = localData.storageRevision ?? 0;
       nasSavedHashesRef.current = localData.nasSavedHashes ?? {};
-      driveActiveSavedHashesRef.current = localData.driveActiveSavedHashes ?? {};
       setSpecialItems(localData.specialItems ?? []);
       setSpecialFolders(localData.specialFolders ?? []);
-      if (JSON.stringify(normalizedLocal.notes) !== JSON.stringify(localData.notes)) {
-        void saveLocalData({
-          ...localData,
-          notes: normalizedLocal.notes,
-          noteTombstones: normalizedLocal.tombstones,
-        });
-      }
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // chrome.storage.local は同一PCの全New Tabで共有される。別タブがlocalDataを書き換えたら
-  // ノートID単位で即座にマージして画面へ反映する。不在だけでは削除せず、明示tombstoneだけを
-  // 削除として扱うため、ほぼ同時に別ノートを編集しても配列全体の後勝ちで消えない。
+  // repositoryが確定したrevisionを画面へ反映するだけの読み取り専用購読。
+  // 以前はここで再マージしてsaveLocalDataし、複数タブが互いの通知へ書き返すループを作っていた。
   useEffect(() => {
     return subscribeLocalData((incoming) => {
       if (!notesRef.current) return;
+      const revision = incoming.storageRevision ?? 0;
+      if (revision < storageRevisionRef.current) return;
+      storageRevisionRef.current = revision;
       const currentNotes = notesRef.current;
-      const merged = mergeNoteCollections(
-        currentNotes,
-        incoming.notes ?? [],
-        noteTombstonesRef.current,
-        incoming.noteTombstones ?? {},
-      );
-      noteTombstonesRef.current = merged.tombstones;
-      const next = ensureTrailingEmptyNotes(merged.notes, TRAILING_EMPTY_NOTES, clockNow());
+      const next = incoming.notes ?? [];
+      noteTombstonesRef.current = incoming.noteTombstones ?? {};
       if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
         setNotes(next);
         // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
@@ -336,14 +296,12 @@ export function App() {
           cur && next.some((note) => note.id === cur) ? cur : (next[0]?.id ?? null),
         );
       }
-      // incomingが古い全体スナップショットだった場合は、和集合を正本へ書き戻して全タブを収束させる。
-      if (JSON.stringify(next) !== JSON.stringify(incoming.notes ?? [])) {
-        void saveLocalData({
-          ...incoming,
-          notes: next,
-          noteTombstones: merged.tombstones,
-        });
-      }
+      setTodos(incoming.todos ?? []);
+      setNextEventCache(incoming.nextEventCache);
+      setAlarmActive(incoming.alarmActive ?? false);
+      setBatteryAlarmActive(incoming.batteryAlarmActive ?? false);
+      setSpecialItems(incoming.specialItems ?? []);
+      setSpecialFolders(incoming.specialFolders ?? []);
     });
   }, []);
 
@@ -353,19 +311,6 @@ export function App() {
   useEffect(() => {
     void flushAllToNas();
   }, []);
-
-  // 常に末尾へ空ノートを3つ確保する(ユーザー指示: 付箋を貼るための余白。スプレッドシートの
-  // 末尾空行と同じ発想)。ensureTrailingEmptyNotesは不足時のみ新しい配列を返すため冪等——
-  // 補充が必要な時だけ更新し、無限ループにならない(補充後は trailing=3 で同一参照が返る)。
-  useEffect(() => {
-    if (!notes) return;
-    if (ensureTrailingEmptyNotes(notes, TRAILING_EMPTY_NOTES, clockNow()) !== notes) {
-      // 末尾空補充はプログラム的更新(人間の操作ではない)——世代所有権のbumpを起こさない。
-      updateNotes((prev) => ensureTrailingEmptyNotes(prev, TRAILING_EMPTY_NOTES, clockNow()), {
-        programmatic: true,
-      });
-    }
-  }, [notes]);
 
   // タブ↔NAS active の世代同期(ユーザー指示)。世代を突き合わせ、自分が所有者で同世代なら push
   // (active上書き+日付追記+削除突合)、NASが新しければ pull(NAS activeでノートを丸ごと上書き。
@@ -381,9 +326,7 @@ export function App() {
     noteTombstonesRef.current = tombstones;
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
-    void loadLocalData().then((local) =>
-      saveLocalData({ ...local, notes: next, noteTombstones: tombstones }),
-    );
+    void commitMergedNotes(next, tombstones);
   }
   // NASへの「push」本体(世代同期tickのpush分岐と、「今すぐNASへ書き出し」ボタンの両方から
   // 呼ぶ共通処理——ユーザー指示: ボタンでも即座にactive/日付フォルダへ反映してほしい)。
@@ -398,8 +341,7 @@ export function App() {
     const current = notesRef.current ?? [];
     const r = await pushActiveToNas(current, clockNow(), nasSavedHashesRef.current);
     nasSavedHashesRef.current = r.savedHashes;
-    const local = await loadLocalData(); // 最新の永続状態へマージ(tickのクロージャは古いnotesを持つため)
-    await saveLocalData({ ...local, nasSavedHashes: r.savedHashes });
+    await patchLocalData({ nasSavedHashes: r.savedHashes });
     // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
     // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
     // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
@@ -576,7 +518,7 @@ export function App() {
     setAlarmActive(false);
     // background.tsのstopAlarm()を待たず、UI側でも即座に永続化する(30秒間隔の
     // 定期リフレッシュが古いalarmActive:trueを読み直して復活させるのを防ぐため)。
-    void loadLocalData().then((local) => saveLocalData({ ...local, alarmActive: false }));
+    void patchLocalData({ alarmActive: false });
   }
 
   function stopBatteryAlarm() {
@@ -584,7 +526,7 @@ export function App() {
       chrome.runtime.sendMessage({ type: "stop-battery-alarm" });
     }
     setBatteryAlarmActive(false);
-    void loadLocalData().then((local) => saveLocalData({ ...local, batteryAlarmActive: false }));
+    void patchLocalData({ batteryAlarmActive: false });
   }
 
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
@@ -747,8 +689,7 @@ export function App() {
         if (result.kind === "no-nas" || result.kind === "network-error") return;
         if (result.kind === "claimed") {
           nasGenRef.current = result.generation;
-          const local = await loadLocalData();
-          await saveLocalData({ ...local, nasGeneration: result.generation });
+          await patchLocalData({ nasGeneration: result.generation });
           return;
         }
         // stale: 自分の知っている世代は既に古い(他タブが先にbump/pushしていた)。所有権の
@@ -759,8 +700,7 @@ export function App() {
         if (result.pulledNotes) {
           nasGenRef.current = result.generation;
           applyPulledNotes(result.pulledNotes);
-          const local = await loadLocalData();
-          await saveLocalData({ ...local, nasGeneration: result.generation });
+          await patchLocalData({ nasGeneration: result.generation });
         }
         // pull失敗時はnasGenRef.currentを進めない→次のtickのdecideActiveSyncが
         // 「NASの方が新しい」と自然に判定してpullを再試行する。
@@ -768,12 +708,9 @@ export function App() {
     }
   }
 
-  function updateNotes(
-    update: Note[] | ((prev: Note[]) => Note[]),
-    opts?: { programmatic?: boolean },
-  ) {
-    // programmatic(末尾空補充・pull等の非ユーザー更新)以外は「人間の操作」として世代所有権を得る。
-    if (!opts?.programmatic) markUserEdit();
+  function updateNotes(update: Note[] | ((prev: Note[]) => Note[])) {
+    // pull/初期化はrepository専用経路を通るため、ここへ来る更新は人間の操作として扱う。
+    markUserEdit();
     // 常にsetNotesの関数型updaterを経由する(引数が配列であっても内部で関数化する)。
     // 「タブ追加ボタンを連打すると作ったノートが消える」バグの原因は、複数の呼び出しが
     // それぞれ古いclosure内のnotes(propsとして渡された時点のスナップショット)から
@@ -792,13 +729,17 @@ export function App() {
         noteTombstonesRef.current,
         changedAt,
       );
-      // saveLocalDataはlocalData全体を1つのJSONとして上書きするため、他フィールド
-      // (todos/nextEventCache/alarmActive/nasGeneration)を巻き込まないよう現在値を明示的に含めて
-      // 保存する(含めずnotesだけ保存すると、ノートを1文字編集するたびにTODOリスト等が
-      // 消えてしまう)。
-      void saveLocalData(
-        buildLocalData({ notes: nextNotes, noteTombstones: noteTombstonesRef.current }),
-      );
+      // 永続化へ渡すのは全件スナップショットではなく、この操作のbefore/afterだけ。
+      // repositoryが排他ロック内で最新状態へ差分を適用する。
+      void commitNoteMutation(base, nextNotes, changedAt).then((committed) => {
+        const revision = committed.storageRevision ?? 0;
+        if (revision < storageRevisionRef.current) return;
+        storageRevisionRef.current = revision;
+        noteTombstonesRef.current = committed.noteTombstones ?? {};
+        // 自分の確定コミットではエディタ版数を進めない。本文はCM6が既に保持しており、
+        // repositoryが追加した末尾空ノート等の構造差分だけをReact stateへ取り込む。
+        setNotes(committed.notes);
+      });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
@@ -823,13 +764,13 @@ export function App() {
 
   function updateTodos(nextTodos: Todo[]) {
     setTodos(nextTodos);
-    void saveLocalData(buildLocalData({ todos: nextTodos }));
+    void patchLocalData({ todos: nextTodos });
   }
 
   // スペシャル(⭐)の凍結項目/フォルダを更新して永続化する(ユーザー指示)。
   function updateSpecialItems(next: SpecialItem[]) {
     setSpecialItems(next);
-    void saveLocalData(buildLocalData({ specialItems: next }));
+    void patchLocalData({ specialItems: next });
   }
   // ⭐トグル(ノートのspecialを反転)。
   function toggleSpecial(noteId: string) {
@@ -1052,13 +993,11 @@ export function App() {
     setSpecialItems(payload.specialItems);
     setSpecialFolders(payload.specialFolders);
     void saveSyncData(nextSync);
-    void saveLocalData(
-      buildLocalData({
-        todos: payload.todos,
-        specialItems: payload.specialItems,
-        specialFolders: payload.specialFolders,
-      }),
-    );
+    void patchLocalData({
+      todos: payload.todos,
+      specialItems: payload.specialItems,
+      specialFolders: payload.specialFolders,
+    });
     setDataPanelMessage("NASから復元しました(ノートは対象外——NASの世代同期が別途復元します)");
   }
 
@@ -1097,14 +1036,15 @@ export function App() {
     if (data.specialItems !== undefined) setSpecialItems(data.specialItems);
     if (data.specialFolders !== undefined) setSpecialFolders(data.specialFolders);
     void saveSyncData(data.sync);
-    void saveLocalData(
-      buildLocalData({
-        notes: data.notes,
-        todos: data.todos ?? todos,
-        specialItems: data.specialItems ?? specialItems,
-        specialFolders: data.specialFolders ?? specialFolders,
-      }),
-    );
+    const importedNotes = ensureTrailingEmptyNotes(data.notes, TRAILING_EMPTY_NOTES, clockNow());
+    void updateLocalData((current) => ({
+      ...current,
+      notes: importedNotes,
+      noteTombstones: {},
+      todos: data.todos ?? current.todos,
+      specialItems: data.specialItems ?? current.specialItems,
+      specialFolders: data.specialFolders ?? current.specialFolders,
+    }));
   }
 
   function openFileAsNote(

@@ -5,6 +5,8 @@ import { logOp } from "../runtime/log";
 const SYNC_KEY = "syncData";
 const LOCAL_KEY = "localData";
 const STORAGE_WRITER_ID = crypto.randomUUID();
+const LOCAL_DATA_LOCK = "new-tab-board:local-data";
+let fallbackWriteQueue: Promise<void> = Promise.resolve();
 
 /** 初回起動時のタグ候補の既定値(ユーザー指示: distから取ってきた時点で既に入っているように)。
  * GitHub全リポジトリ(zappyzed100)のREADMEだけを読んで、繰り返し登場する技術/ドメインから
@@ -113,8 +115,50 @@ export async function loadLocalData(): Promise<LocalShape> {
   return readArea<LocalShape>("local", LOCAL_KEY, { notes: [] });
 }
 
-export async function saveLocalData(data: LocalShape): Promise<void> {
-  await writeArea("local", LOCAL_KEY, { ...data, storageWriterId: STORAGE_WRITER_ID });
+async function withLocalDataLock<T>(operation: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (locks) return locks.request(LOCAL_DATA_LOCK, { mode: "exclusive" }, operation);
+
+  // jsdom/localStorageフォールバックではWeb Locksが無いため、同一JSコンテキスト内だけでも
+  // read-modify-writeを直列化する。実拡張ではnavigator.locksがタブとworkerを横断して直列化する。
+  const previous = fallbackWriteQueue;
+  let release: () => void = () => undefined;
+  fallbackWriteQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+  }
+}
+
+/**
+ * localDataの唯一のread-modify-write境界。
+ * 複数タブ/backgroundが古い全体スナップショットを後勝ち保存しないよう、読み取りから保存までを
+ * Web Locksで直列化する。updaterが同じ参照を返した場合は通知も保存も発生させない。
+ */
+export async function updateLocalData(
+  updater: (current: LocalShape) => LocalShape,
+): Promise<LocalShape> {
+  return withLocalDataLock(async () => {
+    const current = await loadLocalData();
+    const next = updater(current);
+    if (next === current) return current;
+    const committed = {
+      ...next,
+      storageWriterId: STORAGE_WRITER_ID,
+      storageRevision: (current.storageRevision ?? 0) + 1,
+    };
+    await writeArea("local", LOCAL_KEY, committed);
+    return committed;
+  });
+}
+
+/** 指定フィールドだけを最新のlocalDataへ原子的に反映する。 */
+export async function patchLocalData(patch: Partial<LocalShape>): Promise<LocalShape> {
+  return updateLocalData((current) => ({ ...current, ...patch }));
 }
 
 /** 同一PCの別タブがlocalDataを保存した通知を購読する。UI層がchrome.storageへ直接触れないためのseam。 */
@@ -124,7 +168,8 @@ export function subscribeLocalData(listener: (data: LocalShape) => void): () => 
       if (areaName !== "local") return;
       const next = changes[LOCAL_KEY]?.newValue as LocalShape | undefined;
       if (!next) return;
-      // chrome.storage.onChangedは書き込んだ当のタブにも届くため、writer IDで確実に除外する。
+      // 自分の楽観的UI更新を確定通知で巻き戻すと、入力中のCodeMirrorを再マウントして文字を
+      // 落とすため除外する。他コンテキストの確定revisionだけを購読側へ配布する。
       if (next.storageWriterId === STORAGE_WRITER_ID) return;
       listener(next);
     };

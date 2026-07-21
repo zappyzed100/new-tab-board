@@ -4,7 +4,8 @@ import { logOp } from "../lib/runtime/log";
 import { getAuthToken } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
-import { loadLocalData, saveLocalData } from "../lib/storage/storage";
+import { loadLocalData, patchLocalData } from "../lib/storage/storage";
+import { commitMergedNotes } from "../lib/storage/local-data-repository";
 import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
@@ -69,11 +70,7 @@ async function runDriveNoteSync(): Promise<void> {
       clockNow(),
     );
     if (!result) return;
-    await saveLocalData({
-      ...local,
-      notes: result.notes,
-      noteTombstones: result.tombstones,
-    });
+    await commitMergedNotes(result.notes, result.tombstones);
   } catch (err) {
     logOp("background", "drive-note-sync-error", "", { error: err });
   }
@@ -94,9 +91,7 @@ async function pollNextEvent(): Promise<void> {
   if (!token) return;
   try {
     const event = await fetchNextEvent(token);
-    const local = await loadLocalData();
-    await saveLocalData({
-      ...local,
+    await patchLocalData({
       nextEventCache: event
         ? { title: event.title, startsAt: event.startsAt, fetchedAt: clockNow() }
         : undefined,
@@ -156,7 +151,7 @@ async function runDailyMaintenance(): Promise<void> {
     logOp("background", "daily-sqlite-rebuild-error", "", { error: err });
   }
 
-  await saveLocalData({ ...local, lastDailyMaintenanceDay: today });
+  await patchLocalData({ lastDailyMaintenanceDay: today });
   logOp("background", "daily-maintenance", `day=${today}`);
 }
 
@@ -171,7 +166,7 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
   if (!event) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
     if (local.preEventAlarmFor !== undefined) {
-      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+      await patchLocalData({ preEventAlarmFor: undefined });
     }
     logOp("background", "pre-event-alarm-clear", "no next event");
     return;
@@ -183,13 +178,13 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
   if (when === null) {
     await chrome.alarms.clear(PRE_EVENT_ALARM_NAME);
     if (local.preEventAlarmFor !== undefined) {
-      await saveLocalData({ ...local, preEventAlarmFor: undefined });
+      await patchLocalData({ preEventAlarmFor: undefined });
     }
     logOp("background", "pre-event-alarm-clear", `startsAt=${event.startsAt} (既に開始済み)`);
     return;
   }
   chrome.alarms.create(PRE_EVENT_ALARM_NAME, { when });
-  await saveLocalData({ ...local, preEventAlarmFor: event.startsAt });
+  await patchLocalData({ preEventAlarmFor: event.startsAt });
   logOp("background", "pre-event-alarm-schedule", `when=${when}`);
 }
 
@@ -199,8 +194,7 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
 // 閉じる(片方の「停止」でもう片方の音まで止まらないようにする)。
 
 async function fireAlarm(): Promise<void> {
-  const local = await loadLocalData();
-  await saveLocalData({ ...local, alarmActive: true });
+  await patchLocalData({ alarmActive: true });
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
@@ -225,7 +219,7 @@ async function stopAlarm(): Promise<void> {
     await chrome.offscreen.closeDocument();
   }
   chrome.notifications.clear(NOTIFICATION_ID);
-  await saveLocalData({ ...local, alarmActive: false });
+  await patchLocalData({ alarmActive: false });
   logOp("background", "stop-alarm", "pre-event alarm stopped");
 }
 
@@ -243,8 +237,7 @@ async function pollBatteryStatus(): Promise<void> {
 }
 
 async function fireBatteryAlarm(level: number): Promise<void> {
-  const local = await loadLocalData();
-  await saveLocalData({ ...local, batteryAlarmActive: true });
+  await patchLocalData({ batteryAlarmActive: true });
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
       url: "offscreen.html",
@@ -269,6 +262,6 @@ async function stopBatteryAlarm(): Promise<void> {
     await chrome.offscreen.closeDocument();
   }
   chrome.notifications.clear(BATTERY_NOTIFICATION_ID);
-  await saveLocalData({ ...local, batteryAlarmActive: false });
+  await patchLocalData({ batteryAlarmActive: false });
   logOp("background", "stop-battery-alarm", "battery alarm stopped");
 }

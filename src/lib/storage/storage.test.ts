@@ -4,9 +4,9 @@ import {
   DEFAULT_SETTINGS,
   loadLocalData,
   loadSyncData,
-  saveLocalData,
   saveSyncData,
   subscribeLocalData,
+  updateLocalData,
 } from "./storage";
 
 function stubChromeStorage() {
@@ -138,7 +138,7 @@ describe("chrome.storage が無い場合(localStorageフォールバック)", ()
       },
     });
 
-    await saveLocalData({ notes: [] });
+    await updateLocalData(() => ({ notes: [] }));
     expect(await loadLocalData()).toEqual(expect.objectContaining({ notes: [] }));
   });
 

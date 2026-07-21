@@ -259,6 +259,8 @@
 - `src/lib/shortcuts/useGlobalShortcuts.ts` — useGlobalShortcuts.ts — shortcuts.tsのレジストリをwindowのkeydownへ配線するReact hook(SPEC.md §4.6)
 - `src/lib/storage/db.test.ts` — db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 - `src/lib/storage/db.ts` — db.ts — IndexedDBの唯一の入出口(履歴スナップショット・全文検索インデックス・NAS設定。GUARDRAILS.md §8.2)
+- `src/lib/storage/local-data-repository.test.ts` — local-data-repository.test.ts — 排他コミットとノート差分保存の構造的不変条件を検証する
+- `src/lib/storage/local-data-repository.ts` — local-data-repository.ts — localDataへのノート差分コミットと初期化を一元化するrepository
 - `src/lib/storage/note-sync.test.ts` — note-sync.test.ts — ノート和集合マージと削除tombstoneの回帰テスト
 - `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
@@ -1010,6 +1012,11 @@
 - function getAllPastedImages
 - function deletePastedImage
 
+### `src/lib/storage/local-data-repository.ts`
+- function initializeLocalData
+- function commitNoteMutation
+- function commitMergedNotes
+
 ### `src/lib/storage/note-sync.ts`
 - type NoteTombstones
 - type NoteMergeResult
@@ -1023,7 +1030,8 @@
 - function loadSyncData
 - function saveSyncData
 - function loadLocalData
-- function saveLocalData
+- function updateLocalData
+- function patchLocalData
 - function subscribeLocalData
 
 ### `src/newtab/App.tsx`
