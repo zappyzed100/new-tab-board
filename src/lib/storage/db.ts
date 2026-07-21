@@ -11,6 +11,10 @@ const GEMINI_API_KEY_KEY = "geminiApiKey";
 // スマホのバッテリー低下警告(GAS Web App中継)の接続設定。トークンは秘匿情報のため
 // GEMINI_API_KEY_KEYと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
 const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
+// この端末でアラーム音を鳴らすか(ユーザー指示: 複数PCで同じアラームが同時に鳴るのを避けたい)。
+// **端末ローカル設定**なので settings backup/復元で他PCへ伝播しない db.ts に置く(Settings=syncData
+// に置くと settingsBackup 経由で他PCへ復元され得るため不可)。未設定(undefined)は既定=鳴らす。
+const ALARM_ENABLED_KEY = "alarmEnabled";
 // Google Driveのフォルダパス(例: "app/New Tab Board/active")→フォルダIDの永続キャッシュ
 // (ユーザー設計: 保存済みIDがあれば名前検索すらせずそれを使い、以後は名前でなくIDで
 // アクセスする。セッションを跨いだ再訪問のたびに名前+親で検索し直すと、複数ペインが
@@ -158,6 +162,20 @@ export async function setBatteryWebhookConfig(config: BatteryWebhookConfig): Pro
   await db.put("settings", config, BATTERY_WEBHOOK_CONFIG_KEY);
   // NO-LOG: 共有トークンそのものはログに出さない(§7 秘匿。geminiApiKeyと同じ扱い)。
   logOp("db", "put", "settings/batteryWebhookConfig");
+}
+
+/** この端末でアラーム音を鳴らすか。未設定は既定=true(鳴らす。現状挙動を維持)。
+ * background.ts が fireAlarm / pollBatteryStatus の入口で参照する。 */
+export async function getAlarmEnabled(): Promise<boolean> {
+  const db = await getDb();
+  const v = (await db.get("settings", ALARM_ENABLED_KEY)) as boolean | undefined;
+  return v ?? true;
+}
+
+export async function setAlarmEnabled(enabled: boolean): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", enabled, ALARM_ENABLED_KEY);
+  logOp("db", "put", `settings/alarmEnabled=${enabled}`);
 }
 
 /** Google Driveのフォルダパス→フォルダIDの永続キャッシュ全体を返す(未設定なら空オブジェクト)。 */

@@ -6,7 +6,7 @@ import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
 import { loadLocalData, patchLocalData } from "../lib/storage/storage";
 import { commitMergedNotes } from "../lib/storage/local-data-repository";
-import { getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
+import { getAlarmEnabled, getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
 import { fetchBatteryStatus } from "../lib/externalIO/batteryStatus";
 import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
@@ -194,6 +194,12 @@ async function scheduleOrClearPreEventAlarm(event: { startsAt: number } | null):
 // 閉じる(片方の「停止」でもう片方の音まで止まらないようにする)。
 
 async function fireAlarm(): Promise<void> {
+  // この端末でアラームが無効なら、音も通知も出さない(ユーザー指示: 複数PCで同時に鳴るのを避ける。
+  // 完全抑止=停止ボタン用の alarmActive も立てない)。Calendar読み取りは冪等なので発火だけ止める。
+  if (!(await getAlarmEnabled())) {
+    logOp("background", "fire-alarm-skip", "alarm disabled on this device");
+    return;
+  }
   await patchLocalData({ alarmActive: true });
   if (!(await chrome.offscreen.hasDocument())) {
     await chrome.offscreen.createDocument({
@@ -229,6 +235,10 @@ async function stopAlarm(): Promise<void> {
  * chrome側で発火済み閾値を覚える必要がない——ユーザー指摘で2026-07-18に変更)。
  * 未設定/未接続/既に消費済みは静かにスキップする。 */
 async function pollBatteryStatus(): Promise<void> {
+  // この端末でアラームが無効なら、GASを読みにいかない(fetchBatteryStatusはconsume-on-read=
+  // 読んだ時点でGAS側が削除するため、無効な端末が先に読むと有効な端末が警告を取り逃す。
+  // fireBatteryAlarm側でなく、消費する前のここで止めるのが要点)。
+  if (!(await getAlarmEnabled())) return;
   const config = await getBatteryWebhookConfig();
   if (!config) return;
   const status = await fetchBatteryStatus(config.url, config.token);

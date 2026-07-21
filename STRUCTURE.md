@@ -86,6 +86,7 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/data-panel-alarm.spec.ts` — data-panel-alarm.spec.ts — この端末でアラーム(予定前・バッテリー)を鳴らすかのトグルUIの回帰
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
@@ -1002,6 +1003,8 @@
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig
+- function getAlarmEnabled
+- function setAlarmEnabled
 - function getDriveFolderIds
 - function saveDriveFolderId
 - function clearDriveFolderIds
