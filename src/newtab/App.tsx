@@ -95,6 +95,7 @@ import { replaceInNotes } from "../lib/search/noteSearch";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
+import { logOp } from "../lib/runtime/log";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import {
   flushAllToNas,
@@ -243,6 +244,11 @@ export function App() {
   const driveTodosSigRef = useRef<string>("");
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
+    logOp(
+      "notes",
+      "select",
+      `note=${noteId.slice(0, 8)} prevActive=${activeNoteIdRef.current?.slice(0, 8)}`,
+    );
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
   }
@@ -257,6 +263,12 @@ export function App() {
     let cancelled = false;
     Promise.all([loadSyncData(), initializeLocalData(clockNow())]).then(([syncData, localData]) => {
       if (cancelled) return;
+      logOp(
+        "notes",
+        "boot",
+        `notes=${localData.notes.length} rev=${localData.storageRevision ?? 0} ` +
+          `active[0]=${localData.notes[0]?.id?.slice(0, 8) ?? "none"}`,
+      );
       setSync(syncData);
       setNotes(localData.notes);
       setTodos(localData.todos ?? []);
@@ -282,13 +294,22 @@ export function App() {
     return subscribeLocalData((incoming) => {
       if (!notesRef.current) return;
       const revision = incoming.storageRevision ?? 0;
-      if (revision < storageRevisionRef.current) return;
+      if (revision < storageRevisionRef.current) {
+        logOp(
+          "notes-sub",
+          "skip-stale-revision",
+          `incoming=${revision} have=${storageRevisionRef.current}`,
+        );
+        return;
+      }
       storageRevisionRef.current = revision;
       const currentNotes = notesRef.current;
+      const protectedId = protectedNoteId();
       // 別タブの確定revisionでも、こちらで編集中のノートは動かさない/消さない/上書きしない。
-      const next = preserveProtectedNote(incoming.notes ?? [], currentNotes, protectedNoteId());
+      const next = preserveProtectedNote(incoming.notes ?? [], currentNotes, protectedId);
       noteTombstonesRef.current = incoming.noteTombstones ?? {};
-      if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
+      const notesChanged = JSON.stringify(next) !== JSON.stringify(currentNotes);
+      if (notesChanged) {
         setNotes(next);
         // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
         // 無関係な空ノートIDの収束通知でも入力中エディタを破棄するため、本文差分のあるIDだけ進める。
@@ -298,6 +319,17 @@ export function App() {
             (note) => currentContent.has(note.id) && currentContent.get(note.id) !== note.content,
           )
           .map((note) => note.id);
+        // 入力中(protected)ノートが本文差分に入ると、その key が進んでエディタが再マウントされ
+        // カーソルが飛ぶ実害の直接原因。ここを最優先で観測できるよう警告的に出す。
+        const remountsActive = protectedId !== null && changedContentIds.includes(protectedId);
+        logOp(
+          "notes-sub",
+          "apply",
+          `rev=${revision} cur=${currentNotes.length} next=${next.length} ` +
+            `protected=${protectedId?.slice(0, 8) ?? "none"} ` +
+            `remountIds=${changedContentIds.length}[${changedContentIds.map((id) => id.slice(0, 8)).join(",")}] ` +
+            `REMOUNTS_ACTIVE=${remountsActive}`,
+        );
         if (changedContentIds.length > 0) {
           setSyncedContentVersions((versions) => {
             const updated = { ...versions };
@@ -308,6 +340,8 @@ export function App() {
         setActiveNoteId((cur) =>
           cur && next.some((note) => note.id === cur) ? cur : (next[0]?.id ?? null),
         );
+      } else {
+        logOp("notes-sub", "apply-noop", `rev=${revision} notes=${next.length} (no note change)`);
       }
       setTodos(incoming.todos ?? []);
       setNextEventCache(incoming.nextEventCache);
@@ -331,6 +365,11 @@ export function App() {
   function applyPulledNotes(pulled: Note[]) {
     // NAS側も不在だけでは削除と判断せず、ローカルとの和集合にする。削除は共通tombstoneだけ。
     const merged = mergeNoteCollections(notesRef.current ?? [], pulled, noteTombstonesRef.current);
+    logOp(
+      "notes-pull",
+      "apply-pulled",
+      `local=${(notesRef.current ?? []).length} pulled=${pulled.length} merged=${merged.notes.length}`,
+    );
     applySafelySyncedNotes(merged.notes, merged.tombstones);
   }
 
@@ -338,6 +377,12 @@ export function App() {
     // 起動直後に選んで編集中のノートは、同期結果に動かされ/消され/上書きされないよう最優先で守る。
     const guarded = preserveProtectedNote(notesFromSync, notesRef.current ?? [], protectedNoteId());
     const next = ensureTrailingEmptyNotes(guarded, TRAILING_EMPTY_NOTES, clockNow());
+    logOp(
+      "notes-pull",
+      "apply-synced",
+      `fromSync=${notesFromSync.length} guarded=${guarded.length} ` +
+        `final=${next.length} protected=${protectedNoteId()?.slice(0, 8) ?? "none"}`,
+    );
     noteTombstonesRef.current = tombstones;
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
@@ -757,6 +802,17 @@ export function App() {
       const rawNextNotes = typeof update === "function" ? update(base) : update;
       const changedAt = clockNow();
       const nextNotes = stampChangedNotes(base, rawNextNotes, changedAt);
+      // 変更されたノートidを出す(入力=1件のことが多い。多数出るなら別要因を疑う)。
+      const rawById = new Map(base.map((n) => [n.id, n]));
+      const touched = nextNotes
+        .filter((n) => JSON.stringify(rawById.get(n.id)) !== JSON.stringify(n))
+        .map((n) => n.id.slice(0, 8));
+      logOp(
+        "notes",
+        "update",
+        `base=${base.length} next=${nextNotes.length} ` +
+          `touched=${touched.length}[${touched.join(",")}] active=${activeNoteId?.slice(0, 8) ?? "none"}`,
+      );
       noteTombstonesRef.current = updateTombstonesForMutation(
         base,
         nextNotes,
@@ -767,14 +823,32 @@ export function App() {
       // repositoryが排他ロック内で最新状態へ差分を適用する。
       void commitNoteMutation(base, nextNotes, changedAt).then((committed) => {
         const revision = committed.storageRevision ?? 0;
-        if (revision < storageRevisionRef.current) return;
+        if (revision < storageRevisionRef.current) {
+          logOp(
+            "notes",
+            "commit-stale",
+            `rev=${revision} have=${storageRevisionRef.current} (dropped)`,
+          );
+          return;
+        }
         storageRevisionRef.current = revision;
         noteTombstonesRef.current = committed.noteTombstones ?? {};
         // 自分の確定コミットではエディタ版数を進めない。本文はCM6が既に保持しており、
         // repositoryが追加した末尾空ノート等の構造差分だけをReact stateへ取り込む。
+        logOp(
+          "notes",
+          "commit-applied",
+          `rev=${revision} committed=${committed.notes.length} (was next=${nextNotes.length}, ` +
+            `delta=${committed.notes.length - nextNotes.length})`,
+        );
         setNotes(committed.notes);
       });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
+        logOp(
+          "notes",
+          "active-lost",
+          `active=${activeNoteId.slice(0, 8)} not in next → reset to [0]`,
+        );
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
       return nextNotes;

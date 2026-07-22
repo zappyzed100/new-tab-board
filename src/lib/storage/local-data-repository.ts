@@ -7,9 +7,25 @@ import {
   updateTombstonesForMutation,
 } from "./note-sync";
 import { updateLocalData } from "./storage";
+import { logOp } from "../runtime/log";
 
 function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** 末尾から連続する空ノート(content が空白のみ)の数。ログで「なぜ補充されたか/されないか」を
+ * 追うための観測用(entities/notes.ts の ensureTrailingEmptyNotes の内部判定と同じ規則)。 */
+function trailingEmptyCount(notes: Note[]): number {
+  const sorted = [...notes].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    return a.order - b.order;
+  });
+  let count = 0;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (sorted[i].content.trim() === "") count += 1;
+    else break;
+  }
+  return count;
 }
 
 function changedNotes(previous: Note[], next: Note[]): Note[] {
@@ -28,10 +44,18 @@ function noteTimestamp(note: Note): number {
 /** 起動時の正規化と末尾空ノート補充を、全タブ共通の排他コミット内で一度だけ行う。 */
 export async function initializeLocalData(now: number): Promise<LocalData> {
   return updateLocalData((current) => {
-    const normalized = mergeNoteCollections(current.notes ?? [], [], current.noteTombstones ?? {});
+    const before = current.notes ?? [];
+    const normalized = mergeNoteCollections(before, [], current.noteTombstones ?? {});
     const notes = withTrailingNotes(normalized.notes, now);
+    logOp(
+      "note-repo",
+      "initialize",
+      `stored=${before.length} normalized=${normalized.notes.length} ` +
+        `final=${notes.length} trailingEmpty=${trailingEmptyCount(notes)} ` +
+        `trailingAdded=${notes.length - normalized.notes.length}`,
+    );
     if (
-      sameValue(notes, current.notes ?? []) &&
+      sameValue(notes, before) &&
       sameValue(normalized.tombstones, current.noteTombstones ?? {})
     ) {
       return current;
@@ -51,6 +75,13 @@ export async function commitNoteMutation(
 ): Promise<LocalData> {
   const upserts = changedNotes(previous, next);
   const mutationTombstones = updateTombstonesForMutation(previous, next, {}, changedAt);
+  logOp(
+    "note-repo",
+    "commit-mutation:in",
+    `prev=${previous.length} next=${next.length} ` +
+      `upserts=${upserts.length}[${upserts.map((n) => n.id.slice(0, 8)).join(",")}] ` +
+      `deletes=${Object.keys(mutationTombstones).length} changedAt=${changedAt}`,
+  );
   return updateLocalData((current) => {
     // ローカル操作はWeb Lock取得順が正規の全順序。同一msの連続キー入力を外部同期用の
     // 「同時刻競合」に渡すと競合コピーになるため、同時刻は後からlockを得た操作を採る。
@@ -68,9 +99,18 @@ export async function commitNoteMutation(
       if (!stored || timestamp >= noteTimestamp(stored)) notesById.set(note.id, note);
       delete tombstones[note.id];
     }
+    const mergedNotes = [...notesById.values()];
+    const finalNotes = withTrailingNotes(mergedNotes, changedAt);
+    logOp(
+      "note-repo",
+      "commit-mutation:out",
+      `storedNow=${(current.notes ?? []).length} afterMerge=${mergedNotes.length} ` +
+        `final=${finalNotes.length} trailingEmpty=${trailingEmptyCount(finalNotes)} ` +
+        `trailingAdded=${finalNotes.length - mergedNotes.length}`,
+    );
     return {
       ...current,
-      notes: withTrailingNotes([...notesById.values()], changedAt),
+      notes: finalNotes,
       noteTombstones: tombstones,
     };
   });
@@ -87,6 +127,12 @@ export async function commitMergedNotes(
       incoming,
       current.noteTombstones ?? {},
       tombstones,
+    );
+    logOp(
+      "note-repo",
+      "commit-merged",
+      `storedNow=${(current.notes ?? []).length} incoming=${incoming.length} ` +
+        `merged=${merged.notes.length} trailingEmpty=${trailingEmptyCount(merged.notes)}`,
     );
     return {
       ...current,
