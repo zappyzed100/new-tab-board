@@ -134,10 +134,26 @@ export function moveNoteDown(notes: Note[], id: string): Note[] {
   return reorderNotes(notes, i, i + 1);
 }
 
-/** 順序列(sortedNotes基準)の末尾にある空ノートが `desired` 件に満たなければ、
- * `nextNoteLetterTitle` で命名した空ノートを補充して返す純関数(冪等: 既に足りていれば
- * 元の配列をそのまま返す)。MAX_NOTES 上限に達したら打ち止める。
- * 「常に末尾に空のノートが N 個ある」(ユーザー指示: 付箋を貼るための余白)を保つ土台。 */
+/** 自動採番の空プレースホルダ(「ノートX」・本文が空白のみ・ピン/チェック/スター/ゴミ/タグ
+ * いずれも無し)か。末尾の空バッファ管理で「補充・間引きしてよいブランク」の判定に使う。
+ * ユーザーが手で付けた空ノートや、タグ/ピン等の付いた空ノートは対象外(消さない)。
+ * note-sync.ts の同期側 dedup もこの述語を共有する(意味の出所を一箇所にして揃える)。 */
+export function isGeneratedEmptyPlaceholder(note: Note): boolean {
+  return (
+    isDefaultNoteTitle(note.title) &&
+    note.content.trim() === "" &&
+    !note.pinned &&
+    !note.done &&
+    !note.special &&
+    !note.junk &&
+    (note.tags?.length ?? 0) === 0
+  );
+}
+
+/** 「常に空のノートが N 個・表示順の末尾に並ぶ」を保つ純関数(ユーザー指示: 付箋用の余白は常に3つ)。
+ * 不足なら `nextNoteLetterTitle` で命名して末尾へ補充し、余った自動空プレースホルダ(末尾に無い=
+ * 取り残されたもの)は order の低い方から間引いて常に N 個だけにする。冪等: 既に N 個が末尾に
+ * 揃っていれば元の配列をそのまま返す。MAX_NOTES 上限では補充を打ち止める。 */
 export function ensureTrailingEmptyNotes(
   notes: Note[],
   desired: number,
@@ -165,8 +181,18 @@ export function ensureTrailingEmptyNotes(
     titles.push(title);
     nextOrder += 1;
   }
-  // 補充が無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
-  return additions.length === 0 ? notes : [...notes, ...additions];
+  const combined = additions.length === 0 ? notes : [...notes, ...additions];
+  // 自動空プレースホルダが desired を超えたら、order の低い(=末尾に無い・取り残された)ものから
+  // 間引いて常に desired 個だけにする。末尾以外の空ノートに入力する等で空が末尾以外へ取り残される
+  // と、以前は末尾へ補充だけして総数が増えていた(ユーザー指摘: 常に空は3つのはず。真ん中の空へ
+  // 入力すると4つに増えた)。手付けの空ノート/フラグ付き空ノートは述語に該当せず間引かれない。
+  const placeholders = sortedNotes(combined.filter(isGeneratedEmptyPlaceholder));
+  if (placeholders.length <= desired) {
+    // 補充も間引きも無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
+    return combined;
+  }
+  const surplusIds = new Set(placeholders.slice(0, placeholders.length - desired).map((n) => n.id));
+  return combined.filter((n) => !surplusIds.has(n.id));
 }
 
 /** 検索結果(title/content)をノート末尾へ貼り付ける(ユーザー指示)。末尾側の白紙ノートを

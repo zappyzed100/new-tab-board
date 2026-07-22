@@ -756,6 +756,7 @@
 - function reorderNotesById
 - function moveNoteUp
 - function moveNoteDown
+- function isGeneratedEmptyPlaceholder
 - function ensureTrailingEmptyNotes
 - function pasteResultsIntoNotes
 

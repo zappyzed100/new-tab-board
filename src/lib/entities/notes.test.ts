@@ -277,11 +277,37 @@ describe("ensureTrailingEmptyNotes", () => {
     expect(after.filter((n) => n.content === "")).toHaveLength(3);
   });
 
-  it("空欄の並びが末尾になければ(間にあるだけなら)末尾側に補充する", () => {
-    // 空(A) → 本文(X) の順。末尾は本文なので trailingEmpty=0 で3件補充される。
+  it("空欄が間にあるだけなら末尾へ補充し、取り残しは間引いて常に空3つにする", () => {
+    // 空(ノートA) → 本文(X) の順。末尾は本文なので3件を末尾へ補充し、取り残しのノートAは
+    // 間引く(常に空プレースホルダは3つ・末尾に並ぶ。X + 空3つ = 計4件)。
     const notes = [createNote("ノートA", 0), { ...createNote("X", 1), content: "本文" }];
     const after = ensureTrailingEmptyNotes(notes, 3);
-    expect(after).toHaveLength(5);
+    expect(after).toHaveLength(4);
+    expect(after.filter((n) => n.content.trim() === "")).toHaveLength(3);
+    expect(
+      sortedNotes(after)
+        .slice(-3)
+        .every((n) => n.content.trim() === ""),
+    ).toBe(true);
+  });
+
+  it("末尾以外に取り残された空プレースホルダは間引いて常に空を3つに保つ(ユーザー指摘: 常に3つ)", () => {
+    // メモ + 空A,B,C。真ん中のノートBへ入力した状態(=Bだけ非空)で維持を走らせると、
+    // 以前は取り残しA + 末尾補充で空が4つに増えていた。空プレースホルダは常に3つに保つ。
+    const notes = [
+      { ...createNote("メモ", 0), content: "本文" },
+      createNote("ノートA", 1),
+      { ...createNote("ノートB", 2), content: "入力した" },
+      createNote("ノートC", 3),
+    ];
+    const after = ensureTrailingEmptyNotes(notes, 3, 1000);
+    expect(after.filter((n) => n.content.trim() === "")).toHaveLength(3);
+    // 3つの空は表示順の末尾に並ぶ。
+    expect(
+      sortedNotes(after)
+        .slice(-3)
+        .every((n) => n.content.trim() === ""),
+    ).toBe(true);
   });
 
   it("非空ノートが件数以上の高orderを持っても、末尾に空を実際に確保する(空ノート量産バグの回帰)", () => {
