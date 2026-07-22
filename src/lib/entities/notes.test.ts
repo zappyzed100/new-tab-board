@@ -284,6 +284,20 @@ describe("ensureTrailingEmptyNotes", () => {
     expect(after).toHaveLength(5);
   });
 
+  it("非空ノートが件数以上の高orderを持っても、末尾に空を実際に確保する(空ノート量産バグの回帰)", () => {
+    // 削除で order に穴が空く/並べ替えで末尾へ置く等で、非空ノートが「件数以上の order」を
+    // 持つことがある(commitNoteMutation は削除時に order を振り直さない)。このとき新規空ノートへ
+    // `order=件数` を振ると、その非空ノートより前に並んで「末尾の空」に数えられず、毎回補充が
+    // 走って空ノートが量産される(ユーザー報告: 文字を打つたびに空ノートが増える)。
+    const notes = [{ ...createNote("重要", 5), content: "パスワード" }];
+    const after = ensureTrailingEmptyNotes(notes, 3, 1000);
+    const sorted = sortedNotes(after);
+    // 事後条件: 表示順の末尾3件は必ず空でなければならない。
+    expect(sorted.slice(-3).every((n) => n.content.trim() === "")).toBe(true);
+    // 冪等: もう一度かけても増えない(=末尾の空が既に3つある)。
+    expect(ensureTrailingEmptyNotes(after, 3, 1000)).toBe(after);
+  });
+
   it("MAX_NOTES 上限では補充を打ち止める", () => {
     const used: string[] = [];
     while (used.length < MAX_NOTES) {

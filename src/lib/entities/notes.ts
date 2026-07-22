@@ -152,7 +152,11 @@ export function ensureTrailingEmptyNotes(
   }
   const additions: Note[] = [];
   const titles = notes.map((n) => n.title);
-  let nextOrder = sorted.length; // reorder は sortedNotes 経由なので order は連番でなくてよい
+  // 新しい空ノートは既存の最大 order より必ず大きい order を振る。`sorted.length` を使うと、
+  // 削除で order に穴が空く/並べ替えで非空ノートを末尾へ置く等で「件数以上の order を持つ
+  // 非空ノート」があるとき、追加した空ノートがその前に並んで「末尾の空」に数えられず、
+  // 毎コミットで空ノートを量産してしまう(ユーザー報告の空ノート20個・カーソルずれの原因)。
+  let nextOrder = sorted.reduce((max, n) => Math.max(max, n.order), -1) + 1;
   for (let count = trailingEmpty; count < desired; count++) {
     const title = nextNoteLetterTitle(titles);
     if (title === null) break; // MAX_NOTES 上限
