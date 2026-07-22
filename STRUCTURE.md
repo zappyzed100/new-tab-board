@@ -748,6 +748,7 @@
 - function updateNote
 - function mergeDroppedContent
 - function removeNote
+- function nextNoteOrder
 - function sortedNotes
 - function reorderNotes
 - function reorderNotesById

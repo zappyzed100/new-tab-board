@@ -1,5 +1,6 @@
 // note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 import type { Note } from "../../types";
+import { sortedNotes } from "../entities/notes";
 
 export type NoteTombstones = Record<string, number>;
 
@@ -192,7 +193,18 @@ export function preserveProtectedNote(
     }
     return true;
   });
-  return [...kept, localNote].sort((a, b) => a.order - b.order);
+  // 表示(sortedNotes)は安定ソートで、同(pinned, order)のタイは配列順で決まる。以前の
+  // 「末尾へ追加して order で再ソート」は、同orderのノート(例: 補充された空ノート)が
+  // いると保護対象がタイに負けて1つ右の表示位置へ飛んだ(=一文字目が右のノートに飛んで
+  // 見えた実バグの後半)。localでの表示位置(rank)をタイの決着に使い、localに無い新参
+  // ノートは保護対象より後ろへ置く——「動かさない」を同orderタイでも守る。
+  const localRank = new Map(sortedNotes(local).map((note, index) => [note.id, index]));
+  const rankOf = (note: Note) => localRank.get(note.id) ?? Number.MAX_SAFE_INTEGER;
+  return [...kept, localNote].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    if (a.order !== b.order) return a.order - b.order;
+    return rankOf(a) - rankOf(b);
+  });
 }
 
 /** 編集後の配列との差分から削除tombstoneを作る。再作成/編集されたIDの古いtombstoneは外す。 */

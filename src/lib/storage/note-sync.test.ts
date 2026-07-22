@@ -163,6 +163,24 @@ describe("preserveProtectedNote(編集中ノートを同期から守る)", () =>
     },
   );
 
+  it("同orderのノートが割り込んでも、編集中ノートは表示位置を明け渡さない(タイに負けない)", () => {
+    // 2026-07-22: 削除で疎になったorderのせいで補充空ノートが編集中ノートと同orderで生まれ、
+    // 別コンテキストの確定通知を再適用した瞬間、旧実装(末尾へ追加してorderで再ソート)では
+    // 安定ソートのタイに負けて編集中ノートが1つ右へ飛んだ(=一文字目が右のノートに飛んで見えた)。
+    const local = [
+      { ...note("a", "本文A", 10), order: 0 },
+      { ...note("edit", "あ", 20), order: 4 },
+      { ...note("f", "", 10), title: "ノートF", order: 5 },
+    ];
+    // 確定コミット(storage配列)では補充分(同order=4)が配列末尾に付いている。
+    const next = [...local, placeholder("filled", "ノートB", 4)];
+    const result = preserveProtectedNote(next, local, "edit");
+    const ids = result.map((n) => n.id);
+    expect(ids.indexOf("edit")).toBeLessThan(ids.indexOf("filled"));
+    // 表示順(安定ソート)でも編集中ノートが元の位置(1)を保つ。
+    expect(ids).toEqual(["a", "edit", "filled", "f"]);
+  });
+
   it("編集中ノート以外の並び順・集合はそのまま(order昇順で返す)", () => {
     const local = [{ ...note("edit", "編集中", 10), order: 5 }];
     const next = [

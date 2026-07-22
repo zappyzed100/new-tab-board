@@ -57,6 +57,7 @@ import {
   createNote,
   ensureTrailingEmptyNotes,
   isDefaultNoteTitle,
+  nextNoteOrder,
   pasteResultsIntoNotes,
   moveNoteDown,
   moveNoteUp,
@@ -1066,7 +1067,8 @@ export function App() {
     content: string,
     meta?: { sourceNoteId?: string; generatedBy?: string },
   ) {
-    const note = createNote(title, sortedNotes(notes ?? []).length, clockNow());
+    // 件数を order に使うと削除で疎になった既存 order と衝突して途中へ割り込む(notes.ts参照)。
+    const note = createNote(title, nextNoteOrder(notes ?? []), clockNow());
     const full = { ...note, content, ...meta };
     // 要約(sourceNoteId付き)は元ノートの直後へ挿入する=列固定masonryで「一つ右(右端なら
     // 一段下の一番左)」に現れる(ユーザー指示)。それ以外(ファイル取り込み等)は末尾へ。

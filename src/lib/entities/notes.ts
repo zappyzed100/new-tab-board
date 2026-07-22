@@ -77,6 +77,15 @@ export function removeNote(notes: Note[], id: string): Note[] {
   return notes.filter((n) => n.id !== id);
 }
 
+/** 新規ノートを表示末尾へ置くための order(=既存の最大 order + 1)。
+ * 削除(removeNote)は order を振り直さないため、件数(length)を order に使うと
+ * 「件数 < 既存の最大 order」の盤面で既存ノートと衝突し、末尾に置いたつもりの
+ * 新規ノートが盤面の途中へ割り込む(2026-07-22: 空ノートへの一文字目で補充ノートが
+ * 編集位置に割り込み、入力中のノートが右へ飛んで見えた実バグの根因)。 */
+export function nextNoteOrder(notes: Note[]): number {
+  return notes.reduce((max, n) => Math.max(max, n.order), -1) + 1;
+}
+
 /** ピン留めを先頭に、それぞれorder昇順で並べたコピーを返す。 */
 export function sortedNotes(notes: Note[]): Note[] {
   return [...notes].sort((a, b) => {
@@ -140,7 +149,7 @@ export function ensureTrailingEmptyNotes(
   }
   const additions: Note[] = [];
   const titles = notes.map((n) => n.title);
-  let nextOrder = sorted.length; // reorder は sortedNotes 経由なので order は連番でなくてよい
+  let nextOrder = nextNoteOrder(notes); // length だと削除で疎になった order と衝突する(上記ヘッダー参照)
   for (let count = trailingEmpty; count < desired; count++) {
     const title = nextNoteLetterTitle(titles);
     if (title === null) break; // MAX_NOTES 上限
@@ -171,7 +180,7 @@ export function pasteResultsIntoNotes(
     else break;
   }
   let result = [...notes];
-  let nextOrder = sorted.length;
+  let nextOrder = nextNoteOrder(notes);
   results.forEach((r, i) => {
     if (i < trailingBlankIds.length) {
       // 白紙ノートを上書き(id/order/pinnedは保つ)。
