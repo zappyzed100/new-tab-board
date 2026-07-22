@@ -35,6 +35,8 @@ export function freezeNoteToSpecial(note: Note, now: number): SpecialItem | null
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     frozenAt: now,
+    // 「この端末のみ」ノートを⭐削除しても、凍結内容が special ミラー/設定バックアップへ出ないよう引き継ぐ。
+    ...(note.noSync ? { noSync: true } : {}),
   };
 }
 

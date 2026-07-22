@@ -90,6 +90,7 @@
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
+- `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
 - `e2e/specs/pasted-images.spec.ts` — pasted-images.spec.ts — Ctrl+Vで貼り付けた画像の一次保存/一覧/削除のE2E(2026-07-13)
@@ -738,6 +739,8 @@
 - function reorderBookmarks
 
 ### `src/lib/entities/notes.ts`
+- function isNoSyncNote
+- function excludeNoSyncNotes
 - const MAX_NOTES
 - const TRAILING_EMPTY_NOTES
 - function nextNoteLetterTitle

@@ -4,6 +4,8 @@ import {
   addNote,
   addNoteAfter,
   createNote,
+  excludeNoSyncNotes,
+  isNoSyncNote,
   mergeDroppedContent,
   pasteResultsIntoNotes,
   ensureTrailingEmptyNotes,
@@ -292,5 +294,22 @@ describe("ensureTrailingEmptyNotes", () => {
     // 全501件を「本文あり」で埋める(末尾に空が無い状態)。
     const full = used.map((title, i) => ({ ...createNote(title, i), content: "本文" }));
     expect(ensureTrailingEmptyNotes(full, 3)).toHaveLength(MAX_NOTES);
+  });
+});
+
+describe("isNoSyncNote / excludeNoSyncNotes(この端末のみ・同期しないノートの除外)", () => {
+  it("isNoSyncNoteはnoSync===trueだけをtrueにする(undefined/falseはfalse)", () => {
+    expect(isNoSyncNote({ noSync: true })).toBe(true);
+    expect(isNoSyncNote({ noSync: false })).toBe(false);
+    expect(isNoSyncNote({})).toBe(false);
+  });
+
+  it("excludeNoSyncNotesはnoSyncノートを取り除いた配列を返す(egressの共通チョークポイント)", () => {
+    const notes = [
+      { ...createNote("A", 0), content: "普通" },
+      { ...createNote("B", 1), content: "秘密", noSync: true },
+      { ...createNote("C", 2), content: "普通2" },
+    ];
+    expect(excludeNoSyncNotes(notes).map((n) => n.title)).toEqual(["A", "C"]);
   });
 });

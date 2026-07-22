@@ -49,6 +49,20 @@ describe("reconcileDriveActive", () => {
     expect(res).toEqual({ deleted: 1 });
   });
 
+  it("「この端末のみ(noSync)」ノートのactiveファイルは削除する(過去に上げた分を端末外から消す)", async () => {
+    const resolveFolderPath = vi.fn().mockResolvedValue("active");
+    const listNoteFilesInFolder = vi.fn().mockResolvedValue([{ id: "fs", noteId: "secret" }]);
+    const deleteDriveFile = vi.fn().mockResolvedValue(undefined);
+    const secret = { ...note("secret", "パスワード"), noSync: true };
+    const res = await reconcileDriveActive([secret], "t", {
+      resolveFolderPath,
+      listNoteFilesInFolder,
+      deleteDriveFile,
+    });
+    expect(deleteDriveFile).toHaveBeenCalledWith("fs", "t"); // keep対象外→削除
+    expect(res).toEqual({ deleted: 1 });
+  });
+
   it("空になったノートのactiveファイルも削除する(非空セットに無いため)", async () => {
     const resolveFolderPath = vi.fn().mockResolvedValue("active");
     const listNoteFilesInFolder = vi.fn().mockResolvedValue([{ id: "fa", noteId: "n1" }]);
@@ -85,6 +99,27 @@ describe("copyNotesToDriveDateFolder", () => {
       null,
       undefined,
       { folderId: "date-folder", kind: "date:2026/7/13", filename: "n1.md" },
+    );
+    expect(res).toEqual({ dated: 1 });
+  });
+
+  it("「この端末のみ(noSync)」ノートは日付フォルダにも上げない", async () => {
+    const resolveFolderPath = vi.fn().mockResolvedValue("date-folder");
+    const listNoteFilesInFolder = vi.fn().mockResolvedValue([]);
+    const uploadNote = vi.fn().mockResolvedValue("uploaded");
+    const notes = [note("n1", "本文"), { ...note("secret", "パスワード"), noSync: true }];
+    const res = await copyNotesToDriveDateFolder(notes, new Date(2026, 6, 13).getTime(), "tok", {
+      resolveFolderPath,
+      listNoteFilesInFolder,
+      uploadNote,
+    });
+    expect(uploadNote).toHaveBeenCalledTimes(1); // n1だけ
+    expect(uploadNote).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "secret" }),
+      "tok",
+      null,
+      undefined,
+      expect.anything(),
     );
     expect(res).toEqual({ dated: 1 });
   });

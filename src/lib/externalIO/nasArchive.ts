@@ -252,7 +252,7 @@ export async function reconcileActiveNotesOnNas(
   const _deleteFileFromNas = deps.deleteFileFromNas ?? deleteFileFromNas;
   const path = await _getNasFolderPath();
   if (!path) return 0;
-  const keepNotes = notes.filter((n) => n.content.trim() !== "" && !n.junk);
+  const keepNotes = notes.filter((n) => n.content.trim() !== "" && !n.junk && !n.noSync);
   const keepIdFragments = new Set(keepNotes.map((n) => n.id.slice(0, 8)));
   const expectedFilenameByIdFragment = new Map(
     keepNotes.map((n) => [n.id.slice(0, 8), activeNasFilenameFor(n)]),
@@ -320,10 +320,11 @@ export async function writeTodosToNasActive(todos: Todo[], deps: NasDeps = {}): 
   return _writeFileToNas(path, "active/todos.txt", todosToMarkdown(todos));
 }
 
-/** Geminiのタグ付けで junk 判定されたノートIDの集合(NASアーカイブから除外する——ユーザー指示)。 */
+/** NASアーカイブ(履歴スナップショット)から除外するノートIDの集合。junk 判定(ユーザー指示)に加え、
+ * 「この端末のみ(noSync)」ノートも除外する——本文の過去版スナップショットが端末外へ出ないように。 */
 async function defaultGetJunkNoteIds(): Promise<Set<string>> {
   const local = await loadLocalData();
-  return new Set(local.notes.filter((n) => n.junk).map((n) => n.id));
+  return new Set(local.notes.filter((n) => n.junk || n.noSync).map((n) => n.id));
 }
 
 /** 1件をNASへ「プレーンテキスト」で書き込み、再読込して内容が一致することを検証する

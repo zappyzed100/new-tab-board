@@ -1,6 +1,18 @@
 // notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 import type { Note } from "../../types";
 
+/** 「この端末のみ・同期しない」ノートか(Note.noSync)。本文を端末外へ出す全経路の除外判定に使う
+ * 単一の述語(NAS/Drive/Gemini/JSONバックアップ/履歴フラッシュ)。ここを唯一の意味の出所にして、
+ * 各出口が `!isNoSyncNote(n)` / `excludeNoSyncNotes(...)` を通す。 */
+export function isNoSyncNote(note: { noSync?: boolean }): boolean {
+  return note.noSync === true;
+}
+
+/** 端末外へ送る直前に「この端末のみ」ノートを除いた配列を返す(egress の共通チョークポイント)。 */
+export function excludeNoSyncNotes<T extends { noSync?: boolean }>(notes: T[]): T[] {
+  return notes.filter((note) => !isNoSyncNote(note));
+}
+
 /** ノートの保持上限(ユーザー指示で26→501へ拡張)。A〜Z(26)を超えたらAA以降を解禁する。 */
 export const MAX_NOTES = 501;
 /** 末尾に常時確保する空ノートの数(ユーザー指示: スプレッドシートの末尾空行と同じ発想)。 */

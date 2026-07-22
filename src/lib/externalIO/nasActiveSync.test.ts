@@ -226,6 +226,27 @@ describe("pushActiveToNas", () => {
     expect(res.savedHashes).not.toHaveProperty("b"); // 空・junkは記録しない
   });
 
+  it("「この端末のみ(noSync)」ノートはNAS activeへ書かず、reconcileの保持対象にもしない(端末外へ出さない)", async () => {
+    const writeNoteToNasStructure = vi.fn().mockResolvedValue(true);
+    const reconcileActiveNotesOnNas = vi.fn().mockResolvedValue(0);
+    const notes = [
+      note({ id: "a", content: "普通の本文" }),
+      note({ id: "secret", content: "パスワード", noSync: true }),
+    ];
+    const res = await pushActiveToNas(
+      notes,
+      1000,
+      {},
+      { writeNoteToNasStructure, reconcileActiveNotesOnNas },
+    );
+    expect(res.written).toBe(1);
+    expect(writeNoteToNasStructure).toHaveBeenCalledTimes(1);
+    expect(writeNoteToNasStructure).toHaveBeenCalledWith(notes[0], 1000);
+    // noSyncノートは書かれず、ハッシュにも残らない。
+    expect(writeNoteToNasStructure).not.toHaveBeenCalledWith(notes[1], 1000);
+    expect(res.savedHashes).not.toHaveProperty("secret");
+  });
+
   it(
     "旧バージョンのハッシュ(拡張子変更前・本文のみ)を渡すと、本文不変でも1回だけ再書き込みする" +
       "(2026-07-16: active/の拡張子変更後に旧ハッシュがキャッシュに残っていても、新形式で" +

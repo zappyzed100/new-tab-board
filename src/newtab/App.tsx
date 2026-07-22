@@ -56,6 +56,7 @@ import {
   addNoteAfter,
   createNote,
   ensureTrailingEmptyNotes,
+  excludeNoSyncNotes,
   isDefaultNoteTitle,
   pasteResultsIntoNotes,
   moveNoteDown,
@@ -359,7 +360,11 @@ export function App() {
     // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
     // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
     // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
-    const specialEntriesNow = specialEntries(current, specialItemsRef.current);
+    // 「この端末のみ(noSync)」の live ノート・凍結項目は special ミラーにも出さない。
+    const specialEntriesNow = specialEntries(
+      excludeNoSyncNotes(current),
+      specialItemsRef.current.filter((i) => !i.noSync),
+    );
     const specialSig = specialSyncSignature(specialEntriesNow);
     if (specialSig !== nasSpecialSigRef.current) {
       await pushSpecialToNas(specialEntriesNow);
@@ -374,7 +379,8 @@ export function App() {
           syncRef.current,
           {
             todos: todosRef.current,
-            specialItems: specialItemsRef.current,
+            // 「この端末のみ」の凍結項目は設定バックアップ(NAS)にも含めない。
+            specialItems: specialItemsRef.current.filter((i) => !i.noSync),
             specialFolders: specialFoldersRef.current,
           },
           clockNow(),
@@ -467,7 +473,11 @@ export function App() {
   const driveSpecialSigRef = useRef<string>("");
   useEffect(() => {
     if (!notes) return;
-    const entries = specialEntries(notes, specialItems);
+    // 「この端末のみ(noSync)」の live ノート・凍結項目は Drive の special ミラーにも出さない。
+    const entries = specialEntries(
+      excludeNoSyncNotes(notes),
+      specialItems.filter((i) => !i.noSync),
+    );
     const sig = specialSyncSignature(entries);
     if (sig === driveSpecialSigRef.current) return;
     const timer = setTimeout(() => {
@@ -595,8 +605,18 @@ export function App() {
   // 再計算してdebounceを安定させる。
   const backupJson = useMemo(() => {
     if (!sync || !notes) return null;
+    // 全データJSONバックアップはノート本文を丸ごと含むため、「この端末のみ(noSync)」は除外する。
     return serializeExport(
-      buildExportPayload(sync, { notes, todos, specialItems, specialFolders }, clockNow()),
+      buildExportPayload(
+        sync,
+        {
+          notes: excludeNoSyncNotes(notes),
+          todos,
+          specialItems: specialItems.filter((i) => !i.noSync),
+          specialFolders,
+        },
+        clockNow(),
+      ),
     );
   }, [sync, notes, todos, specialItems, specialFolders]);
   useJsonBackupSync(backupJson, sync?.settings.jsonBackupFileId, (fileId) =>
@@ -841,7 +861,8 @@ export function App() {
     const apiKey = await getGeminiApiKey();
     if (!apiKey) return { targetCount: 0, done: 0, junkCount: 0 };
     const all = notesRef.current ?? [];
-    const targets = all.filter(needsRetag);
+    // 「この端末のみ(noSync)」は Gemini(=Googleのサーバー)へ本文を送らない。
+    const targets = all.filter((n) => needsRetag(n) && !n.noSync);
     if (targets.length === 0) return { targetCount: 0, done: 0, junkCount: 0 };
     // タグ候補＋既存ノートの頻出タグ(最大200)を語彙として渡し、タグの統一を促す(ユーザー指示)。
     const vocabulary = buildTagVocabulary(tagCandidates, all);
@@ -945,9 +966,10 @@ export function App() {
           buildExportPayload(
             sync,
             {
-              notes: notesRef.current ?? [],
+              // 「この端末のみ(noSync)」は Drive への退避JSONにも含めない。
+              notes: excludeNoSyncNotes(notesRef.current ?? []),
               todos: todosRef.current,
-              specialItems: specialItemsRef.current,
+              specialItems: specialItemsRef.current.filter((i) => !i.noSync),
               specialFolders: specialFoldersRef.current,
             },
             clockNow(),
