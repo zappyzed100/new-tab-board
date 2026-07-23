@@ -137,6 +137,58 @@ describe("mergeNoteCollections", () => {
     }
   });
 
+  it("タグだけの差では競合コピーを作らずタグを union する(同ID・同時刻の自動タグ揺れ対策)", () => {
+    const local = { ...note("n1", "本文", 10), tags: ["a"] };
+    const remote = { ...note("n1", "本文", 10), tags: ["b"] };
+    const merged = mergeNoteCollections([local], [remote]);
+    expect(merged.notes).toHaveLength(1);
+    expect(merged.notes[0].id).toBe("n1");
+    expect([...(merged.notes[0].tags ?? [])].sort()).toEqual(["a", "b"]);
+  });
+
+  it("既に競合コピーのIDは二度とフォークしない(連鎖爆発の遮断)", () => {
+    // -conflict- を含むIDは、本文差でもタグ差でも、これ以上競合コピーを増やさない。
+    const local = {
+      ...note("n1-conflict-aaa", "本文X", 10),
+      title: "元 (競合コピー)",
+      tags: ["a"],
+    };
+    const remote = {
+      ...note("n1-conflict-aaa", "本文Y", 10),
+      title: "元 (競合コピー)",
+      tags: ["b"],
+    };
+    const merged = mergeNoteCollections([local], [remote]);
+    expect(merged.notes.some((n) => n.id.includes("-conflict-aaa-conflict-"))).toBe(false);
+  });
+
+  it("連鎖した同内容の競合コピーは大元まで畳む(指数増殖の掃除)", () => {
+    const base = { ...note("n1", "本文", 20), title: "元" };
+    const chain = [
+      "n1-conflict-a",
+      "n1-conflict-a-conflict-b",
+      "n1-conflict-a-conflict-b-conflict-c",
+    ].map((id, i) => ({
+      ...note(id, "本文", 20),
+      title: `元 ${"(競合コピー)".repeat(i + 1)}`,
+      tags: [`t${i}`],
+    }));
+    const merged = mergeNoteCollections([base, ...chain], []);
+    expect(merged.notes.map((n) => n.id)).toEqual(["n1"]);
+  });
+
+  it("大元と本文が違う本物の競合コピーは連鎖の中でも1つだけ残す", () => {
+    const base = { ...note("n1", "本文", 20), title: "元" };
+    // 本文が違う(=本物)コピーが同内容で2段連鎖 → 1つへ畳む。大元は残す。
+    const real1 = { ...note("n1-conflict-a", "別本文", 20), title: "元 (競合コピー)" };
+    const real2 = {
+      ...note("n1-conflict-a-conflict-b", "別本文", 20),
+      title: "元 (競合コピー)(競合コピー)",
+    };
+    const merged = mergeNoteCollections([base, real1, real2], []);
+    expect(merged.notes.map((n) => n.content).sort()).toEqual(["別本文", "本文"]);
+  });
+
   it("明示tombstoneがノートより新しい時だけ削除する", () => {
     expect(mergeNoteCollections([], [note("n1", "old", 10)], { n1: 20 }).notes).toEqual([]);
     expect(mergeNoteCollections([], [note("n1", "new", 30)], { n1: 20 }).notes[0].content).toBe(
