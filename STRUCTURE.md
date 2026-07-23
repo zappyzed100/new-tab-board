@@ -961,6 +961,7 @@
 - const NAS_IMAGE_SCHEME
 - const NAS_IMAGES_DIR
 - function imageExtensionFor
+- function imageDateStamp
 - function nasImageRelPath
 - function markdownImageReference
 - function nasRelPathFromSrc

@@ -48,12 +48,15 @@ describe("saveNoteImageToNas", () => {
       getFolderPath: async () => "Z:/NAS",
       writeBinary,
       newImageId: () => "img-1",
+      // 現在時刻は clock シーム経由。テストでは固定値を注入する(実クロックを読まない — AGENTS.md §8)
+      now: () => new Date(2026, 6, 23, 12, 0).getTime(),
     };
     const relPath = await saveNoteImageToNas("note-1", pngBlob(), deps);
-    expect(relPath).toBe("images/note-1/img-1.png");
+    // フォルダはノートid、ファイル名の先頭は貼り付け日(NAS上で「いつ貼ったか」を辿れる)
+    expect(relPath).toBe("images/note-1/2026-07-23-img-1.png");
     expect(writeBinary).toHaveBeenCalledWith(
       "Z:/NAS",
-      "images/note-1/img-1.png",
+      "images/note-1/2026-07-23-img-1.png",
       expect.any(String),
     );
   });
@@ -73,6 +76,7 @@ describe("saveNoteImageToNas", () => {
       getFolderPath: async () => "Z:/NAS",
       writeBinary: async () => false,
       newImageId: () => "img-1",
+      now: () => new Date(2026, 6, 23).getTime(),
     });
     expect(relPath).toBeNull();
   });

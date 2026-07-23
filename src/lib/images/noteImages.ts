@@ -30,9 +30,27 @@ export function imageExtensionFor(mimeType: string): string {
   return EXT_BY_MIME[mimeType.toLowerCase()] ?? "png";
 }
 
-/** 画像のNAS相対パス。ノートidでフォルダを切り、ノートを消したときに人が辿れるようにする。 */
-export function nasImageRelPath(noteId: string, imageId: string, extension: string): string {
-  return `${NAS_IMAGES_DIR}/${noteId}/${imageId}.${extension}`;
+/** ファイル名の先頭に付ける貼り付け日(ローカル日付)。**ゼロ埋めする**——日付フォルダ
+ * (`YYYY/M/D`。ユーザー指示でゼロ埋めしない)と違い、ここは同じフォルダ内で名前順に並べたときに
+ * 時系列になることが目的なので、桁を揃える必要がある。 */
+export function imageDateStamp(nowMs: number): string {
+  const d = new Date(nowMs);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/** 画像のNAS相対パス。**フォルダはノートid**で切る(ノートの画像=このフォルダ、という規則が
+ * サムネイル帯の土台。本文から参照を消しても画像を見失わない)。**ファイル名の先頭は貼り付け日**
+ * ——フォルダ名がUUIDで人には読めないので、せめて「いつ貼ったか」をNAS上で辿れるようにする
+ * (ユーザー指示・2026-07-23。日付フォルダ階層にしなかった理由はPLAN.md)。 */
+export function nasImageRelPath(
+  noteId: string,
+  createdAtMs: number,
+  imageId: string,
+  extension: string,
+): string {
+  return `${NAS_IMAGES_DIR}/${noteId}/${imageDateStamp(createdAtMs)}-${imageId}.${extension}`;
 }
 
 /** 本文へ挿入する参照テキスト。前後の改行は呼び出し側(挿入位置を知っている側)が足す。 */

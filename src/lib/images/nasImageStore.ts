@@ -4,6 +4,7 @@
 // タブ内には揮発のメモリキャッシュしか持たない(ユーザー指示・2026-07-23)。NASフォルダが
 // 未登録なら保存も読み込みも行わない(=ノートに画像は表示されない)。
 import { logOp } from "../runtime/log";
+import { now as clockNow } from "../runtime/clock";
 import { getNasFolderPath } from "../storage/db";
 import { listNasImages, readBinaryFromNas, writeBinaryToNas } from "../externalIO/nasNativeHost";
 import { imageExtensionFor, nasImageRelPath } from "./noteImages";
@@ -15,6 +16,8 @@ export type NasImageDeps = {
   readBinary?: (path: string, filename: string) => Promise<string | null>;
   listImages?: (path: string) => Promise<string[] | null>;
   newImageId?: () => string;
+  /** 貼り付け日をファイル名へ入れるための現在時刻(テストでは固定値を注入する)。 */
+  now?: () => number;
 };
 
 function resolve(deps: NasImageDeps) {
@@ -24,6 +27,7 @@ function resolve(deps: NasImageDeps) {
     readBinary: deps.readBinary ?? ((p, f) => readBinaryFromNas(p, f)),
     listImages: deps.listImages ?? ((p) => listNasImages(p)),
     newImageId: deps.newImageId ?? (() => crypto.randomUUID()),
+    now: deps.now ?? clockNow,
   };
 }
 
@@ -76,7 +80,12 @@ export async function saveNoteImageToNas(
     logOp("note-image", "skip-no-nas-folder", `note=${noteId}`);
     return null;
   }
-  const relPath = nasImageRelPath(noteId, d.newImageId(), imageExtensionFor(blob.type));
+  const relPath = nasImageRelPath(
+    noteId,
+    d.now(),
+    d.newImageId(),
+    imageExtensionFor(blob.type),
+  );
   const ok = await d.writeBinary(base, relPath, await blobToBase64(blob));
   logOp("note-image", ok ? "save" : "save-failed", `note=${noteId} path=${relPath}`);
   return ok ? relPath : null;

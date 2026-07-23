@@ -68,6 +68,7 @@ describe("useNoteImages", () => {
         readBinary,
         writeBinary,
         newImageId: () => "img-1",
+        now: () => new Date(2026, 6, 23).getTime(),
       }),
     );
     await waitFor(() => expect(result.current.loaded).toBe(true));
@@ -77,9 +78,11 @@ describe("useNoteImages", () => {
       relPath = await result.current.attach("note-1", png());
     });
 
-    expect(relPath).toBe("images/note-1/img-1.png");
+    expect(relPath).toBe("images/note-1/2026-07-23-img-1.png");
     expect(writeBinary).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(result.current.urls.get("images/note-1/img-1.png")).toBeDefined());
+    await waitFor(() =>
+      expect(result.current.urls.get("images/note-1/2026-07-23-img-1.png")).toBeDefined(),
+    );
     expect(readBinary).not.toHaveBeenCalled(); // 保存直後は手元のblobをそのまま見せる
   });
 

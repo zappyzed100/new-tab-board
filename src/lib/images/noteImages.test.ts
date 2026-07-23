@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attachedImagesForNote,
+  imageDateStamp,
   imageExtensionFor,
   markdownImageReference,
   nasImageRelPath,
@@ -22,9 +23,37 @@ describe("imageExtensionFor", () => {
   });
 });
 
+describe("imageDateStamp", () => {
+  it("ローカル日付をゼロ埋めして返す(同じフォルダ内で名前順=時系列になるため)", () => {
+    expect(imageDateStamp(new Date(2026, 6, 23, 10, 30).getTime())).toBe("2026-07-23");
+    expect(imageDateStamp(new Date(2026, 0, 5, 0, 0).getTime())).toBe("2026-01-05");
+  });
+
+  it("名前順に並べると時系列になる(ゼロ埋めしないと10月が1月の隣に来る)", () => {
+    const stamps = [
+      imageDateStamp(new Date(2026, 9, 1).getTime()),
+      imageDateStamp(new Date(2026, 0, 5).getTime()),
+      imageDateStamp(new Date(2026, 6, 23).getTime()),
+    ];
+    expect([...stamps].sort()).toEqual(["2026-01-05", "2026-07-23", "2026-10-01"]);
+  });
+});
+
 describe("nasImageRelPath / markdownImageReference", () => {
-  it("images/<noteId>/<imageId>.<ext> に置く", () => {
-    expect(nasImageRelPath("note-1", "abc", "png")).toBe("images/note-1/abc.png");
+  it("フォルダはノートid、ファイル名の先頭は貼り付け日", () => {
+    const at = new Date(2026, 6, 23, 9, 0).getTime();
+    expect(nasImageRelPath("note-1", at, "abc", "png")).toBe("images/note-1/2026-07-23-abc.png");
+  });
+
+  it("同じノートの画像は貼った日付順に並ぶ(NAS上で辿れる)", () => {
+    const paths = [
+      nasImageRelPath("n", new Date(2026, 9, 1).getTime(), "z", "png"),
+      nasImageRelPath("n", new Date(2026, 0, 5).getTime(), "a", "png"),
+    ];
+    expect([...paths].sort()).toEqual([
+      "images/n/2026-01-05-a.png",
+      "images/n/2026-10-01-z.png",
+    ]);
   });
 
   it("本文へ書く参照はMarkdown標準の画像記法(独自スキーム nas:)", () => {
