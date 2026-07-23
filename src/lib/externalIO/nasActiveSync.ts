@@ -160,7 +160,9 @@ export async function pushActiveToNas(
   const next: Record<string, string> = {};
   let written = 0;
   for (const n of notes) {
-    if (n.content.trim() === "" || n.junk) continue; // 空・ゴミは保存対象外(ハッシュも捨てる)
+    // 空・ゴミ・「この端末のみ(noSync)」は保存対象外(ハッシュも捨てる)。noSync は本文を端末外へ
+    // 出さないための除外(reconcile 側でも keep から外し、過去に書いた active ファイルも削除される)。
+    if (n.content.trim() === "" || n.junk || n.noSync) continue;
     const fp = noteSaveFingerprint(n);
     if (savedHashes[n.id] === fp) {
       next[n.id] = fp; // 変更なし=保存済み。書かずにハッシュだけ引き継ぐ。

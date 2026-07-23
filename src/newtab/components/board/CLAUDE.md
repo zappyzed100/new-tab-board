@@ -9,3 +9,13 @@
 
 本文が表示中に変更され、そのまま画面外へ出た場合は`onSuspend`を呼ぶ。App側はこれを即時
 スナップショットへ配線し、ペイン破棄で5分timerがキャンセルされても編集履歴を失わない。
+
+## セルは絶対配置。**親DOMを変える置き換えをしてはいけない**
+
+`.note-cell`は`position:absolute`で、列は`columnIndex`(→`--note-column-index`→`left`)、縦位置は
+`top`(px)をAppから受け取るだけ(`layout.css`)。**DOMの並びはorder順で固定**する。列ごとの`<div>`へ
+振り分ける実装に戻すと、ノートが1件増減しただけでセルが別の親へ移り、Reactが再マウントして
+CodeMirrorが破棄され、入力中のカーソルと以降の打鍵が失われる(2026-07-23の実害。回帰は
+`e2e/specs/notes-board.spec.ts`「空ノートの2番目に入力しても…」がDOMノードの同一性で固定する)。
+同じ理由で、位置合わせは`top`/`left`だけで行い、DOMの並べ替え(insertBefore)も避ける
+——フォーカス中の要素をDOM上で動かすとChromeはblurする。

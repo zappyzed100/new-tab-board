@@ -40,7 +40,10 @@ export async function reconcileDriveActive(
   const _list = deps.listNoteFilesInFolder ?? listNoteFilesInFolder;
   const _delete = deps.deleteDriveFile ?? deleteDriveFile;
 
-  const keepIds = new Set(notes.filter((n) => n.content.trim() !== "").map((n) => n.id));
+  // 「この端末のみ(noSync)」は keep しない——過去に上がった active ファイルを Drive から削除する。
+  const keepIds = new Set(
+    notes.filter((n) => n.content.trim() !== "" && !n.noSync).map((n) => n.id),
+  );
 
   logOp("driveActiveMirror", "resolve-folder-start", `path=${ACTIVE_FOLDER_PATH.join("/")}`);
   const activeFolder = await _resolve(ACTIVE_FOLDER_PATH, token);
@@ -71,7 +74,7 @@ export async function copyNotesToDriveDateFolder(
   const _list = deps.listNoteFilesInFolder ?? listNoteFilesInFolder;
   const _upload = deps.uploadNote ?? uploadNote;
 
-  const nonEmpty = notes.filter((n) => n.content.trim() !== "");
+  const nonEmpty = notes.filter((n) => n.content.trim() !== "" && !n.junk && !n.noSync);
   const dateKind = `date:${dateFolderParts(dayMs).join("/")}`;
   const datePath = [...APP_ROOT, ...dateFolderParts(dayMs)];
   logOp("driveActiveMirror", "resolve-folder-start", `path=${datePath.join("/")}`);

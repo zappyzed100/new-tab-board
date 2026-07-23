@@ -52,6 +52,14 @@ describe("freezeNoteToSpecial", () => {
   it("スターでないノートはnull(凍結しない)", () => {
     expect(freezeNoteToSpecial(note({ special: false }), 1)).toBeNull();
   });
+  it("「この端末のみ(noSync)」ノートを凍結するとnoSyncを引き継ぐ(special同期/バックアップから除外するため)", () => {
+    const frozen = freezeNoteToSpecial(note({ id: "s", special: true, noSync: true }), 1);
+    expect(frozen?.noSync).toBe(true);
+  });
+  it("noSyncでないノートの凍結項目はnoSyncを持たない(undefined)", () => {
+    const frozen = freezeNoteToSpecial(note({ id: "s", special: true }), 1);
+    expect(frozen?.noSync).toBeUndefined();
+  });
 });
 
 describe("upsert/removeSpecialItem", () => {

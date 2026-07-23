@@ -1,6 +1,6 @@
 // note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 import type { Note } from "../../types";
-import { sortedNotes } from "../entities/notes";
+import { isGeneratedEmptyPlaceholder, sortedNotes } from "../entities/notes";
 
 export type NoteTombstones = Record<string, number>;
 
@@ -67,18 +67,6 @@ function conflictCopy(note: Note, originalId: string): Note {
     id: `${originalId}-conflict-${suffix}`,
     title: `${note.title} (競合コピー)`,
   };
-}
-
-function isGeneratedEmptyPlaceholder(note: Note): boolean {
-  return (
-    /^ノート[A-Z]+$/.test(note.title) &&
-    note.content.trim() === "" &&
-    !note.pinned &&
-    !note.done &&
-    !note.special &&
-    !note.junk &&
-    (note.tags?.length ?? 0) === 0
-  );
 }
 
 /** staleな全体保存同士を和集合にした際、別IDで二重化した自動空ノートだけをタイトルで畳む。

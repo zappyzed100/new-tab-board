@@ -122,7 +122,7 @@ export async function syncDriveNotesSafely(
     const uploadedNotes = new Map<string, Note>();
 
     for (const note of merged.notes) {
-      if (note.content.trim() === "" || note.junk) continue;
+      if (note.content.trim() === "" || note.junk || note.noSync) continue;
       const remote = remoteById.get(note.id);
       if (remote && samePersistedNote(note, remote)) continue;
       const result = await _syncNote(note, now, false);

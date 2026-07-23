@@ -62,9 +62,10 @@ export async function syncNoteToDrive(
   interactive: boolean,
   deps: SyncDeps = {},
 ): Promise<SyncResult> {
-  // 空ファイルはDriveへ上げない(ユーザー指示)。既存ファイルの削除は board 側の突合で行う。
-  // 直列化の前に判定する——空ノートはチェーンへ乗せる必要がない。
-  if (note.content.trim() === "") return { status: "skipped-empty" };
+  // 空ファイル・「この端末のみ(noSync)」はDriveへ上げない。既存ファイルの削除は board 側の突合で行う。
+  // per-note 経路(Cmd/Ctrl+S・useDriveSync)と safeSync の共通最終点なので、ここで noSync を止めれば
+  // Drive の active ミラーへの本文流出を1点で塞げる。直列化の前に判定する。
+  if (note.content.trim() === "" || note.noSync) return { status: "skipped-empty" };
 
   const prev = syncChainByNoteId.get(note.id) ?? Promise.resolve();
   // 前段が失敗しても後段は走らせる(失敗を握って次へ繋ぐ)。

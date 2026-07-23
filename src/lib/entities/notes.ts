@@ -1,6 +1,18 @@
 // notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 import type { Note } from "../../types";
 
+/** 「この端末のみ・同期しない」ノートか(Note.noSync)。本文を端末外へ出す全経路の除外判定に使う
+ * 単一の述語(NAS/Drive/Gemini/JSONバックアップ/履歴フラッシュ)。ここを唯一の意味の出所にして、
+ * 各出口が `!isNoSyncNote(n)` / `excludeNoSyncNotes(...)` を通す。 */
+export function isNoSyncNote(note: { noSync?: boolean }): boolean {
+  return note.noSync === true;
+}
+
+/** 端末外へ送る直前に「この端末のみ」ノートを除いた配列を返す(egress の共通チョークポイント)。 */
+export function excludeNoSyncNotes<T extends { noSync?: boolean }>(notes: T[]): T[] {
+  return notes.filter((note) => !isNoSyncNote(note));
+}
+
 /** ノートの保持上限(ユーザー指示で26→501へ拡張)。A〜Z(26)を超えたらAA以降を解禁する。 */
 export const MAX_NOTES = 501;
 /** 末尾に常時確保する空ノートの数(ユーザー指示: スプレッドシートの末尾空行と同じ発想)。 */
@@ -131,26 +143,51 @@ export function moveNoteDown(notes: Note[], id: string): Note[] {
   return reorderNotes(notes, i, i + 1);
 }
 
-/** 順序列(sortedNotes基準)の末尾にある空ノートが `desired` 件に満たなければ、
- * `nextNoteLetterTitle` で命名した空ノートを補充して返す純関数(冪等: 既に足りていれば
- * 元の配列をそのまま返す)。MAX_NOTES 上限に達したら打ち止める。
- * 「常に末尾に空のノートが N 個ある」(ユーザー指示: 付箋を貼るための余白)を保つ土台。 */
+/** 自動採番の空プレースホルダ(「ノートX」・本文が空白のみ・ピン/チェック/スター/ゴミ/タグ
+ * いずれも無し)か。末尾の空バッファ管理で「補充・間引きしてよいブランク」の判定に使う。
+ * ユーザーが手で付けた空ノートや、タグ/ピン等の付いた空ノートは対象外(消さない)。
+ * note-sync.ts の同期側 dedup もこの述語を共有する(意味の出所を一箇所にして揃える)。 */
+export function isGeneratedEmptyPlaceholder(note: Note): boolean {
+  return (
+    isDefaultNoteTitle(note.title) &&
+    note.content.trim() === "" &&
+    !note.pinned &&
+    !note.done &&
+    !note.special &&
+    !note.junk &&
+    (note.tags?.length ?? 0) === 0
+  );
+}
+
+/** 「自動空プレースホルダが常にちょうど N 個ある」を保つ純関数(ユーザー指示: 付箋用の余白は常に3つ)。
+ * 不足分だけ `nextNoteLetterTitle` で命名して**表示順の末尾へ**補充する。冪等: 既に N 個あれば
+ * 元の配列をそのまま返す。MAX_NOTES 上限では補充を打ち止める。
+ *
+ * **数えるのは「末尾に連続する空」ではなく「盤面全体の自動空プレースホルダ」**。末尾の連続数で
+ * 数えると、末尾の空3つのうち2番目以降へ入力した瞬間に「末尾の空が足りない」と誤判定して補充が
+ * 走り、前に取り残された空が余剰として**入力中ノートより前から削除**され、盤面が繰り上がって
+ * 入力中のペインが別の列へ飛ぶ(＝CodeMirrorが再マウントされフォーカスと打鍵が失われる)。
+ * 2026-07-23 のユーザー報告「ノートA辺りを操作すると配置が勝手に変わり操作中のノートが移る」の
+ * 直接原因がこれ。全体で数えれば、2番目の空へ入力しても「空は2つ→1つ補充」で収まり、
+ * **既存ノートは1件も消えず order も動かない**(取り残された空はそのまま残り、後続の入力で自然に
+ * 末尾へ揃う)。回帰は下の「2番目の空へ入力しても前の空を消さない」テストが固定する。
+ *
+ * 超過分(別端末とのマージ等で N を超えたとき)は **order の高い方=末尾側から**間引く。前から
+ * 間引くと同じ「繰り上がりで入力中ノートが動く」実害が出るため、削るのは必ず末尾側。
+ * 手付けの空ノート/フラグ付き空ノートは述語に該当せず、補充カウントにも間引きにも関与しない。 */
 export function ensureTrailingEmptyNotes(
   notes: Note[],
   desired: number,
   createdAt?: number,
 ): Note[] {
   const sorted = sortedNotes(notes);
-  // 末尾から数えて連続する空ノート(content が空白のみ)の数。
-  let trailingEmpty = 0;
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    if (sorted[i].content.trim() === "") trailingEmpty += 1;
-    else break;
-  }
+  const existing = sorted.filter(isGeneratedEmptyPlaceholder);
   const additions: Note[] = [];
   const titles = notes.map((n) => n.title);
-  let nextOrder = nextNoteOrder(notes); // length だと削除で疎になった order と衝突する(上記ヘッダー参照)
-  for (let count = trailingEmpty; count < desired; count++) {
+  // length だと削除で疎になった order と衝突して補充が末尾へ並ばず、空ノートを量産する
+  // (nextNoteOrder のヘッダー参照 — 空ノート20個・カーソルずれの原因)。
+  let nextOrder = nextNoteOrder(notes);
+  for (let count = existing.length; count < desired; count++) {
     const title = nextNoteLetterTitle(titles);
     if (title === null) break; // MAX_NOTES 上限
     const note = createNote(title, nextOrder, createdAt);
@@ -158,8 +195,13 @@ export function ensureTrailingEmptyNotes(
     titles.push(title);
     nextOrder += 1;
   }
-  // 補充が無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
-  return additions.length === 0 ? notes : [...notes, ...additions];
+  if (additions.length > 0) return [...notes, ...additions];
+  if (existing.length <= desired) {
+    // 補充も間引きも無ければ同一参照を返す(維持effectが no-op を検知して再保存を避けられるように)。
+    return notes;
+  }
+  const surplusIds = new Set(existing.slice(desired).map((n) => n.id));
+  return notes.filter((n) => !surplusIds.has(n.id));
 }
 
 /** 検索結果(title/content)をノート末尾へ貼り付ける(ユーザー指示)。末尾側の白紙ノートを

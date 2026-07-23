@@ -1,5 +1,14 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
   AlertTriangle,
@@ -57,6 +66,7 @@ import {
   addNoteAfter,
   createNote,
   ensureTrailingEmptyNotes,
+  excludeNoSyncNotes,
   isDefaultNoteTitle,
   nextNoteOrder,
   pasteResultsIntoNotes,
@@ -96,6 +106,7 @@ import { replaceInNotes } from "../lib/search/noteSearch";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
+import { logOp } from "../lib/runtime/log";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import {
   flushAllToNas,
@@ -249,6 +260,11 @@ export function App() {
   const driveTodosSigRef = useRef<string>("");
   function selectNote(noteId: string) {
     // 全件表示なので「表示集合に入れる」処理は不要。アクティブ(オートフォーカス対象)を移すだけ。
+    logOp(
+      "notes",
+      "select",
+      `note=${noteId.slice(0, 8)} prevActive=${activeNoteIdRef.current?.slice(0, 8)}`,
+    );
     userSelectedNoteRef.current = true;
     setActiveNoteId(noteId);
   }
@@ -269,6 +285,12 @@ export function App() {
     let cancelled = false;
     Promise.all([loadSyncData(), initializeLocalData(clockNow())]).then(([syncData, localData]) => {
       if (cancelled) return;
+      logOp(
+        "notes",
+        "boot",
+        `notes=${localData.notes.length} rev=${localData.storageRevision ?? 0} ` +
+          `active[0]=${localData.notes[0]?.id?.slice(0, 8) ?? "none"}`,
+      );
       setSync(syncData);
       setNotes(localData.notes);
       setTodos(localData.todos ?? []);
@@ -294,7 +316,14 @@ export function App() {
     return subscribeLocalData((incoming) => {
       if (!notesRef.current) return;
       const revision = incoming.storageRevision ?? 0;
-      if (revision < storageRevisionRef.current) return;
+      if (revision < storageRevisionRef.current) {
+        logOp(
+          "notes-sub",
+          "skip-stale-revision",
+          `incoming=${revision} have=${storageRevisionRef.current}`,
+        );
+        return;
+      }
       storageRevisionRef.current = revision;
       const currentNotes = notesRef.current;
       // 別タブの確定revisionでも、こちらで編集中のノート(フォーカス中/未保存の全部)は
@@ -307,7 +336,8 @@ export function App() {
         incoming.noteTombstones ?? {},
       );
       noteTombstonesRef.current = incoming.noteTombstones ?? {};
-      if (JSON.stringify(next) !== JSON.stringify(currentNotes)) {
+      const notesChanged = JSON.stringify(next) !== JSON.stringify(currentNotes);
+      if (notesChanged) {
         setNotes(next);
         // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
         // 無関係な空ノートIDの収束通知でも入力中エディタを破棄するため、本文差分のあるIDだけ進める。
@@ -322,6 +352,18 @@ export function App() {
               currentContent.get(note.id) !== note.content,
           )
           .map((note) => note.id);
+        // 入力中(protected)ノートが本文差分に入ると、その key が進んでエディタが再マウントされ
+        // カーソルが飛ぶ実害の直接原因。上のフィルタで除外済みだが、破れたら即分かるよう出す。
+        const remountsActive = changedContentIds.some((id) => protectedIds.has(id));
+        const protectedLabel = [...protectedIds].map((id) => id.slice(0, 8)).join(",") || "none";
+        logOp(
+          "notes-sub",
+          "apply",
+          `rev=${revision} cur=${currentNotes.length} next=${next.length} ` +
+            `protected=${protectedLabel} ` +
+            `remountIds=${changedContentIds.length}[${changedContentIds.map((id) => id.slice(0, 8)).join(",")}] ` +
+            `REMOUNTS_ACTIVE=${remountsActive}`,
+        );
         if (changedContentIds.length > 0) {
           setSyncedContentVersions((versions) => {
             const updated = { ...versions };
@@ -332,6 +374,8 @@ export function App() {
         setActiveNoteId((cur) =>
           cur && next.some((note) => note.id === cur) ? cur : (next[0]?.id ?? null),
         );
+      } else {
+        logOp("notes-sub", "apply-noop", `rev=${revision} notes=${next.length} (no note change)`);
       }
       setTodos(incoming.todos ?? []);
       setNextEventCache(incoming.nextEventCache);
@@ -355,6 +399,11 @@ export function App() {
   function applyPulledNotes(pulled: Note[]) {
     // NAS側も不在だけでは削除と判断せず、ローカルとの和集合にする。削除は共通tombstoneだけ。
     const merged = mergeNoteCollections(notesRef.current ?? [], pulled, noteTombstonesRef.current);
+    logOp(
+      "notes-pull",
+      "apply-pulled",
+      `local=${(notesRef.current ?? []).length} pulled=${pulled.length} merged=${merged.notes.length}`,
+    );
     applySafelySyncedNotes(merged.notes, merged.tombstones);
   }
 
@@ -368,6 +417,12 @@ export function App() {
       tombstones,
     );
     const next = ensureTrailingEmptyNotes(guarded, TRAILING_EMPTY_NOTES, clockNow());
+    logOp(
+      "notes-pull",
+      "apply-synced",
+      `fromSync=${notesFromSync.length} guarded=${guarded.length} ` +
+        `final=${next.length} protected=${[...protectedNoteIds()].length}`,
+    );
     noteTombstonesRef.current = tombstones;
     setNotes(next);
     setActiveNoteId((cur) => (cur && next.some((n) => n.id === cur) ? cur : (next[0]?.id ?? null)));
@@ -390,7 +445,11 @@ export function App() {
     // スペシャル(⭐)は NAS の special/<folder>/<id>.md へ(ユーザー指示)。live+frozenを突き合わせ。
     // pushSpecialToNas自体はハッシュ差分を持たない全件書き込みのため、ここでシグネチャが
     // 変わった時だけ呼ぶ(内容不変のtickで⭐全件を無駄に再書き込みしない——2026-07-16 是正)。
-    const specialEntriesNow = specialEntries(current, specialItemsRef.current);
+    // 「この端末のみ(noSync)」の live ノート・凍結項目は special ミラーにも出さない。
+    const specialEntriesNow = specialEntries(
+      excludeNoSyncNotes(current),
+      specialItemsRef.current.filter((i) => !i.noSync),
+    );
     const specialSig = specialSyncSignature(specialEntriesNow);
     if (specialSig !== nasSpecialSigRef.current) {
       await pushSpecialToNas(specialEntriesNow);
@@ -405,7 +464,8 @@ export function App() {
           syncRef.current,
           {
             todos: todosRef.current,
-            specialItems: specialItemsRef.current,
+            // 「この端末のみ」の凍結項目は設定バックアップ(NAS)にも含めない。
+            specialItems: specialItemsRef.current.filter((i) => !i.noSync),
             specialFolders: specialFoldersRef.current,
           },
           clockNow(),
@@ -498,7 +558,11 @@ export function App() {
   const driveSpecialSigRef = useRef<string>("");
   useEffect(() => {
     if (!notes) return;
-    const entries = specialEntries(notes, specialItems);
+    // 「この端末のみ(noSync)」の live ノート・凍結項目は Drive の special ミラーにも出さない。
+    const entries = specialEntries(
+      excludeNoSyncNotes(notes),
+      specialItems.filter((i) => !i.noSync),
+    );
     const sig = specialSyncSignature(entries);
     if (sig === driveSpecialSigRef.current) return;
     const timer = setTimeout(() => {
@@ -605,18 +669,25 @@ export function App() {
       return next;
     });
   }, []);
-  const noteColumns = useMemo(() => {
-    const cols: Note[][] = Array.from({ length: columnCount }, () => []);
+  // 各ノートの置き場所(列index・列内のtop座標)と、ボード全体の高さ。**DOMの並びは常に
+  // order順のまま**にして、列は絶対配置(CSSのleft)＋topのpxで表現する。列ごとの<div>へ振り分けて
+  // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
+  // CodeMirrorが破棄され「入力中にカーソルが飛び以降の打鍵が消える」実害が出ていた(2026-07-23)。
+  // 親が変わらなければ配置が変わってもCM6は生き続ける——position/top/leftだけが変わる。
+  const noteLayout = useMemo(() => {
+    const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
+    const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
     const heights = new Array(columnCount).fill(0);
-    const GAP = 12; // --space-3 相当。列高さ見積りの隙間ぶん(厳密でなくてよい)。
-    const ESTIMATE = 220; // 未測定ノートの暫定高さ(初回描画→測定で確定する)。
+    const placement = new Map<string, { column: number; top: number }>();
     for (const note of orderedNotes) {
       let min = 0;
       for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
-      cols[min].push(note);
+      placement.set(note.id, { column: min, top: heights[min] });
       heights[min] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
     }
-    return cols;
+    // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
+    const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
+    return { placement, boardHeight };
   }, [orderedNotes, columnCount, noteHeights]);
 
   // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
@@ -626,8 +697,18 @@ export function App() {
   // 再計算してdebounceを安定させる。
   const backupJson = useMemo(() => {
     if (!sync || !notes) return null;
+    // 全データJSONバックアップはノート本文を丸ごと含むため、「この端末のみ(noSync)」は除外する。
     return serializeExport(
-      buildExportPayload(sync, { notes, todos, specialItems, specialFolders }, clockNow()),
+      buildExportPayload(
+        sync,
+        {
+          notes: excludeNoSyncNotes(notes),
+          todos,
+          specialItems: specialItems.filter((i) => !i.noSync),
+          specialFolders,
+        },
+        clockNow(),
+      ),
     );
   }, [sync, notes, todos, specialItems, specialFolders]);
   useJsonBackupSync(backupJson, sync?.settings.jsonBackupFileId, (fileId) =>
@@ -768,6 +849,17 @@ export function App() {
       const rawNextNotes = typeof update === "function" ? update(base) : update;
       const changedAt = clockNow();
       const nextNotes = stampChangedNotes(base, rawNextNotes, changedAt);
+      // 変更されたノートidを出す(入力=1件のことが多い。多数出るなら別要因を疑う)。
+      const rawById = new Map(base.map((n) => [n.id, n]));
+      const touched = nextNotes
+        .filter((n) => JSON.stringify(rawById.get(n.id)) !== JSON.stringify(n))
+        .map((n) => n.id.slice(0, 8));
+      logOp(
+        "notes",
+        "update",
+        `base=${base.length} next=${nextNotes.length} ` +
+          `touched=${touched.length}[${touched.join(",")}] active=${activeNoteId?.slice(0, 8) ?? "none"}`,
+      );
       noteTombstonesRef.current = updateTombstonesForMutation(
         base,
         nextNotes,
@@ -778,11 +870,24 @@ export function App() {
       // repositoryが排他ロック内で最新状態へ差分を適用する。
       void commitNoteMutation(base, nextNotes, changedAt).then((committed) => {
         const revision = committed.storageRevision ?? 0;
-        if (revision < storageRevisionRef.current) return;
+        if (revision < storageRevisionRef.current) {
+          logOp(
+            "notes",
+            "commit-stale",
+            `rev=${revision} have=${storageRevisionRef.current} (dropped)`,
+          );
+          return;
+        }
         storageRevisionRef.current = revision;
         noteTombstonesRef.current = committed.noteTombstones ?? {};
         // 自分の確定コミットではエディタ版数を進めない。本文はCM6が既に保持しており、
         // repositoryが追加した末尾空ノート等の構造差分だけをReact stateへ取り込む。
+        logOp(
+          "notes",
+          "commit-applied",
+          `rev=${revision} committed=${committed.notes.length} (was next=${nextNotes.length}, ` +
+            `delta=${committed.notes.length - nextNotes.length})`,
+        );
         // ただし編集中(フォーカス中/未保存)のノートは、コミット結果より新しいローカルの打鍵を
         // 保持しているため local 版で不可侵にする(排他ロック中に別tickの構造差分が混ざっても
         // 編集中ノートの本文を巻き戻さない)。commit往復もここで同じ合流点の保護を通す。
@@ -796,6 +901,11 @@ export function App() {
         );
       });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
+        logOp(
+          "notes",
+          "active-lost",
+          `active=${activeNoteId.slice(0, 8)} not in next → reset to [0]`,
+        );
         setActiveNoteId(nextNotes[0]?.id ?? null);
       }
       return nextNotes;
@@ -887,7 +997,8 @@ export function App() {
     const apiKey = await getGeminiApiKey();
     if (!apiKey) return { targetCount: 0, done: 0, junkCount: 0 };
     const all = notesRef.current ?? [];
-    const targets = all.filter(needsRetag);
+    // 「この端末のみ(noSync)」は Gemini(=Googleのサーバー)へ本文を送らない。
+    const targets = all.filter((n) => needsRetag(n) && !n.noSync);
     if (targets.length === 0) return { targetCount: 0, done: 0, junkCount: 0 };
     // タグ候補＋既存ノートの頻出タグ(最大200)を語彙として渡し、タグの統一を促す(ユーザー指示)。
     const vocabulary = buildTagVocabulary(tagCandidates, all);
@@ -991,9 +1102,10 @@ export function App() {
           buildExportPayload(
             sync,
             {
-              notes: notesRef.current ?? [],
+              // 「この端末のみ(noSync)」は Drive への退避JSONにも含めない。
+              notes: excludeNoSyncNotes(notesRef.current ?? []),
               todos: todosRef.current,
-              specialItems: specialItemsRef.current,
+              specialItems: specialItemsRef.current.filter((i) => !i.noSync),
               specialFolders: specialFoldersRef.current,
             },
             clockNow(),
@@ -1456,58 +1568,62 @@ export function App() {
                   />
                 ) : null}
                 {orderedNotes.length > 0 ? (
-                  // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
+                  // 実測masonry: order順の全ノートを「その時点で一番低い列」へ入れて縦積みする
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
                   // 編集シーム(ドラフトバッファ＋編集レジストリ)を全ペインへ配る。
                   <EditingSeamProvider seam={editingSeam}>
-                    <div className="note-board" data-testid="note-board">
-                      {noteColumns.map((column, colIndex) => (
-                        <div
-                          key={colIndex}
-                          className="note-column"
-                          data-testid={`note-column-${colIndex}`}
+                    // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                    <div
+                      className="note-board"
+                      data-testid="note-board"
+                      style={
+                        {
+                          height: `${noteLayout.boardHeight}px`,
+                          "--note-columns": columnCount,
+                        } as CSSProperties
+                      }
+                    >
+                      {orderedNotes.map((note) => (
+                        <ViewportNote
+                          key={note.id}
+                          noteId={note.id}
+                          title={note.title}
+                          linearIndex={noteLinearIndices.get(note.id) ?? -1}
+                          columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
+                          top={noteLayout.placement.get(note.id)?.top ?? 0}
+                          active={note.id === activeNoteId}
+                          estimatedHeight={noteHeights.get(note.id)}
+                          contentVersion={note.updatedAt}
+                          onHeight={reportNoteHeight}
+                          onSuspend={() => void forceSnapshot(note.id, note.content)}
                         >
-                          {column.map((note) => (
-                            <ViewportNote
-                              key={note.id}
-                              noteId={note.id}
-                              title={note.title}
-                              linearIndex={noteLinearIndices.get(note.id) ?? -1}
-                              active={note.id === activeNoteId}
-                              estimatedHeight={noteHeights.get(note.id)}
-                              contentVersion={note.updatedAt}
-                              onHeight={reportNoteHeight}
-                              onSuspend={() => void forceSnapshot(note.id, note.content)}
-                            >
-                              <NoteEditorPane
-                                note={note}
-                                notes={notes}
-                                tagCandidates={tagCandidates}
-                                isActive={note.id === activeNoteId}
-                                isFirst={orderedNotes[0]?.id === note.id}
-                                isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
-                                autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
-                                manualSyncSignal={manualSyncSignal}
-                                replaceContentVersion={
-                                  replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
-                                }
-                                onNotesChange={updateNotes}
-                                onSelectNote={selectNote}
-                                onSelectNoteByTitle={selectNoteByTitle}
-                                onCreateNote={openFileAsNote}
-                                onAddTodos={addTodos}
-                                onMessage={setDataPanelMessage}
-                                onTogglePin={togglePinNote}
-                                onToggleSpecial={toggleSpecial}
-                                onDeleteNote={deleteNote}
-                                onMoveUp={moveNoteUpOne}
-                                onMoveDown={moveNoteDownOne}
-                                onDragStartNote={handleNoteDragStart}
-                                onDropNote={handleNoteDrop}
-                              />
-                            </ViewportNote>
-                          ))}
-                        </div>
+                          <NoteEditorPane
+                            note={note}
+                            notes={notes}
+                            tagCandidates={tagCandidates}
+                            isActive={note.id === activeNoteId}
+                            isFirst={orderedNotes[0]?.id === note.id}
+                            isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
+                            autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                            manualSyncSignal={manualSyncSignal}
+                            replaceContentVersion={
+                              replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
+                            }
+                            onNotesChange={updateNotes}
+                            onSelectNote={selectNote}
+                            onSelectNoteByTitle={selectNoteByTitle}
+                            onCreateNote={openFileAsNote}
+                            onAddTodos={addTodos}
+                            onMessage={setDataPanelMessage}
+                            onTogglePin={togglePinNote}
+                            onToggleSpecial={toggleSpecial}
+                            onDeleteNote={deleteNote}
+                            onMoveUp={moveNoteUpOne}
+                            onMoveDown={moveNoteDownOne}
+                            onDragStartNote={handleNoteDragStart}
+                            onDropNote={handleNoteDrop}
+                          />
+                        </ViewportNote>
                       ))}
                     </div>
                   </EditingSeamProvider>

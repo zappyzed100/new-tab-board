@@ -70,6 +70,12 @@ export type Note = {
   special?: boolean;
   /** スペシャル内のフォルダパス(例: "仕事/2026")。未設定はルート。NAS/Driveの special/<folder>/ に対応。 */
   specialFolder?: string;
+  /** 「この端末のみ・同期しない」フラグ(ユーザー指示: パスワード等を貼るノート用)。true のノートは
+   * 本文が端末外へ一切出ない——NAS/Drive の全ミラー・履歴スナップショットのNASフラッシュ・全データ
+   * JSONバックアップ・Gemini(要約/タイトル/タグ/TODO抽出)から除外する。**暗号化ではない**:
+   * chrome.storage.local には平文で残るため「端末外へ出さない」だけを保証する(端末固有フラグ・
+   * 他端末へは運ばれない)。除外の合流点は excludeNoSyncNotes(entities/notes.ts)。 */
+  noSync?: boolean;
 };
 
 /** スペシャル(⭐)の凍結項目。元ノートが削除された時点の内容のスナップショット(ユーザー指示:
@@ -85,6 +91,9 @@ export type SpecialItem = {
   updatedAt?: number;
   /** ノート削除で凍結された時刻(epoch ms)。 */
   frozenAt: number;
+  /** 元ノートが「この端末のみ・同期しない」だったか(Note.noSync を凍結時に引き継ぐ)。
+   * true の凍結項目は NAS/Drive の special ミラー・設定バックアップから除外する。 */
+  noSync?: boolean;
 };
 
 /** ノート本文とは独立したシンプルなTODOリスト(TodoMVC相当。ノートのチェックボックス

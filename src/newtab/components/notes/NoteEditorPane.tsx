@@ -9,6 +9,8 @@ import {
   ArrowUp,
   BookOpen,
   CheckSquare,
+  Cloud,
+  CloudOff,
   Copy,
   Eraser,
   GripVertical,
@@ -39,6 +41,9 @@ import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)";
+// 「この端末のみ(noSync)」ノートは本文を Gemini(=Googleのサーバー)へ送らない。手動AIボタンは
+// UIで無効化するが、二重の防御としてハンドラ先頭でもガードする(将来の呼び出し追加で漏れないよう)。
+const NOSYNC_AI_HINT = "「この端末のみ」ノートはGeminiへ送りません(トグルを解除すると使えます)";
 
 // 保存時の自動タグ付けを全ペイン横断で1件ずつに直列化するガード。blurでは複数ペインの
 // スナップショットが同時に発火し、Geminiが429を返す前に複数fetchが飛んでクールダウンが
@@ -155,6 +160,10 @@ export function NoteEditorPane({
   }
 
   async function handleTagThisNote() {
+    if (note.noSync) {
+      onMessage(NOSYNC_AI_HINT);
+      return;
+    }
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
       onMessage(GEMINI_KEY_HINT);
@@ -197,6 +206,10 @@ export function NoteEditorPane({
   // キー未設定・前回から変更なし・別ペイン処理中・意味のある結果なしは null(タグ付けせず)。
   async function runAutoTag(savedContent: string): Promise<NoteAnalysis | null> {
     logOp("autotag", "trigger", `note=${note.id} chars=${savedContent.length}`);
+    if (note.noSync) {
+      logOp("autotag", "skip-nosync", `note=${note.id}`); // 「この端末のみ」は Gemini へ送らない
+      return null;
+    }
     if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) {
       logOp("autotag", "skip-no-retag-needed", `note=${note.id}`);
       return null;
@@ -244,6 +257,10 @@ export function NoteEditorPane({
   }
 
   async function handleSummarize() {
+    if (note.noSync) {
+      onMessage(NOSYNC_AI_HINT);
+      return;
+    }
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
       onMessage(GEMINI_KEY_HINT);
@@ -265,6 +282,10 @@ export function NoteEditorPane({
   }
 
   async function handleExtractTodos() {
+    if (note.noSync) {
+      onMessage(NOSYNC_AI_HINT);
+      return;
+    }
     const apiKey = await getGeminiApiKey();
     if (!apiKey) {
       onMessage(GEMINI_KEY_HINT);
@@ -423,7 +444,35 @@ export function NoteEditorPane({
           >
             <Pin size={14} aria-hidden="true" fill={note.pinned ? "currentColor" : "none"} />
           </IconButton>
+          {/* 「この端末のみ・同期しない」トグル(ユーザー指示: パスワード等を貼る用)。ONのノートは
+              本文を NAS/Drive/Gemini/バックアップへ一切出さない。**暗号化ではない**——chrome.storage.local
+              には平文で残る(トグルは「端末外へ出さない」だけを保証)。 */}
+          <IconButton
+            type="button"
+            variant={note.noSync ? "solid" : "soft"}
+            color={note.noSync ? "amber" : undefined}
+            data-testid={`nosync-note-${note.id}`}
+            title={
+              note.noSync
+                ? "この端末のみ:同期・AI送信しません(平文で端末には残ります)。クリックで同期を再開"
+                : "このノートを同期しない(NAS/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
+            }
+            onClick={() =>
+              onNotesChange((prev) => updateNote(prev, note.id, { noSync: !note.noSync }))
+            }
+          >
+            {note.noSync ? (
+              <CloudOff size={14} aria-hidden="true" />
+            ) : (
+              <Cloud size={14} aria-hidden="true" />
+            )}
+          </IconButton>
         </Flex>
+        {note.noSync ? (
+          <Text size="1" color="amber" data-testid={`nosync-badge-${note.id}`}>
+            🔒 この端末のみ・同期しません(暗号化ではありません。平文で端末に残ります)
+          </Text>
+        ) : null}
         {/* 2行目: 操作ボタンを全て「アイコン＋説明」で統一・順序も統一(移動→表示→AI→編集操作)。
             ピン/自由チェック/同期状態はノート名の行(1行目)へ移動済み。 */}
         <Flex align="center" gap="2" wrap="wrap">
@@ -480,7 +529,7 @@ export function NoteEditorPane({
             variant="soft"
             data-testid={`summarize-${note.id}`}
             title="Geminiでこのノートを要約し、「〇〇の要約」ノートを新規作成する"
-            disabled={aiBusy !== null}
+            disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleSummarize()}
           >
             {aiBusy === "summary" ? (
@@ -495,7 +544,7 @@ export function NoteEditorPane({
             variant="soft"
             data-testid={`extract-todos-${note.id}`}
             title="GeminiでこのノートからTODOを抽出し、TODOリストへ追加する"
-            disabled={aiBusy !== null}
+            disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleExtractTodos()}
           >
             {aiBusy === "todo" ? (
@@ -510,7 +559,7 @@ export function NoteEditorPane({
             variant="soft"
             data-testid={`tag-note-${note.id}`}
             title="Geminiでこのノートにタグとタイトルを付ける"
-            disabled={aiBusy !== null}
+            disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleTagThisNote()}
           >
             {aiBusy === "tag" ? (

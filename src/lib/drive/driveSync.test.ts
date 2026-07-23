@@ -64,6 +64,23 @@ describe("syncNoteToDrive", () => {
     expect(uploadNote).not.toHaveBeenCalled();
   });
 
+  it("「この端末のみ(noSync)」ノートはDriveへ上げない(per-note経路の最終共通点で止める)", async () => {
+    const uploadNote = vi.fn();
+    const getAuthToken = vi.fn();
+    const result = await syncNoteToDrive(
+      { ...note, content: "パスワード", noSync: true },
+      1000,
+      false,
+      {
+        getAuthToken,
+        uploadNote,
+      },
+    );
+    expect(result).toEqual({ status: "skipped-empty" });
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(uploadNote).not.toHaveBeenCalled();
+  });
+
   it("driveFileId未設定なら active フォルダを解決し、検索してから新規アップロードする", async () => {
     const resolveFolderPath = vi.fn().mockResolvedValue("active-folder");
     const findFileForNote = vi.fn().mockResolvedValue(null);
