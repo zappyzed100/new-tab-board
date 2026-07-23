@@ -114,6 +114,10 @@ type Props = {
   onDragStartNote: (noteId: string) => void;
   /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
   onDropNote: (targetNoteId: string) => void;
+  /** ノート添付画像の揮発キャッシュ(NAS相対パス → object URL)。NAS未登録なら空=画像は出ない。 */
+  noteImageUrls?: ReadonlyMap<string, string>;
+  /** 画像の貼り付け/ドロップをNASへ保存し、本文へ挿入する参照テキストを返す(失敗はnull)。 */
+  onAttachImage?: (noteId: string, blob: Blob) => Promise<string | null>;
 };
 
 export function NoteEditorPane({
@@ -139,6 +143,8 @@ export function NoteEditorPane({
   onMoveDown,
   onDragStartNote,
   onDropNote,
+  noteImageUrls,
+  onAttachImage,
 }: Props) {
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -635,7 +641,11 @@ export function NoteEditorPane({
         ) : null}
         <Suspense fallback={<div data-testid="editor-loading">エディタを読み込み中…</div>}>
           {showPreview ? (
-            <MarkdownPreview content={note.content} onNavigateToNote={onSelectNoteByTitle} />
+            <MarkdownPreview
+              content={note.content}
+              onNavigateToNote={onSelectNoteByTitle}
+              imageUrls={noteImageUrls}
+            />
           ) : (
             <Notepad
               key={`editor-${note.id}-${restoreCounter}-${replaceContentVersion}`}
@@ -650,6 +660,8 @@ export function NoteEditorPane({
                 seam?.endEditing(note.id);
                 seam?.clearDraft(note.id);
               }}
+              // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
+              onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}
               onContentChange={(content) => {
                 seam?.setDraft(note.id, content); // 未保存の打鍵を同期的にドラフトへ保持
                 onNotesChange((prev) =>

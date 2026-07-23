@@ -125,7 +125,36 @@ Native Messaging・HTTPを介して疎結合に連携する。
 回帰は `e2e/specs/note-katex.spec.ts`(実ビルドを貫通し、組版結果を `getBoundingClientRect` で
 数値検証する)。単体テスト(`MarkdownPreview.test.tsx`)はsanitize設定を守る側の門。
 
+### src/lib/images/ — ノート添付画像はNASにだけ置き、ブラウザ側は揮発キャッシュ(2026-07-23)
+
+ユーザー指示: 「ノートに画像を紐づけて保存する。画像はNASにだけ保存する。画像は揮発(しかしNASに
+保存)で10MB制限から外す。起動時にNASから取ってくる。NASが未登録だったらノートに表示しない」。
+
+- **保存先はNASのみ**。`chrome.storage.local`(10MBクォータ・AGENTS.md §11)にもIndexedDBにも
+  画像実体を置かない。ブラウザ側にあるのは起動時にNASから読み直すメモリ上のobject URLだけで、
+  タブを閉じれば消える(=クォータを一切消費しない)。
+- **添付の操作**はノート本文への Ctrl+V もしくは画像のドラッグ&ドロップ。CM6は既定でバイナリを
+  無視するため `EditorView.domEventHandlers` の paste/drop/dragover を奪って処理する。
+- **本文の参照は `![alt](nas:images/<noteId>/<id>.<ext>)`**(ユーザー選択)。Markdown標準の画像
+  記法なので、NASの `.md`/`.txt` を他のエディタで開いても「ここに画像がある」ことが読み取れる。
+- **NAS未登録/未接続なら画像を表示しない**。プレビューのimageレンダラが `nas:` を解決できない時は
+  `<img>` を出さず alt だけを残す(壊れた画像アイコンを出さない)。保存側も同じ判断で、保存に
+  失敗したら**本文へ参照を書かない**——表示できない参照だけが残る事故を作らない。
+
+新規ディレクトリ `src/lib/images/` の根拠: 「NAS上の画像実体 ↔ 本文のテキスト参照 ↔ 揮発キャッシュ」
+という独立した関心事で、`externalIO/`(NASの生I/O)にも `entities/`(I/Oを持たない純粋ロジック)にも
+収まらない(`drive/`・`gemini/` と同じ「特定の連携単位で1ディレクトリ」の流儀)。内訳は参照記法の
+純粋ロジック(`noteImages.ts`)・NAS入出力(`nasImageStore.ts`)・Reactの揮発キャッシュ
+(`useNoteImages.ts`)。native-host 側は `write-binary`/`read-binary`/`list-images` を追加した
+(契約は `docs/nas-native-messaging-protocol.md`)。
+
+**旧「貼り付け画像パネル」は削除した**(ユーザー判断)。Ctrl+Vの画像をIndexedDB(`pastedImages`)へ
+貯めてサイドに並べる機能で、どのノートにも属さず・NASにも出ず・ブラウザ内に画像が積み上がる
+一時置き場だった。画像は「ノートに添付してNASへ置く」へ一本化し、DBは v4 で `pastedImages`
+ストアごと削除する(溜まっていた画像も一緒に捨てる——NASへ移す価値のある一時データではない)。
+
 ### src/newtab/components/clipboard/(貼り付け画像の一次保存・2026-07-13)
+**(2026-07-23に削除済み——上の「src/lib/images/」節を参照)**
 Ctrl+Vで貼り付けた画像を一次保存し、ノート類の下で一覧/クリップボードへコピー/削除する
 (ユーザー指示。NASへは出さずローカルのみ)。ノート/検索とは独立した「クリップボード由来の一時
 データ」という関心事のため `src/newtab/components/clipboard/` を新設。保存は既存の

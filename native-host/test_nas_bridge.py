@@ -392,3 +392,84 @@ def test_unknown_message_type_returns_error() -> None:
     result = handle({"type": "something-else"})
     assert result["type"] == "error"
     assert "something-else" in result["error"]
+
+
+# --- ノート添付画像(NASのみ保存・2026-07-23) ------------------------------------------------
+# 画像はテキストと違い utf-8 で往復できない——バイナリが1バイトも変わらずに戻ることを固定する。
+PNG_1PX = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+    "890000000a49444154789c6360000002000100fefe5cdc0000000049454e44ae426082"
+)
+
+
+def test_write_binary_then_read_binary_roundtrip(tmp_path) -> None:
+    import base64
+
+    encoded = base64.b64encode(PNG_1PX).decode("ascii")
+    written = handle(
+        {
+            "type": "write-binary",
+            "path": str(tmp_path),
+            "filename": "images/note-1/a.png",
+            "contentBase64": encoded,
+        }
+    )
+    assert written == {"type": "write-binary-result", "ok": True}
+    # 親フォルダ(images/note-1)は自動生成される
+    on_disk = tmp_path / "images" / "note-1" / "a.png"
+    assert on_disk.read_bytes() == PNG_1PX
+
+    read = handle(
+        {"type": "read-binary", "path": str(tmp_path), "filename": "images/note-1/a.png"}
+    )
+    assert read["ok"] is True
+    assert base64.b64decode(read["contentBase64"]) == PNG_1PX
+
+
+def test_write_binary_rejects_path_traversal(tmp_path) -> None:
+    import base64
+
+    result = handle(
+        {
+            "type": "write-binary",
+            "path": str(tmp_path),
+            "filename": "../escaped.png",
+            "contentBase64": base64.b64encode(PNG_1PX).decode("ascii"),
+        }
+    )
+    assert result["ok"] is False
+    assert not (tmp_path.parent / "escaped.png").exists()
+
+
+def test_read_binary_failure_for_missing_file(tmp_path) -> None:
+    result = handle({"type": "read-binary", "path": str(tmp_path), "filename": "images/none.png"})
+    assert result["type"] == "read-binary-result"
+    assert result["ok"] is False
+
+
+def test_list_images_returns_note_relative_paths(tmp_path) -> None:
+    for rel in ["images/n1/a.png", "images/n1/b.JPG", "images/n2/c.webp"]:
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(PNG_1PX)
+    # 画像以外は無視する(ノートのmdが混ざっても画像一覧には出さない)
+    (tmp_path / "images" / "n1" / "notes.md").write_text("x", encoding="utf-8")
+
+    result = handle({"type": "list-images", "path": str(tmp_path)})
+    assert result["ok"] is True
+    assert result["files"] == ["images/n1/a.png", "images/n1/b.JPG", "images/n2/c.webp"]
+
+
+def test_list_images_empty_when_no_images_dir(tmp_path) -> None:
+    result = handle({"type": "list-images", "path": str(tmp_path)})
+    assert result == {"type": "list-images-result", "ok": True, "files": []}
+
+
+def test_list_tree_does_not_include_images(tmp_path) -> None:
+    # list-tree は .md/.txt の突合削除に使われる——画像を混ぜると突合対象がずれる。
+    (tmp_path / "images").mkdir()
+    (tmp_path / "images" / "a.png").write_bytes(PNG_1PX)
+    (tmp_path / "images" / "keep.md").write_text("x", encoding="utf-8")
+    result = handle({"type": "list-tree", "path": str(tmp_path), "subdir": "images"})
+    assert result["ok"] is True
+    assert result["files"] == ["keep.md"]

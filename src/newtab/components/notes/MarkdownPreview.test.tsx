@@ -9,8 +9,8 @@ import { MarkdownPreview } from "./MarkdownPreview";
 // markdown-preview が残り、getByTestId が複数一致で落ちる。
 afterEach(cleanup);
 
-function preview(content: string): HTMLElement {
-  const { container } = render(<MarkdownPreview content={content} />);
+function preview(content: string, imageUrls?: ReadonlyMap<string, string>): HTMLElement {
+  const { container } = render(<MarkdownPreview content={content} imageUrls={imageUrls} />);
   const el = container.querySelector<HTMLElement>('[data-testid="markdown-preview"]');
   if (el === null) throw new Error("markdown-preview が描画されていない");
   return el;
@@ -87,5 +87,44 @@ describe("MarkdownPreview の[[リンク]]", () => {
     const el = preview("参照: [[線形代数]]");
     const link = el.querySelector<HTMLElement>(".wiki-link");
     expect(link?.dataset.noteTitle).toBe("線形代数");
+  });
+});
+
+describe("MarkdownPreview のノート添付画像(nas: 参照)", () => {
+  it("揮発キャッシュにあれば object URL へ差し替えて描画する", () => {
+    const urls = new Map([["images/n1/a.png", "blob:chrome-extension://x/abc"]]);
+    const el = preview("板書\n\n![黒板](nas:images/n1/a.png)", urls);
+    const img = el.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("blob:chrome-extension://x/abc");
+    expect(img?.getAttribute("alt")).toBe("黒板");
+  });
+
+  it("NASが未登録(キャッシュが空)なら画像を出さない — 壊れた画像アイコンを出さない", () => {
+    const el = preview("板書\n\n![黒板](nas:images/n1/a.png)", new Map());
+    expect(el.querySelector("img")).toBeNull();
+    // altテキストだけは残す(そこに画像があることは分かる)
+    expect(el.textContent).toContain("黒板");
+  });
+
+  it("キャッシュを渡していない場合も画像を出さない", () => {
+    const el = preview("![](nas:images/n1/a.png)");
+    expect(el.querySelector("img")).toBeNull();
+  });
+
+  it("`..` を含む nas: 参照は解決しない(パス脱出を本文から作れない)", () => {
+    const urls = new Map([["../secret.png", "blob:chrome-extension://x/leak"]]);
+    const el = preview("![x](nas:../secret.png)", urls);
+    expect(el.querySelector("img")).toBeNull();
+  });
+
+  it("nas: 以外の画像参照は従来どおり(sanitizeの判断に委ねる)", () => {
+    const el = preview("![外部](https://example.com/a.png)", new Map());
+    expect(el.querySelector("img")?.getAttribute("src")).toBe("https://example.com/a.png");
+  });
+
+  it("blob: を許可しても javascript: は通らない(URI許可を広げすぎていないこと)", () => {
+    const el = preview("[link](javascript:alert(1))", new Map());
+    expect(el.querySelectorAll('a[href^="javascript"]').length).toBe(0);
+    expect(el.textContent).toContain("link");
   });
 });

@@ -1,12 +1,10 @@
 // db.test.ts — db.ts(IndexedDBラッパー)の単体テスト(fake-indexeddbで実DB相当を検証)
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  deletePastedImage,
   deleteSnapshot,
   geminiUsageDateKey,
   getAlarmEnabled,
   getAllIndexEntries,
-  getAllPastedImages,
   getAllSnapshots,
   getBatteryWebhookConfig,
   getGeminiUsageCount,
@@ -16,7 +14,6 @@ import {
   getSnapshotsByNote,
   markSnapshotArchived,
   putIndexEntry,
-  putPastedImage,
   putSnapshot,
   recordGeminiUsage,
   setAlarmEnabled,
@@ -164,19 +161,21 @@ describe("Gemini使用量カウント", () => {
   });
 });
 
-describe("貼り付け画像(pastedImages)", () => {
-  it("保存→新しい順で全件取得→削除ができる", async () => {
-    const blob = new Blob(["x"], { type: "image/png" });
-    await putPastedImage({ id: "img-1", blob, type: "image/png", createdAt: 100 });
-    await putPastedImage({ id: "img-2", blob, type: "image/png", createdAt: 200 });
-
-    const all = await getAllPastedImages();
-    const ids = all.filter((r) => r.id.startsWith("img-")).map((r) => r.id);
-    expect(ids).toEqual(["img-2", "img-1"]); // createdAt降順(新しい順)
-
-    await deletePastedImage("img-1");
-    const after = (await getAllPastedImages()).map((r) => r.id);
-    expect(after).toContain("img-2");
-    expect(after).not.toContain("img-1");
+describe("廃止した貼り付け画像ストア(pastedImages)", () => {
+  it("DBに pastedImages ストアが存在しない(v4で削除・画像はNASのみに置く)", async () => {
+    // 画像をブラウザ内へ貯める経路を残さないことの回帰。ノート添付画像はNASにだけ保存し、
+    // タブ内はメモリ上の揮発キャッシュしか持たない(ユーザー指示・2026-07-23)。
+    await getAllSnapshots(); // DBを開く(getDbは非公開なので既存の公開APIで起こす)
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open("new-tab-board");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    try {
+      expect([...db.objectStoreNames]).not.toContain("pastedImages");
+      expect([...db.objectStoreNames]).toContain("snapshots");
+    } finally {
+      db.close();
+    }
   });
 });

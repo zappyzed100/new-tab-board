@@ -91,12 +91,12 @@
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
+- `e2e/specs/note-images.spec.ts` — note-images.spec.ts — ノート添付画像(NASのみ保存・揮発キャッシュ)の回帰(ユーザー指示・2026-07-23)
 - `e2e/specs/note-katex.spec.ts` — note-katex.spec.ts — ノートプレビューのKaTeX数式描画の回帰(ユーザー指示・2026-07-23)。
 - `e2e/specs/note-manual-tags.spec.ts` — note-manual-tags.spec.ts — 本文の `#タグ`(手動タグ)がタグとして認識されることの回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
-- `e2e/specs/pasted-images.spec.ts` — pasted-images.spec.ts — Ctrl+Vで貼り付けた画像の一次保存/一覧/削除のE2E(2026-07-13)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
 - `e2e/specs/shortcuts-theme-calendar.spec.ts` — shortcuts-theme-calendar.spec.ts — ショートカット一覧/テーマ切替/小型カレンダーのE2E(SPEC.md §4.6・§4.8・§4.9)
 - `e2e/specs/special.spec.ts` — special.spec.ts — ⭐スター/スペシャル(保管棚)の回帰。スターでスペシャル一覧に出る、削除で凍結して
@@ -234,6 +234,12 @@
 - `src/lib/history/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
 - `src/lib/history/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
 - `src/lib/history/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
+- `src/lib/images/nasImageStore.test.ts` — nasImageStore.test.ts — ノート添付画像のNAS入出力の単体テスト(実NAS・実IndexedDBは経由しない)
+- `src/lib/images/nasImageStore.ts` — nasImageStore.ts — ノート添付画像のNAS入出力(保存/一括読み込み)。ブラウザ側に永続化しない
+- `src/lib/images/noteImages.test.ts` — noteImages.test.ts — ノート添付画像の参照(`![alt](nas:…)`)まわりの純粋関数の単体テスト
+- `src/lib/images/noteImages.ts` — noteImages.ts — ノートに添付した画像の保存先解決と本文参照(`![alt](nas:…)`)の純粋ロジック
+- `src/lib/images/useNoteImages.test.ts` — useNoteImages.test.ts — ノート添付画像の揮発キャッシュhookの単体テスト
+- `src/lib/images/useNoteImages.ts` — useNoteImages.ts — ノート添付画像の揮発キャッシュ(NAS相対パス → object URL)を配るReact hook
 - `src/lib/linking/calculator.test.ts` — calculator.test.ts — calculator.ts(安全な算術式評価)の単体テスト
 - `src/lib/linking/calculator.ts` — calculator.ts — 行末の算術式(例: `3 * 8 =`)を安全に評価する(SPEC.md §7 v1確定)
 - `src/lib/linking/links.test.ts` — links.test.ts — links.ts([[リンク]]パース・バックリンク索引)の単体テスト
@@ -273,7 +279,6 @@
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/board/CLAUDE.md`
 - `src/newtab/components/board/ViewportNote.tsx` — ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
-- `src/newtab/components/clipboard/PastedImagesPanel.tsx` — PastedImagesPanel.tsx — Ctrl+Vで貼り付けた画像の一次保存(ローカルのみ・NASへは出さない)と、
 - `src/newtab/components/discovery/SearchPanel.tsx` — SearchPanel.tsx — 全ノート横断の全文検索UI(現在の本文を部分一致で走査。SPEC.md §4.3)
 - `src/newtab/components/discovery/ShortcutsModal.tsx` — ShortcutsModal.tsx — `?`キーで開くショートカット一覧モーダル(SPEC.md §4.6。単一レジストリ駆動)
 - `src/newtab/components/discovery/TagSearchPanel.tsx` — TagSearchPanel.tsx — NASの索引(index.db)から タグ(AND/OR)＋本文(部分一致)＋期間(半開区間)で
@@ -413,6 +418,9 @@
 - def handle_probe
 - def handle_write_file
 - def handle_read_file
+- def handle_write_binary
+- def handle_read_binary
+- def handle_list_images
 - def handle_delete_file
 - def handle_read_generation
 - def handle_bump_generation
@@ -464,6 +472,12 @@
 - def test_list_tree_lists_md_and_txt_recursively
 - def test_list_tree_missing_folder_is_empty
 - def test_unknown_message_type_returns_error
+- def test_write_binary_then_read_binary_roundtrip
+- def test_write_binary_rejects_path_traversal
+- def test_read_binary_failure_for_missing_file
+- def test_list_images_returns_note_relative_paths
+- def test_list_images_empty_when_no_images_dir
+- def test_list_tree_does_not_include_images
 
 ### `scripts/check_bootstrap.py`
 - def parse_ledger
@@ -844,6 +858,9 @@
 - function bumpNasGeneration
 - function readNasActive
 - function listNasTree
+- function writeBinaryToNas
+- function readBinaryFromNas
+- function listNasImages
 - function searchNasHistory
 - function topNasTags
 - function searchNasNotes
@@ -930,6 +947,27 @@
 - function forceSnapshot
 - function useSnapshotScheduler
 
+### `src/lib/images/nasImageStore.ts`
+- type NasImageDeps
+- function blobToBase64
+- function base64ToBlob
+- function mimeTypeForRelPath
+- function saveNoteImageToNas
+- function loadAllNoteImagesFromNas
+
+### `src/lib/images/noteImages.ts`
+- const NAS_IMAGE_SCHEME
+- const NAS_IMAGES_DIR
+- function imageExtensionFor
+- function nasImageRelPath
+- function markdownImageReference
+- function nasRelPathFromSrc
+- function referencedNasImages
+
+### `src/lib/images/useNoteImages.ts`
+- type NoteImageCache
+- function useNoteImages
+
 ### `src/lib/linking/calculator.ts`
 - function evaluateExpression
 - function evaluateLineIfCalculator
@@ -997,7 +1035,6 @@
 - function useGlobalShortcuts
 
 ### `src/lib/storage/db.ts`
-- type PastedImageRecord
 - function putSnapshot
 - function getSnapshotsByNote
 - function getAllSnapshots
@@ -1023,9 +1060,6 @@
 - function geminiUsageDateKey
 - function getGeminiUsageCount
 - function recordGeminiUsage
-- function putPastedImage
-- function getAllPastedImages
-- function deletePastedImage
 
 ### `src/lib/storage/local-data-repository.ts`
 - function initializeLocalData
@@ -1056,9 +1090,6 @@
 
 ### `src/newtab/components/board/ViewportNote.tsx`
 - function ViewportNote
-
-### `src/newtab/components/clipboard/PastedImagesPanel.tsx`
-- function PastedImagesPanel
 
 ### `src/newtab/components/discovery/SearchPanel.tsx`
 - const SearchPanel
