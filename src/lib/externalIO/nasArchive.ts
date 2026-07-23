@@ -67,6 +67,10 @@ export function noteToMarkdown(note: Note): string {
   if (note.specialFolder) fm.push(`special_folder: ${yamlScalar(note.specialFolder)}`);
   if (note.sourceNoteId) fm.push(`source_note_id: ${note.sourceNoteId}`);
   if (note.generatedBy) fm.push(`generated_by: ${yamlScalar(note.generatedBy)}`);
+  // taggedHash を往復保存する——載せないと pull した端末が「未タグ」と誤判定して同一内容へ
+  // 再度 Gemini タグ付けを走らせ、端末ごとにタグが揺れて競合コピーが増える(2026-07-24 実害)。
+  // contentHash は決定的なので他端末でもそのまま有効。build_index.py は未知キーを無視する。
+  if (note.taggedHash) fm.push(`tagged_hash: ${note.taggedHash}`);
   fm.push("---");
   // front matterの閉じ --- のあとは空行を1つ入れて本文(慣例)。
   return `${fm.join("\n")}\n\n${note.content}`;
@@ -129,6 +133,7 @@ export function markdownToNote(md: string, fallbackOrder = 0): Note {
     else if (key === "special_folder") note.specialFolder = yamlUnscalar(value);
     else if (key === "source_note_id") note.sourceNoteId = value;
     else if (key === "generated_by") note.generatedBy = yamlUnscalar(value);
+    else if (key === "tagged_hash") note.taggedHash = value;
   }
   if (tags.length > 0) note.tags = tags;
   return note;

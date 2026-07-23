@@ -18,6 +18,7 @@ import {
   writeNoteToNasStructure,
   writeTodosToNasActive,
 } from "./nasArchive";
+import { contentHash, needsRetag } from "../gemini/tagging";
 import type { Note, Todo } from "../../types";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { putSnapshot, getSnapshot } from "../storage/db";
@@ -227,6 +228,22 @@ describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
     const md = noteToMarkdown({ ...baseNote, sourceNoteId: "orig-1", generatedBy: "gemini" });
     expect(md).toContain("source_note_id: orig-1");
     expect(md).toContain("generated_by: gemini");
+  });
+
+  it("taggedHash は往復保存され、pull後に同一内容の再タグ付けが走らない", () => {
+    // 端末Aで付けた taggedHash を Drive/NAS 経由で端末Bが受け取れないと、Bが「未タグ」と
+    // 誤判定して同一内容へ再タグ付け→タグ揺れ→競合コピー増殖になる(2026-07-24の根本原因)。
+    const tagged: Note = { ...baseNote, taggedHash: contentHash(baseNote.content) };
+    const md = noteToMarkdown(tagged);
+    expect(md).toContain(`tagged_hash: ${tagged.taggedHash}`);
+    const restored = markdownToNote(md);
+    expect(restored.taggedHash).toBe(tagged.taggedHash);
+    // pull した端末側の再タグ付け判定: 同一内容なので false(=Geminiを回さない)。
+    expect(needsRetag({ content: restored.content, taggedHash: restored.taggedHash })).toBe(false);
+  });
+
+  it("taggedHash が無いノートは tagged_hash 行を出さない(未タグの往復は従来どおり)", () => {
+    expect(noteToMarkdown(baseNote)).not.toContain("tagged_hash:");
   });
 
   it("notes/<id>.md へ書き出す", async () => {
