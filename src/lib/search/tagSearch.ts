@@ -1,6 +1,10 @@
 // tagSearch.ts — タグによるノート絞り込みの純粋ロジック(メモリ内。ノートは最大501件・全件
 // メモリ上なので索引不要で一瞬。SQLiteは外部用でアプリ内検索はこれで足りる——設計はPLAN.md)。
-type TaggedNote = { tags?: string[]; junk?: boolean };
+import { resolveNoteTags } from "../entities/tags";
+
+// content を受けるのは本文中の `#タグ`(手動タグ)も検索対象にするため——タグの正本は
+// resolveNoteTags(手動 + Geminiの自動)であって note.tags だけではない。
+type TaggedNote = { content?: string; tags?: string[]; junk?: boolean };
 
 export type TagCount = { tag: string; count: number };
 
@@ -8,7 +12,7 @@ function countByTag(notes: TaggedNote[], predicate: (n: TaggedNote) => boolean):
   const map = new Map<string, number>();
   for (const n of notes) {
     if (n.junk || !predicate(n)) continue;
-    for (const tag of n.tags ?? []) map.set(tag, (map.get(tag) ?? 0) + 1);
+    for (const tag of resolveNoteTags(n)) map.set(tag, (map.get(tag) ?? 0) + 1);
   }
   return [...map.entries()]
     .map(([tag, count]) => ({ tag, count }))
@@ -29,7 +33,7 @@ export function filterNotesByTags<T extends TaggedNote>(
   if (selected.length === 0) return [];
   return notes.filter((n) => {
     if (n.junk) return false;
-    const tags = new Set(n.tags ?? []);
+    const tags = new Set(resolveNoteTags(n));
     return mode === "and" ? selected.every((t) => tags.has(t)) : selected.some((t) => tags.has(t));
   });
 }

@@ -57,3 +57,32 @@ describe("relatedTags", () => {
     expect(relatedTags(notes, [])).toEqual([]);
   });
 });
+
+describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () => {
+  // タグの正本は resolveNoteTags(本文の手動タグ + Geminiの自動タグ)であって note.tags だけではない。
+  const manual = [
+    { id: "m1", content: "微分の復習 #数学", tags: ["復習"] },
+    { id: "m2", content: "英単語 #英語", tags: [] },
+    { id: "m3", content: "行列式 #数学 #線形代数", tags: ["復習"] },
+  ];
+
+  it("tagCounts が本文の#タグを数える", () => {
+    expect(tagCounts(manual)).toEqual([
+      { tag: "数学", count: 2 },
+      { tag: "復習", count: 2 },
+      { tag: "英語", count: 1 },
+      { tag: "線形代数", count: 1 },
+    ]);
+  });
+
+  it("filterNotesByTags が本文の#タグで絞り込める", () => {
+    expect(filterNotesByTags(manual, ["数学"], "and").map((n) => n.id)).toEqual(["m1", "m3"]);
+  });
+
+  it("手動タグとGeminiタグのANDが効く(両者は同じ1つの集合として扱う)", () => {
+    expect(filterNotesByTags(manual, ["数学", "復習"], "and").map((n) => n.id)).toEqual([
+      "m1",
+      "m3",
+    ]);
+  });
+});

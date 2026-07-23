@@ -83,6 +83,25 @@ Native Messaging・HTTPを介して疎結合に連携する。
 
 ## 設計判断の記録（過去の主な設計判断・新規ディレクトリの根拠）
 
+### 手動タグは「本文の `#タグ名`」を正本にする(専用フィールドを作らない・2026-07-23)
+
+ユーザー指示「`#タグ名` と書いたらタグとして認識する仕組みにしよう」。`Note` に手動タグ用の
+フィールドは**足さない**——Geminiの自動タグ(`note.tags`)は `analyzeNote` の結果で毎回**全置換**
+されるため、同じ配列へ混ぜると自動タグ付けのたびに手動分が消える。本文を正本にすれば構造的に
+消えようがない(手動タグを消すのは本文からその語を消したときだけ)。
+
+合流点は `src/lib/entities/tags.ts` の `resolveNoteTags(note)` 一本(本文の手動タグ→自動タグの順で
+重複除去)。表示(`NoteEditorPane`)・タグ検索(`search/tagSearch.ts`)・NAS/Driveのfront matter
+(`externalIO/nasArchive.ts` の `noteToMarkdown`)・⭐スペシャル(`entities/special.ts`)・Geminiへ渡す
+語彙(`buildTagVocabulary`)はすべてこれを通す。front matter へ出すのは、SQLite索引
+(`native-host/build_index.py`)が front matter しか読まないため——ここで合流させないと外部の
+タグ検索から手動タグが見えない。
+
+`extractTags` は Markdown と食い違わないよう、コードフェンス/インラインコード内を除外し、
+`#` は行頭・空白・開き括弧の直後だけをタグの開始と見なす(`###見出し` の2つ目以降の `#` や
+`http://…#frag` を拾わない)。`# 見出し` は CommonMark が `#` の後に空白を要求するため元から
+一致しない=行頭 `#タグ` は見出しにならず、タグ解釈と描画が矛盾しない。
+
 ### src/newtab/components/clipboard/(貼り付け画像の一次保存・2026-07-13)
 Ctrl+Vで貼り付けた画像を一次保存し、ノート類の下で一覧/クリップボードへコピー/削除する
 (ユーザー指示。NASへは出さずローカルのみ)。ノート/検索とは独立した「クリップボード由来の一時

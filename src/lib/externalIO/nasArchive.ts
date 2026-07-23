@@ -18,6 +18,7 @@
 // レイアウトは 年/月/日/ のフォルダ階層(例: 2026/7/12/<noteId>-<timestamp>-<id>.txt。
 // 月・日はゼロ埋めしない——ユーザー指示)。ネイティブホストが親フォルダを自動生成する。
 import { logOp } from "../runtime/log";
+import { resolveNoteTags } from "../entities/tags";
 import { gzipCompress, gzipDecompress } from "../history/gzip";
 import { getAllSnapshots, getNasFolderPath, markSnapshotArchived } from "../storage/db";
 import { loadLocalData } from "../storage/storage";
@@ -46,9 +47,12 @@ function yamlScalar(value: string): string {
 /** ノートを「YAML front matter + Markdown本文」の.md文字列にする(タグ検索の正本形式・ユーザー設計)。 */
 export function noteToMarkdown(note: Note): string {
   const fm: string[] = ["---", `id: ${note.id}`, `title: ${yamlScalar(note.title)}`];
-  if (note.tags && note.tags.length > 0) {
+  // 本文の `#タグ`(手動)も front matter へ出す——SQLite索引(build_index.py)は front matter しか
+  // 読まないため、ここで合流させないと外部のタグ検索から手動タグが見えない。
+  const tags = resolveNoteTags(note);
+  if (tags.length > 0) {
     fm.push("tags:");
-    for (const tag of note.tags) fm.push(`  - ${yamlScalar(tag)}`);
+    for (const tag of tags) fm.push(`  - ${yamlScalar(tag)}`);
   } else {
     fm.push("tags: []");
   }

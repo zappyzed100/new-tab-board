@@ -2,7 +2,7 @@
 // 複数ノートを横並び表示する際、1ペイン=1コンポーネントインスタンスとして完全に独立させる
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import {
   ArrowDown,
@@ -36,7 +36,7 @@ import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
 import { logOp } from "../../../lib/runtime/log";
-import { buildTagVocabulary } from "../../../lib/entities/tags";
+import { buildTagVocabulary, extractTags, resolveNoteTags } from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
@@ -149,6 +149,9 @@ export function NoteEditorPane({
   // note.content を巻き戻す/再マウントを起こしても入力を失わない。フォーカス中は編集レジストリへ
   // 登録して、この1件を全同期経路の合流点で不可侵にする(editing-seam.tsx)。
   const seam = useEditingSeamContext();
+  // 本文の `#タグ` は打鍵のたびに変わるので、本文が変わった時だけ再計算する。
+  const manualTags = useMemo(() => new Set(extractTags(note.content)), [note.content]);
+  const resolvedTags = useMemo(() => resolveNoteTags(note), [note]);
 
   async function handleCopy() {
     try {
@@ -656,10 +659,17 @@ export function NoteEditorPane({
             />
           )}
         </Suspense>
-        {note.tags && note.tags.length > 0 ? (
+        {/* 本文の `#タグ`(手動)とGeminiの自動タグを合流して表示する。手動タグは本文が正本なので
+            自動タグ付けの全置換で消えない——区別が付くよう色を変える(手動=緑/自動=青)。 */}
+        {resolvedTags.length > 0 ? (
           <Flex gap="1" wrap="wrap" data-testid={`note-tags-${note.id}`}>
-            {note.tags.map((tag) => (
-              <Badge key={tag} color="blue" variant="soft">
+            {resolvedTags.map((tag) => (
+              <Badge
+                key={tag}
+                color={manualTags.has(tag) ? "green" : "blue"}
+                variant="soft"
+                data-tag-origin={manualTags.has(tag) ? "manual" : "ai"}
+              >
                 #{tag}
               </Badge>
             ))}

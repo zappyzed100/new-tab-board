@@ -91,6 +91,7 @@
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
+- `e2e/specs/note-manual-tags.spec.ts` — note-manual-tags.spec.ts — 本文の `#タグ`(手動タグ)がタグとして認識されることの回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
@@ -781,6 +782,7 @@
 
 ### `src/lib/entities/tags.ts`
 - function extractTags
+- function resolveNoteTags
 - function buildTagVocabulary
 
 ### `src/lib/entities/todos.ts`

@@ -2,6 +2,7 @@
 // ユーザー指示: ⭐でスペシャルへ保管。ノートがボードにある間はそのノートに追従表示し、ノートを
 // 削除した時点の内容で凍結(SpecialItem)して残す。フォルダで整理でき、NAS/Driveの special/ に対応。
 import type { Note, SpecialItem } from "../../types";
+import { resolveNoteTags } from "./tags";
 
 /** スペシャル一覧の表示エントリ(live=ボードにあるスター済みノート / frozen=削除済みの凍結項目)。 */
 export type SpecialEntry = {
@@ -30,7 +31,8 @@ export function freezeNoteToSpecial(note: Note, now: number): SpecialItem | null
     id: note.id,
     title: note.title,
     content: note.content,
-    tags: note.tags,
+    // 凍結時点のタグは本文の手動タグも含めて確定させる(凍結後は本文が編集されないため)。
+    tags: resolveNoteTags(note),
     folder: note.specialFolder,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
@@ -76,7 +78,7 @@ export function specialEntries(notes: Note[], items: SpecialItem[]): SpecialEntr
       id: n.id,
       title: n.title,
       content: n.content,
-      tags: n.tags,
+      tags: resolveNoteTags(n),
       folder: n.specialFolder,
       source: "live" as const,
     }));
