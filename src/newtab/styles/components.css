@@ -275,6 +275,22 @@
   background: var(--surface);
 }
 
+/* ノート下部の添付画像サムネイル帯。ペイン幅を超えず、枚数が増えても折り返して収まる。 */
+.note-image-thumb-link {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.note-image-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  display: block;
+}
+
 /* NASが未登録/未接続で解決できなかった画像。壊れた画像アイコンを出さず、altだけを控えめに残す。 */
 .nas-image-missing {
   color: var(--text-muted);

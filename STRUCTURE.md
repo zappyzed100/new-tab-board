@@ -289,6 +289,8 @@
 - `src/newtab/components/notes/MarkdownPreview.test.tsx` — MarkdownPreview.test.tsx — Markdownプレビュー(KaTeX数式 + sanitize)の単体テスト
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/notes/NoteEditorPane.tsx` — NoteEditorPane.tsx — ノート編集エリア1件分(SPEC.md §4.2)
+- `src/newtab/components/notes/NoteImageStrip.test.tsx` — NoteImageStrip.test.tsx — ノート下部の添付画像サムネイル帯の単体テスト
+- `src/newtab/components/notes/NoteImageStrip.tsx` — NoteImageStrip.tsx — ノート下部に並べる添付画像のサムネイル帯(ユーザー指示・2026-07-23)
 - `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
 - `src/newtab/components/notes/editing-seam.tsx` — editing-seam.tsx — 編集中ノートの単一の真実源(ドラフトバッファ＋編集レジストリ)を配るReact context
@@ -962,6 +964,8 @@
 - function nasImageRelPath
 - function markdownImageReference
 - function nasRelPathFromSrc
+- function noteImagePathPrefix
+- function attachedImagesForNote
 - function referencedNasImages
 
 ### `src/lib/images/useNoteImages.ts`
@@ -1114,6 +1118,9 @@
 
 ### `src/newtab/components/notes/NoteEditorPane.tsx`
 - function NoteEditorPane
+
+### `src/newtab/components/notes/NoteImageStrip.tsx`
+- function NoteImageStrip
 
 ### `src/newtab/components/notes/Notepad.tsx`
 - function Notepad

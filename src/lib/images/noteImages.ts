@@ -50,6 +50,33 @@ export function nasRelPathFromSrc(src: string): string | null {
   return rel;
 }
 
+/** そのノートに属する画像の置き場(`images/<noteId>/`)。 */
+export function noteImagePathPrefix(noteId: string): string {
+  return `${NAS_IMAGES_DIR}/${noteId}/`;
+}
+
+/** ノートの下部に並べる添付画像を、揮発キャッシュの中から選んで返す(2026-07-23・ユーザー指示
+ * 「貼り付けた画像内容を確認できるようにしたい。ノートの下部に表示」)。
+ *
+ * 選ぶ基準は**本文の参照ではなく保存先フォルダ**(`images/<noteId>/`)——本文から参照テキストを
+ * 消しても画像自体は残るため、参照だけを見ると「貼ったのに確認できない」画像が生まれる。
+ * 並びは本文で参照している順を先にし、本文に出てこないものを相対パス順で後ろへ置く
+ * (書いた順に見えるのが自然で、消し忘れ・貼り直しの残骸も末尾で確認できる)。
+ * NASが未登録/未接続ならキャッシュが空なので結果も空=何も表示されない。 */
+export function attachedImagesForNote(
+  noteId: string,
+  content: string,
+  available: ReadonlyMap<string, string>,
+): string[] {
+  const prefix = noteImagePathPrefix(noteId);
+  const owned = new Set([...available.keys()].filter((rel) => rel.startsWith(prefix)));
+  const ordered: string[] = [];
+  for (const rel of referencedNasImages(content)) {
+    if (owned.delete(rel)) ordered.push(rel);
+  }
+  return [...ordered, ...[...owned].sort()];
+}
+
 /** 本文が参照しているNAS画像の相対パスを重複無く列挙する(未使用画像の判定などに使う)。 */
 export function referencedNasImages(content: string): string[] {
   const found = new Set<string>();

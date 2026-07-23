@@ -24,6 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { BacklinksPanel } from "./BacklinksPanel";
+import { NoteImageStrip } from "./NoteImageStrip";
 import { SnapshotScheduler } from "./SnapshotScheduler";
 import { useEditingSeamContext } from "./editing-seam";
 import type { DragEvent as ReactDragEvent } from "react";
@@ -671,6 +672,11 @@ export function NoteEditorPane({
             />
           )}
         </Suspense>
+        {/* 添付画像のサムネイル帯(ユーザー指示: 貼り付けた画像内容をノート下部で確認できるように)。
+            プレビュー中は本文の中に実物が描画されるため、二重に出さず編集中だけ並べる。 */}
+        {showPreview ? null : (
+          <NoteImageStrip noteId={note.id} content={note.content} imageUrls={noteImageUrls} />
+        )}
         {/* 本文の `#タグ`(手動)とGeminiの自動タグを合流して表示する。手動タグは本文が正本なので
             自動タグ付けの全置換で消えない——区別が付くよう色を変える(手動=緑/自動=青)。 */}
         {resolvedTags.length > 0 ? (
