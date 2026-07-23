@@ -163,6 +163,30 @@ test("各ノートの操作ボタンは3行以内に収まる(狭い列でも)",
   expect(rows.length).toBeLessThanOrEqual(3);
 });
 
+test("コードコメントが画面に描画されない(JSX子要素内の // 漏れの回帰・2026-07-23)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(panes(page)).toHaveCount(3); // 空3つ=ユーザー入力に「//」は無い状態で見る
+
+  // JSXの子要素の位置に書かれた「// コメント」はコメントにならずテキストノードとして
+  // 描画される(実バグ: note-board の直前に「// DOMの並びは…」が丸ごと表示されていた)。
+  // 画面上の全テキストノードから「//」で始まるものを探し、1つも無いことを実測する。
+  const leaked = await page.getByTestId("app-root").evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const bad: string[] = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.textContent?.trim() ?? "";
+      if (text.startsWith("//")) bad.push(text.slice(0, 60));
+    }
+    return bad;
+  });
+  expect(leaked).toEqual([]);
+});
+
 test("空ノートと非空ノートで背景色が変わる(見分けられる)", async ({ context, newTabUrl }) => {
   const page = await context.newPage();
   await page.setViewportSize({ width: 1600, height: 900 });

@@ -1589,7 +1589,8 @@ export function App() {
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
                   // 編集シーム(ドラフトバッファ＋編集レジストリ)を全ペインへ配る。
                   <EditingSeamProvider seam={editingSeam}>
-                    // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                    {/* DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                        JSX子要素の位置では // はコメントにならず画面に描画されてしまう——必ずこの形式で書く。 */}
                     <div
                       className="note-board"
                       data-testid="note-board"
