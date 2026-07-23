@@ -114,26 +114,25 @@ body {
 }
 
 /* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
-   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて `.note-column` ごとに
-   縦積みする。各列は独立した縦スタック(align-items:flex-startで上端揃え・縦の高さは列でバラバラ)。
+   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて縦積みする。
    実測で最短列へ詰めるため列高さがほぼ揃い、長いノートがあっても凸凹が最小化される。
-   ※masonry配置アルゴリズム自体(App.tsx)はリデザインで変更していない——ここは見た目のみ。 */
+
+   **列は<div>で作らず絶対配置で表現する**(2026-07-23)。列ごとの入れ物へ振り分けると、ノートが
+   1件増減しただけでセルが別の列(=別の親DOM)へ移り、Reactが再マウントしてCodeMirrorが破棄され、
+   入力中のカーソルと以降の打鍵が失われた(ユーザー報告「操作中のノートがどこかに移る」)。
+   DOMの並びをorder順で固定し、位置だけをleft/topで動かせばCM6は生き残る。
+   高さ(--note-columns と併せて App.tsx がインラインで与える)は絶対配置ぶんの自己申告。 */
 .note-board {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
+  position: relative;
+  --note-columns: 3;
 }
 
-.note-column {
-  flex: 1 1 0;
-  min-width: 240px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列内で横幅いっぱい・高さは中身なり。 */
+/* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列幅はボード幅の等分、
+   left は i*(幅+gap) = i*(100%+gap)/列数(gap=--space-3)。高さは中身なり。 */
 .note-cell {
+  position: absolute;
+  left: calc((100% + var(--space-3)) / var(--note-columns) * var(--note-column-index));
+  width: calc((100% - (var(--note-columns) - 1) * var(--space-3)) / var(--note-columns));
   min-width: 0;
 }
 

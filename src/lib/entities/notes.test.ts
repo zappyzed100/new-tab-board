@@ -1,10 +1,12 @@
 // notes.test.ts — notes.ts の純粋関数の単体テスト
 import { describe, expect, it } from "vitest";
+import type { Note } from "../../types";
 import {
   addNote,
   addNoteAfter,
   createNote,
   excludeNoSyncNotes,
+  isGeneratedEmptyPlaceholder,
   isNoSyncNote,
   mergeDroppedContent,
   pasteResultsIntoNotes,
@@ -277,37 +279,57 @@ describe("ensureTrailingEmptyNotes", () => {
     expect(after.filter((n) => n.content === "")).toHaveLength(3);
   });
 
-  it("空欄が間にあるだけなら末尾へ補充し、取り残しは間引いて常に空3つにする", () => {
-    // 空(ノートA) → 本文(X) の順。末尾は本文なので3件を末尾へ補充し、取り残しのノートAは
-    // 間引く(常に空プレースホルダは3つ・末尾に並ぶ。X + 空3つ = 計4件)。
+  it("取り残された空は消さず、不足分だけ末尾へ補充して合計3つにする", () => {
+    // 空(ノートA) → 本文(X) の順。空は全体で1つなので2つだけ末尾へ補充する(合計3つ)。
+    // 取り残しのノートAを削ると、その後ろのノートが繰り上がって表示位置が動く——だから消さない。
     const notes = [createNote("ノートA", 0), { ...createNote("X", 1), content: "本文" }];
     const after = ensureTrailingEmptyNotes(notes, 3);
     expect(after).toHaveLength(4);
     expect(after.filter((n) => n.content.trim() === "")).toHaveLength(3);
+    // 既存ノートは1件も消えていない(idが全部残っている)。
+    expect(notes.every((n) => after.some((a) => a.id === n.id))).toBe(true);
+    // 補充分は末尾(既存の最大orderより後ろ)に並ぶ。
     expect(
       sortedNotes(after)
-        .slice(-3)
+        .slice(-2)
         .every((n) => n.content.trim() === ""),
     ).toBe(true);
   });
 
-  it("末尾以外に取り残された空プレースホルダは間引いて常に空を3つに保つ(ユーザー指摘: 常に3つ)", () => {
-    // メモ + 空A,B,C。真ん中のノートBへ入力した状態(=Bだけ非空)で維持を走らせると、
-    // 以前は取り残しA + 末尾補充で空が4つに増えていた。空プレースホルダは常に3つに保つ。
+  it("2番目の空へ入力しても前の空を消さない(操作中のノートが動くバグの回帰・2026-07-23)", () => {
+    // メモ + 空A,B,C。2番目のノートBへ入力した状態(=Bだけ非空)。以前はここで「末尾の連続空が
+    // 1つしかない」と誤判定して2件補充→余剰4件を order の低い方から間引き、**入力中のBより前に
+    // あるノートAを削除**していた。その繰り上がりでBが別の列へ飛び、CodeMirrorが再マウントされて
+    // カーソルと以降の打鍵が失われる(ユーザー報告)。前のノートは消えず、Bのorderも動かない。
     const notes = [
       { ...createNote("メモ", 0), content: "本文" },
       createNote("ノートA", 1),
       { ...createNote("ノートB", 2), content: "入力した" },
       createNote("ノートC", 3),
     ];
+    const editing = notes[2];
     const after = ensureTrailingEmptyNotes(notes, 3, 1000);
-    expect(after.filter((n) => n.content.trim() === "")).toHaveLength(3);
-    // 3つの空は表示順の末尾に並ぶ。
-    expect(
-      sortedNotes(after)
-        .slice(-3)
-        .every((n) => n.content.trim() === ""),
-    ).toBe(true);
+    // ①既存ノートは1件も消えない(特に入力中ノートより前のノートA)。
+    expect(after.map((n) => n.id)).toEqual(expect.arrayContaining(notes.map((n) => n.id)));
+    // ②入力中ノートの表示順の位置(前に並ぶ件数)が変わらない=画面上で動かない。
+    const indexOf = (list: Note[]) => sortedNotes(list).findIndex((n) => n.id === editing.id);
+    expect(indexOf(after)).toBe(indexOf(notes));
+    // ③空プレースホルダは合計3つ(A・C + 末尾へ1つ補充)。
+    expect(after.filter(isGeneratedEmptyPlaceholder)).toHaveLength(3);
+  });
+
+  it("超過した空プレースホルダは末尾側から間引く(前を削ると後続が繰り上がって動くため)", () => {
+    // 別端末とのマージ等で空が5つになった状態。間引くのは order の高い2つ(ノートD・E)。
+    const notes = [
+      { ...createNote("メモ", 0), content: "本文" },
+      createNote("ノートA", 1),
+      createNote("ノートB", 2),
+      createNote("ノートC", 3),
+      createNote("ノートD", 4),
+      createNote("ノートE", 5),
+    ];
+    const after = ensureTrailingEmptyNotes(notes, 3, 1000);
+    expect(after.map((n) => n.title)).toEqual(["メモ", "ノートA", "ノートB", "ノートC"]);
   });
 
   it("非空ノートが件数以上の高orderを持っても、末尾に空を実際に確保する(空ノート量産バグの回帰)", () => {

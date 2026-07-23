@@ -37,6 +37,20 @@ function withTrailingNotes(notes: Note[], now: number): Note[] {
   return ensureTrailingEmptyNotes(notes, TRAILING_EMPTY_NOTES, now);
 }
 
+/** 末尾空ノートの維持で「何件足して何件消したか」。件数差だけを出すと、3件追加+2件削除が
+ * `+1` に相殺されて**既存ノートの削除が見えなくなる**(実際、入力中ノートより前の空ノートが
+ * 消えて盤面が繰り上がるバグを、この相殺が実機ログ上で隠していた — 2026-07-23)。 */
+function placeholderDelta(before: Note[], after: Note[]): string {
+  const beforeIds = new Set(before.map((n) => n.id));
+  const afterIds = new Set(after.map((n) => n.id));
+  const added = after.filter((n) => !beforeIds.has(n.id));
+  const removed = before.filter((n) => !afterIds.has(n.id));
+  return (
+    `added=${added.length}[${added.map((n) => n.title).join(",")}] ` +
+    `removed=${removed.length}[${removed.map((n) => n.title).join(",")}]`
+  );
+}
+
 function noteTimestamp(note: Note): number {
   return note.updatedAt ?? note.createdAt ?? 0;
 }
@@ -52,7 +66,7 @@ export async function initializeLocalData(now: number): Promise<LocalData> {
       "initialize",
       `stored=${before.length} normalized=${normalized.notes.length} ` +
         `final=${notes.length} trailingEmpty=${trailingEmptyCount(notes)} ` +
-        `trailingAdded=${notes.length - normalized.notes.length}`,
+        placeholderDelta(normalized.notes, notes),
     );
     if (
       sameValue(notes, before) &&
@@ -106,7 +120,7 @@ export async function commitNoteMutation(
       "commit-mutation:out",
       `storedNow=${(current.notes ?? []).length} afterMerge=${mergedNotes.length} ` +
         `final=${finalNotes.length} trailingEmpty=${trailingEmptyCount(finalNotes)} ` +
-        `trailingAdded=${finalNotes.length - mergedNotes.length}`,
+        placeholderDelta(mergedNotes, finalNotes),
     );
     return {
       ...current,

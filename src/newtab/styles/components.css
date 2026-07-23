@@ -126,8 +126,8 @@
 
 /* --- ノート編集エリア(エディタ/プレビュー/履歴/バックリンク。1ペイン=1ノート。
    NoteEditorPane.tsxが `note-editor-area-<noteId>` を付与するため前方一致で拾う)
-   外枠はCard(NoteEditorPane.tsx)に任せる。列固定masonryでは各ペインは所属する
-   `.note-column`(縦flex)の中で横幅いっぱい・高さは中身なり(等高stretchしない)。 --- */
+   外枠はCard(NoteEditorPane.tsx)に任せる。実測masonryでは各ペインは絶対配置の
+   `.note-cell`(layout.css)の中で横幅いっぱい・高さは中身なり(等高stretchしない)。 --- */
 [data-testid^="note-editor-area-"] {
   width: 100%;
   min-width: 0;

@@ -1,5 +1,14 @@
 // App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
   AlertTriangle,
@@ -629,18 +638,25 @@ export function App() {
       return next;
     });
   }, []);
-  const noteColumns = useMemo(() => {
-    const cols: Note[][] = Array.from({ length: columnCount }, () => []);
+  // 各ノートの置き場所(列index・列内のtop座標)と、ボード全体の高さ。**DOMの並びは常に
+  // order順のまま**にして、列は絶対配置(CSSのleft)＋topのpxで表現する。列ごとの<div>へ振り分けて
+  // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
+  // CodeMirrorが破棄され「入力中にカーソルが飛び以降の打鍵が消える」実害が出ていた(2026-07-23)。
+  // 親が変わらなければ配置が変わってもCM6は生き続ける——position/top/leftだけが変わる。
+  const noteLayout = useMemo(() => {
+    const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
+    const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
     const heights = new Array(columnCount).fill(0);
-    const GAP = 12; // --space-3 相当。列高さ見積りの隙間ぶん(厳密でなくてよい)。
-    const ESTIMATE = 220; // 未測定ノートの暫定高さ(初回描画→測定で確定する)。
+    const placement = new Map<string, { column: number; top: number }>();
     for (const note of orderedNotes) {
       let min = 0;
       for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
-      cols[min].push(note);
+      placement.set(note.id, { column: min, top: heights[min] });
       heights[min] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
     }
-    return cols;
+    // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
+    const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
+    return { placement, boardHeight };
   }, [orderedNotes, columnCount, noteHeights]);
 
   // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
@@ -1505,56 +1521,60 @@ export function App() {
                   />
                 ) : null}
                 {orderedNotes.length > 0 ? (
-                  // 列固定masonry: order順の全ノートを i%列数 で各列へ振り分けて縦積みする
+                  // 実測masonry: order順の全ノートを「その時点で一番低い列」へ入れて縦積みする
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
-                  <div className="note-board" data-testid="note-board">
-                    {noteColumns.map((column, colIndex) => (
-                      <div
-                        key={colIndex}
-                        className="note-column"
-                        data-testid={`note-column-${colIndex}`}
+                  // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                  <div
+                    className="note-board"
+                    data-testid="note-board"
+                    style={
+                      {
+                        height: `${noteLayout.boardHeight}px`,
+                        "--note-columns": columnCount,
+                      } as CSSProperties
+                    }
+                  >
+                    {orderedNotes.map((note) => (
+                      <ViewportNote
+                        key={note.id}
+                        noteId={note.id}
+                        title={note.title}
+                        linearIndex={noteLinearIndices.get(note.id) ?? -1}
+                        columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
+                        top={noteLayout.placement.get(note.id)?.top ?? 0}
+                        active={note.id === activeNoteId}
+                        estimatedHeight={noteHeights.get(note.id)}
+                        contentVersion={note.updatedAt}
+                        onHeight={reportNoteHeight}
+                        onSuspend={() => void forceSnapshot(note.id, note.content)}
                       >
-                        {column.map((note) => (
-                          <ViewportNote
-                            key={note.id}
-                            noteId={note.id}
-                            title={note.title}
-                            linearIndex={noteLinearIndices.get(note.id) ?? -1}
-                            active={note.id === activeNoteId}
-                            estimatedHeight={noteHeights.get(note.id)}
-                            contentVersion={note.updatedAt}
-                            onHeight={reportNoteHeight}
-                            onSuspend={() => void forceSnapshot(note.id, note.content)}
-                          >
-                            <NoteEditorPane
-                              note={note}
-                              notes={notes}
-                              tagCandidates={tagCandidates}
-                              isActive={note.id === activeNoteId}
-                              isFirst={orderedNotes[0]?.id === note.id}
-                              isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
-                              autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
-                              manualSyncSignal={manualSyncSignal}
-                              replaceContentVersion={
-                                replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
-                              }
-                              onNotesChange={updateNotes}
-                              onSelectNote={selectNote}
-                              onSelectNoteByTitle={selectNoteByTitle}
-                              onCreateNote={openFileAsNote}
-                              onAddTodos={addTodos}
-                              onMessage={setDataPanelMessage}
-                              onTogglePin={togglePinNote}
-                              onToggleSpecial={toggleSpecial}
-                              onDeleteNote={deleteNote}
-                              onMoveUp={moveNoteUpOne}
-                              onMoveDown={moveNoteDownOne}
-                              onDragStartNote={handleNoteDragStart}
-                              onDropNote={handleNoteDrop}
-                            />
-                          </ViewportNote>
-                        ))}
-                      </div>
+                        <NoteEditorPane
+                          note={note}
+                          notes={notes}
+                          tagCandidates={tagCandidates}
+                          isActive={note.id === activeNoteId}
+                          isFirst={orderedNotes[0]?.id === note.id}
+                          isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
+                          autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                          manualSyncSignal={manualSyncSignal}
+                          replaceContentVersion={
+                            replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
+                          }
+                          onNotesChange={updateNotes}
+                          onSelectNote={selectNote}
+                          onSelectNoteByTitle={selectNoteByTitle}
+                          onCreateNote={openFileAsNote}
+                          onAddTodos={addTodos}
+                          onMessage={setDataPanelMessage}
+                          onTogglePin={togglePinNote}
+                          onToggleSpecial={toggleSpecial}
+                          onDeleteNote={deleteNote}
+                          onMoveUp={moveNoteUpOne}
+                          onMoveDown={moveNoteDownOne}
+                          onDragStartNote={handleNoteDragStart}
+                          onDropNote={handleNoteDrop}
+                        />
+                      </ViewportNote>
                     ))}
                   </div>
                 ) : (

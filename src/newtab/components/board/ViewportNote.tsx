@@ -1,5 +1,5 @@
 // ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 const VIEWPORT_MARGIN_PX = 900;
 const DEFAULT_PLACEHOLDER_HEIGHT_PX = 520;
@@ -37,6 +37,10 @@ type Props = {
   noteId: string;
   title: string;
   linearIndex: number;
+  /** 実測masonryで割り当てられた列(0始まり)。CSS変数 --note-column-index として左位置に効く。 */
+  columnIndex: number;
+  /** 列内の縦位置(px)。絶対配置なのでApp側の計算結果をそのまま座標として使う。 */
+  top: number;
   active: boolean;
   estimatedHeight?: number;
   contentVersion?: number;
@@ -49,6 +53,8 @@ export function ViewportNote({
   noteId,
   title,
   linearIndex,
+  columnIndex,
+  top,
   active,
   estimatedHeight = DEFAULT_PLACEHOLDER_HEIGHT_PX,
   contentVersion,
@@ -104,9 +110,18 @@ export function ViewportNote({
       ref={cellRef}
       className="note-cell"
       data-linear-index={linearIndex}
+      data-column-index={columnIndex}
       data-note-id={noteId}
       data-viewport-state={mounted ? "mounted" : "deferred"}
-      style={mounted ? undefined : { height: `${placeholderHeight}px` }}
+      // 絶対配置(layout.css)。列はCSS変数→left、縦はtopのpx。DOMの並びは常にorder順で不変なので、
+      // 配置が変わってもReactは再マウントせず、編集中のCodeMirrorとフォーカスが生き残る。
+      style={
+        {
+          top: `${top}px`,
+          "--note-column-index": columnIndex,
+          ...(mounted ? null : { height: `${placeholderHeight}px` }),
+        } as CSSProperties
+      }
     >
       {mounted ? (
         children
