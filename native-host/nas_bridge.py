@@ -88,6 +88,67 @@ def handle_read_file(message: dict) -> dict:
         return {"type": "read-result", "ok": False, "error": str(exc)}
 
 
+# ノート添付画像(2026-07-23・ユーザー指示)。画像は chrome.storage.local の 10MB クォータを
+# 圧迫しないよう**NASにだけ**置き、ブラウザ側はメモリ上の揮発キャッシュしか持たない。
+# native messaging のメッセージは JSON なのでバイト列を直接運べない——base64 で載せる
+# (テキスト用の write-file/read-file は utf-8 前提なので分けている。バイナリを utf-8 として
+# 読み書きすると壊れるため、同じハンドラへ相乗りさせてはいけない)。
+IMAGES_DIR = "images"
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg")
+
+
+def handle_write_binary(message: dict) -> dict:
+    """base64のバイト列を base 配下へ書く(親フォルダは自動生成)。"""
+    try:
+        import base64
+
+        base = message["path"]
+        if not os.path.isdir(base):
+            raise FileNotFoundError(f"base folder not found: {base!r}")
+        target = _safe_target(base, message["filename"])
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as f:
+            f.write(base64.b64decode(message["contentBase64"]))
+        return {"type": "write-binary-result", "ok": True}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "write-binary-result", "ok": False, "error": str(exc)}
+
+
+def handle_read_binary(message: dict) -> dict:
+    """base 配下のファイルをbase64で返す。"""
+    try:
+        import base64
+
+        target = _safe_target(message["path"], message["filename"])
+        with open(target, "rb") as f:
+            content = base64.b64encode(f.read()).decode("ascii")
+        return {"type": "read-binary-result", "ok": True, "contentBase64": content}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "read-binary-result", "ok": False, "error": str(exc)}
+
+
+def handle_list_images(message: dict) -> dict:
+    """images/ 配下の画像ファイルを "images/<noteId>/<name>" 形式の相対パスで再帰列挙する。
+    起動時にブラウザが一括で取りに来る一覧(NAS未登録なら呼ばれない)。フォルダが無ければ空。
+    list-tree と分けているのは、あちらが .md/.txt だけを返す契約でノート突合に使われており、
+    画像を混ぜると突合削除の対象がずれるため。"""
+    try:
+        base = message["path"]
+        root = _safe_target(base, IMAGES_DIR)
+        if not os.path.isdir(root):
+            return {"type": "list-images-result", "ok": True, "files": []}
+        files = []
+        for dirpath, _dirnames, filenames in os.walk(root):
+            for name in filenames:
+                if name.lower().endswith(IMAGE_EXTENSIONS):
+                    rel = os.path.relpath(os.path.join(dirpath, name), root).replace("\\", "/")
+                    files.append(f"{IMAGES_DIR}/{rel}")
+        files.sort()
+        return {"type": "list-images-result", "ok": True, "files": files}
+    except (OSError, KeyError, ValueError) as exc:
+        return {"type": "list-images-result", "ok": False, "error": str(exc)}
+
+
 def handle_delete_file(message: dict) -> dict:
     """base配下のファイルを削除する(ブラウザで消えた/空になったノートを active/ から消す用)。
     既に無い場合も成功扱い(消したい結果は達成)。base の外へ出るパスは拒否。"""
@@ -438,6 +499,9 @@ HANDLERS = {
     "probe": handle_probe,
     "write-file": handle_write_file,
     "read-file": handle_read_file,
+    "write-binary": handle_write_binary,
+    "read-binary": handle_read_binary,
+    "list-images": handle_list_images,
     "delete-file": handle_delete_file,
     "read-generation": handle_read_generation,
     "bump-generation": handle_bump_generation,

@@ -17,6 +17,21 @@ type ProbeResult = { type: "probe-result"; ok: boolean; error?: string };
 type WriteResult = { type: "write-result"; ok: boolean; error?: string };
 type ReadResult = { type: "read-result"; ok: boolean; content?: string; error?: string };
 type DeleteResult = { type: "delete-result"; ok: boolean; error?: string };
+// ノート添付画像(2026-07-23)。JSONにバイト列は載らないのでbase64で運ぶ。テキスト用の
+// write-file/read-file はutf-8前提なので相乗りさせない(バイナリが壊れる)。
+type WriteBinaryResult = { type: "write-binary-result"; ok: boolean; error?: string };
+type ReadBinaryResult = {
+  type: "read-binary-result";
+  ok: boolean;
+  contentBase64?: string;
+  error?: string;
+};
+type ListImagesResult = {
+  type: "list-images-result";
+  ok: boolean;
+  files?: string[];
+  error?: string;
+};
 export type HistoryHit = {
   note_id: string;
   title: string | null;
@@ -71,6 +86,9 @@ type HostResponse =
   | WriteResult
   | ReadResult
   | DeleteResult
+  | WriteBinaryResult
+  | ReadBinaryResult
+  | ListImagesResult
   | SearchResult
   | SearchNotesResult
   | TopTagsResult
@@ -235,6 +253,45 @@ export async function listNasTree(
 ): Promise<string[] | null> {
   const result = await callHost({ type: "list-tree", path, subdir }, connectNative);
   if (result?.type === "list-tree-result" && result.ok) {
+    return result.files ?? [];
+  }
+  return null;
+}
+
+/** バイナリ(base64)をNASへ書く。ノート添付画像専用(2026-07-23)。失敗はfalse。 */
+export async function writeBinaryToNas(
+  path: string,
+  filename: string,
+  contentBase64: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<boolean> {
+  const result = await callHost(
+    { type: "write-binary", path, filename, contentBase64 },
+    connectNative,
+  );
+  return result?.type === "write-binary-result" && result.ok;
+}
+
+/** NASのバイナリをbase64で読む。host未導入/読み込み失敗はnull。 */
+export async function readBinaryFromNas(
+  path: string,
+  filename: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<string | null> {
+  const result = await callHost({ type: "read-binary", path, filename }, connectNative);
+  if (result?.type === "read-binary-result" && result.ok && result.contentBase64 !== undefined) {
+    return result.contentBase64;
+  }
+  return null;
+}
+
+/** NASの images/ 配下の画像を "images/<noteId>/<name>" の相対パスで列挙する。失敗はnull。 */
+export async function listNasImages(
+  path: string,
+  connectNative: ConnectNativeFn = (app) => chrome.runtime.connectNative(app),
+): Promise<string[] | null> {
+  const result = await callHost({ type: "list-images", path }, connectNative);
+  if (result?.type === "list-images-result" && result.ok) {
     return result.files ?? [];
   }
   return null;

@@ -35,17 +35,12 @@ interface AppDB extends DBSchema {
     key: string;
     value: unknown;
   };
-  pastedImages: {
-    key: string;
-    value: PastedImageRecord;
-  };
 }
 
-/** Ctrl+Vで貼り付けた画像の一次保存レコード(ユーザー指示。NASへは出さずローカルのみ)。 */
-export type PastedImageRecord = { id: string; blob: Blob; type: string; createdAt: number };
-
 const DB_NAME = "new-tab-board";
-const DB_VERSION = 3;
+// v4: pastedImages ストアを削除した(2026-07-23)。画像は「ノートに添付してNASにだけ置く」方式へ
+// 一本化し、ブラウザ側は揮発キャッシュしか持たない——ブラウザ内に画像実体を貯めない設計。
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<AppDB>> | null = null;
 
@@ -61,8 +56,15 @@ function getDb(): Promise<IDBPDatabase<AppDB>> {
         if (oldVersion < 2) {
           db.createObjectStore("settings");
         }
-        if (oldVersion < 3) {
-          db.createObjectStore("pastedImages", { keyPath: "id" });
+        // v3の pastedImages は v4 で廃止したので新規には作らない。既存DBに残っていれば消す
+        // ——旧ストアに溜まった画像ごと捨てる(NASへ移す価値のある一時データではない)。
+        // 型からストアが消えているため、削除だけは名前で扱う。
+        const legacy = db as unknown as {
+          objectStoreNames: DOMStringList;
+          deleteObjectStore: (name: string) => void;
+        };
+        if (legacy.objectStoreNames.contains("pastedImages")) {
+          legacy.deleteObjectStore("pastedImages");
         }
       },
     });
@@ -252,22 +254,3 @@ export async function recordGeminiUsage(today: string): Promise<number> {
 }
 
 /** 貼り付け画像を1件保存する(ローカルのみ。NASには出さない——ユーザー指示)。 */
-export async function putPastedImage(rec: PastedImageRecord): Promise<void> {
-  const db = await getDb();
-  await db.put("pastedImages", rec);
-  logOp("db", "put", `pastedImages/${rec.id} (${rec.type})`);
-}
-
-/** 貼り付け画像を全件、新しい順で返す。 */
-export async function getAllPastedImages(): Promise<PastedImageRecord[]> {
-  const db = await getDb();
-  const all = await db.getAll("pastedImages");
-  return all.sort((a, b) => b.createdAt - a.createdAt);
-}
-
-/** 貼り付け画像を1件削除する。 */
-export async function deletePastedImage(id: string): Promise<void> {
-  const db = await getDb();
-  await db.delete("pastedImages", id);
-  logOp("db", "delete", `pastedImages/${id}`);
-}

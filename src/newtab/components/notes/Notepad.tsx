@@ -34,7 +34,23 @@ type Props = {
    * 登録/解除し、フォーカス中のノートを同期の巻き戻し/削除/再マウントから守るのに使う。 */
   onFocus?: () => void;
   onBlur?: () => void;
+  /** 画像の貼り付け/ドロップ(ユーザー指示・2026-07-23)。保存先はNASのみで、成功したら
+   * 本文へ挿入する参照テキストを返す。NAS未登録などで保存できなければnull(何も挿入しない)。 */
+  onAttachImage?: (blob: Blob) => Promise<string | null>;
 };
+
+/** DataTransfer から画像を取り出す(貼り付け・ドロップ共通)。画像が無ければ空配列。 */
+function imageBlobsFrom(data: DataTransfer | null): Blob[] {
+  if (!data) return [];
+  const blobs: Blob[] = [];
+  for (const item of data.items) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) blobs.push(file);
+    }
+  }
+  return blobs;
+}
 
 // インライン電卓(SPEC.md §7 v1確定): 行末が`= `で終わる算術式で改行すると、
 // その場で結果を追記する。既定のEnter(改行挿入)より先に試し、該当しなければ
@@ -70,11 +86,43 @@ const editingKeymap = [
 // 行/列(メモ帳風)+カーソル位置(文書先頭からの絶対文字数)/全文字数の両方を表示する。
 type CursorInfo = { line: number; col: number; pos: number; length: number };
 
-export function Notepad({ content, onContentChange, autoFocus = true, onFocus, onBlur }: Props) {
+export function Notepad({
+  content,
+  onContentChange,
+  autoFocus = true,
+  onFocus,
+  onBlur,
+  onAttachImage,
+}: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
+  const onAttachImageRef = useRef(onAttachImage);
+  onAttachImageRef.current = onAttachImage;
+
+  /** 画像があれば既定動作を止め、NASへ保存してからカーソル位置へ参照を挿入する。
+   * 画像が無い/添付口が無い場合は false を返して通常の貼り付け・ドロップへ委ねる。 */
+  function attachImages(view: EditorView, blobs: Blob[], event: Event): boolean {
+    const attach = onAttachImageRef.current;
+    if (blobs.length === 0 || !attach) return false;
+    event.preventDefault();
+    void (async () => {
+      for (const blob of blobs) {
+        const reference = await attach(blob);
+        if (reference === null) continue; // NAS未登録などで保存できなかった。本文は汚さない
+        // 保存の待ち時間中にカーソルが動いている可能性があるため、その時点の位置へ入れる。
+        const pos = view.state.selection.main.head;
+        const line = view.state.doc.lineAt(pos);
+        const prefix = line.text.slice(0, pos - line.from).trim() === "" ? "" : "\n";
+        view.dispatch({
+          changes: { from: pos, insert: `${prefix}${reference}\n` },
+          selection: { anchor: pos + prefix.length + reference.length + 1 },
+        });
+      }
+    })();
+    return true;
+  }
   // マウント時クロージャのCM6ハンドラが最新のfocus/blurコールバックを読むための鏡。
   const onFocusRef = useRef(onFocus);
   onFocusRef.current = onFocus;
@@ -141,6 +189,16 @@ export function Notepad({ content, onContentChange, autoFocus = true, onFocus, o
         // 他のノート(や他の要素)を触ってフォーカスが外れたら、選択を解除してカーソルへ畳む
         // (ユーザー指示)。drawSelection()の選択ハイライトはblurしても残り続けるため明示的に消す。
         EditorView.domEventHandlers({
+          // 画像の貼り付け/ドロップは、そのノートへの添付として扱う(ユーザー指示)。
+          // CM6の既定はバイナリを無視して何も起きないため、こちらで奪って非同期に処理する。
+          paste: (event, view) => attachImages(view, imageBlobsFrom(event.clipboardData), event),
+          drop: (event, view) => attachImages(view, imageBlobsFrom(event.dataTransfer), event),
+          // dropを受けるにはdragoverでの既定動作の打ち消しが要る(ブラウザのファイル表示を防ぐ)。
+          dragover: (event) => {
+            if (imageBlobsFrom(event.dataTransfer).length === 0) return false;
+            event.preventDefault();
+            return true;
+          },
           focus: () => {
             onFocusRef.current?.();
             return false;

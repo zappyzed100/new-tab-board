@@ -285,13 +285,6 @@ body {
   word-break: break-word;
 }
 
-/* ノート類と「貼り付けた画像」一覧の間の区切り線(ユーザー指示: ノートの下に一つ線を引く)。 */
-.notes-images-divider {
-  border: none;
-  border-top: 2px solid var(--border);
-  margin: var(--space-3) 0 0;
-}
-
 /* タブバー＋全文検索は下スクロール時に上端へ貼り付いて追従する(ユーザー指示)。
    スクロール容器はドキュメント(html/body)なのでtop:0で視界上端に留まる。
    下の本文が透けないよう背景を敷き、他要素より前面に出す。 */

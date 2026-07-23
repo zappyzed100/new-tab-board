@@ -32,9 +32,10 @@ import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
+import { useNoteImages } from "../lib/images/useNoteImages";
+import { markdownImageReference } from "../lib/images/noteImages";
 import { EditingSeamProvider, useEditingSeam } from "./components/notes/editing-seam";
 import { ViewportNote } from "./components/board/ViewportNote";
-import { PastedImagesPanel } from "./components/clipboard/PastedImagesPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
@@ -233,6 +234,9 @@ export function App() {
   // 「今フォーカス中/未保存のノート全部」を読んで不可侵にするための ref を持つ(editing-seam.tsx)。
   // seam は Provider で子(NoteEditorPane)へ配り、ref はここで直読みする。
   const { seam: editingSeam, refs: editingRefs } = useEditingSeam();
+  // ノート添付画像の揮発キャッシュ。起動時にNASから読み、以後はメモリ上のobject URLで描画する
+  // (画像はNASにだけ置き、chrome.storage.localの10MBクォータには一切載せない — ユーザー指示)。
+  const noteImages = useNoteImages();
   const { draftContentRef, editingIdsRef } = editingRefs;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
   const specialItemsRef = useRef<SpecialItem[]>([]);
@@ -979,6 +983,19 @@ export function App() {
   function handleNoteDragStart(noteId: string) {
     dragNoteIdRef.current = noteId;
   }
+  // 画像の貼り付け/ドロップをそのノートへ添付する。保存先はNASのみ——NAS未登録なら保存せず、
+  // 本文にも何も書かない(参照だけ残って永久に表示できない状態を作らない)。
+  async function attachNoteImage(noteId: string, blob: Blob): Promise<string | null> {
+    const relPath = await noteImages.attach(noteId, blob);
+    if (relPath === null) {
+      setDataPanelMessage(
+        "画像を保存できませんでした(NASフォルダが未設定か、NASブリッジへ接続できません)",
+      );
+      return null;
+    }
+    return markdownImageReference(relPath);
+  }
+
   function handleNoteDrop(targetId: string) {
     const fromId = dragNoteIdRef.current;
     dragNoteIdRef.current = null;
@@ -1572,7 +1589,8 @@ export function App() {
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
                   // 編集シーム(ドラフトバッファ＋編集レジストリ)を全ペインへ配る。
                   <EditingSeamProvider seam={editingSeam}>
-                    // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                    {/* DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                        JSX子要素の位置では // はコメントにならず画面に描画されてしまう——必ずこの形式で書く。 */}
                     <div
                       className="note-board"
                       data-testid="note-board"
@@ -1622,6 +1640,8 @@ export function App() {
                             onMoveDown={moveNoteDownOne}
                             onDragStartNote={handleNoteDragStart}
                             onDropNote={handleNoteDrop}
+                            noteImageUrls={noteImages.urls}
+                            onAttachImage={attachNoteImage}
                           />
                         </ViewportNote>
                       ))}
@@ -1637,9 +1657,6 @@ export function App() {
                     </Text>
                   </Card>
                 )}
-                {/* ノート類の下に一つ線を引いて、貼り付けた画像の一覧を置く(ユーザー指示)。 */}
-                <hr className="notes-images-divider" />
-                <PastedImagesPanel />
               </section>
             </div>
           </main>

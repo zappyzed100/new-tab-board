@@ -266,25 +266,36 @@
   white-space: pre-wrap;
 }
 
-/* --- 貼り付け画像の一覧: サムネイル(上限サイズ)+コピー/削除ボタン。 --- */
-.pasted-image-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* --- ノート添付画像(本文の `![](nas:…)` をプレビューで描画したもの) ---
+   原本(フル解像度)がNASにあるため、ペイン幅を超えないよう縮めて収める。 */
+[data-testid="markdown-preview"] img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+/* ノート下部の添付画像サムネイル帯。ペイン幅を超えず、枚数が増えても折り返して収まる。 */
+.note-image-thumb-link {
+  display: inline-flex;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: var(--space-2);
+  overflow: hidden;
   background: var(--surface-2);
 }
 
-/* 貼り付け画像は原本(フル解像度)を保存している。表示を大きめにして細部まで見えるようにする
-   (ユーザー指示)。画質を保つため拡大時のスムージングは効かせつつ、原寸より大きくは引き伸ばさない。 */
-.pasted-image-thumb {
-  max-width: 360px;
-  max-height: 360px;
+.note-image-thumb {
+  width: 96px;
+  height: 96px;
   object-fit: contain;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  display: block;
+}
+
+/* NASが未登録/未接続で解決できなかった画像。壊れた画像アイコンを出さず、altだけを控えめに残す。 */
+.nas-image-missing {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  opacity: 0.7;
 }
 
 /* --- トグルパネル(検索/データ管理) ---

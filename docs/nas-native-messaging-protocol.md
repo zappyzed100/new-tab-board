@@ -221,6 +221,38 @@ Python側(nas_bridge.py)がindex.dbへSQLを実行し、結果だけ返す。`in
 { "type": "list-tree-result", "ok": true, "files": ["メモ.md", "仕事/2026/計画.md"] }
 ```
 
+### ノート添付画像の書き込み/読み込み/一覧(write-binary / read-binary / list-images)
+
+画像は `chrome.storage.local`(10MBクォータ)に載せず **NASにだけ** 置く(2026-07-23)。JSONに
+バイト列は載らないので base64 で運ぶ。**テキスト用の write-file/read-file は utf-8 前提なので
+相乗りさせない**——バイナリを utf-8 として読み書きすると壊れる。
+
+```json
+{ "type": "write-binary", "path": "Z:\NAS\backup", "filename": "images/<noteId>/<id>.png",
+  "contentBase64": "iVBORw0K..." }
+```
+```json
+{ "type": "write-binary-result", "ok": true }
+```
+
+```json
+{ "type": "read-binary", "path": "Z:\NAS\backup", "filename": "images/<noteId>/<id>.png" }
+```
+```json
+{ "type": "read-binary-result", "ok": true, "contentBase64": "iVBORw0K..." }
+```
+
+`list-images` は `images/` 配下の画像だけを `images/<noteId>/<name>` 形式で再帰列挙する
+(起動時にブラウザが一括で取りに来る)。`list-tree` と分けているのは、あちらが `.md`/`.txt` だけを
+返す契約で active/special の**突合削除**に使われており、画像を混ぜると削除対象がずれるため。
+
+```json
+{ "type": "list-images", "path": "Z:\NAS\backup" }
+```
+```json
+{ "type": "list-images-result", "ok": true, "files": ["images/n1/a.png", "images/n2/b.webp"] }
+```
+
 ## エラー・切断時の扱い
 
 - host未インストール/接続失敗時、`chrome.runtime.connectNative`は`onDisconnect`を

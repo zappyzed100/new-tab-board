@@ -57,3 +57,39 @@ describe("relatedTags", () => {
     expect(relatedTags(notes, [])).toEqual([]);
   });
 });
+
+describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () => {
+  // タグの正本は resolveNoteTags(本文の手動タグ + Geminiの自動タグ)であって note.tags だけではない。
+  const manual = [
+    { id: "m1", content: "微分の復習 #数学", tags: ["復習"] },
+    { id: "m2", content: "英単語 #英語", tags: [] },
+    { id: "m3", content: "行列式 #数学 #線形代数", tags: ["復習"] },
+  ];
+
+  it("tagCounts が本文の#タグを数える", () => {
+    // 同数タグどうしの並びは localeCompare 依存＝OS/ICUで変わる(Windowsは数学→復習、Linuxは逆)。
+    // 順序ではなく「件数」を検証し、順序については件数降順であることだけを見る。
+    const counts = new Map(tagCounts(manual).map((c) => [c.tag, c.count]));
+    expect(counts).toEqual(
+      new Map([
+        ["数学", 2],
+        ["復習", 2],
+        ["英語", 1],
+        ["線形代数", 1],
+      ]),
+    );
+    const order = tagCounts(manual).map((c) => c.count);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
+  });
+
+  it("filterNotesByTags が本文の#タグで絞り込める", () => {
+    expect(filterNotesByTags(manual, ["数学"], "and").map((n) => n.id)).toEqual(["m1", "m3"]);
+  });
+
+  it("手動タグとGeminiタグのANDが効く(両者は同じ1つの集合として扱う)", () => {
+    expect(filterNotesByTags(manual, ["数学", "復習"], "and").map((n) => n.id)).toEqual([
+      "m1",
+      "m3",
+    ]);
+  });
+});
