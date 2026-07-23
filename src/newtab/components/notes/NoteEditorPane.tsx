@@ -150,6 +150,12 @@ export function NoteEditorPane({
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [restoreCounter, setRestoreCounter] = useState(0);
+  // 意図的な本文置換(初期化/履歴復元/ファイル取込)で再マウントするときは、ドラフト(未保存の
+  // 打鍵バッファ)を参照せず note.content を使う。同期clearDraftの直後に、遅延したCM6のupdateが
+  // 古い本文を setDraft し直し、再マウントがそれを拾って「初期化が空にならない」CIレースがあった
+  // (2026-07-24。ローカルは速く再現しないがLinux/xvfbで再現)。viewport再マウント等の非意図的な
+  // 再マウント(=新しいNoteEditorPaneインスタンス)では既定の false のままドラフトbeltが効く。
+  const [replaceFromNoteContent, setReplaceFromNoteContent] = useState(false);
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
   // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
@@ -330,6 +336,7 @@ export function NoteEditorPane({
       });
     });
     seam?.clearDraft(note.id); // 意図的な本文置換。古いドラフトを残すと再マウントで取り込み前へ戻る
+    setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
     setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
     onMessage(`「${file.name}」の内容をノートへ取り込みました`);
   }
@@ -609,6 +616,7 @@ export function NoteEditorPane({
               // Notepad(CM6)はcontentをマウント時しか読まないため、復元と同様に
               // restoreCounterを進めて再マウントし、空になった本文を画面へ反映する。
               seam?.clearDraft(note.id); // 意図的な初期化。古いドラフトを残すと再マウントで元へ戻る
+              setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
               setRestoreCounter((c) => c + 1);
             }}
           >
@@ -635,6 +643,7 @@ export function NoteEditorPane({
               onRestore={(content) => {
                 onNotesChange((prev) => updateNote(prev, note.id, { content }));
                 seam?.clearDraft(note.id); // 意図的な履歴復元。古いドラフトを残すと再マウントで復元前へ戻る
+                setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
                 setRestoreCounter((c) => c + 1);
               }}
             />
@@ -652,7 +661,11 @@ export function NoteEditorPane({
               key={`editor-${note.id}-${restoreCounter}-${replaceContentVersion}`}
               // マウント時はドラフト(未保存の最新打鍵)を最優先で読む。同期が note.content を
               // 巻き戻して再マウントを起こしても、ドラフトがあれば入力が生き残る(belt)。
-              content={seam?.getDraft(note.id) ?? note.content}
+              // ただし意図的な置換(初期化/履歴/取込)の再マウントは note.content を使う——
+              // 遅延ドラフト再充填で古い本文を拾うレースを避ける(replaceFromNoteContent)。
+              content={
+                replaceFromNoteContent ? note.content : (seam?.getDraft(note.id) ?? note.content)
+              }
               autoFocus={autoFocus}
               onFocus={() => seam?.beginEditing(note.id)}
               // blur=編集終了。レジストリから外し、ドラフトも破棄する(この時点で note.content は
