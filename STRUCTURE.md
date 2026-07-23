@@ -91,6 +91,7 @@
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
 - `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
+- `e2e/specs/note-katex.spec.ts` — note-katex.spec.ts — ノートプレビューのKaTeX数式描画の回帰(ユーザー指示・2026-07-23)。
 - `e2e/specs/note-manual-tags.spec.ts` — note-manual-tags.spec.ts — 本文の `#タグ`(手動タグ)がタグとして認識されることの回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
@@ -280,6 +281,7 @@
 - `src/newtab/components/notes/CLAUDE.md`
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
+- `src/newtab/components/notes/MarkdownPreview.test.tsx` — MarkdownPreview.test.tsx — Markdownプレビュー(KaTeX数式 + sanitize)の単体テスト
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
 - `src/newtab/components/notes/NoteEditorPane.tsx` — NoteEditorPane.tsx — ノート編集エリア1件分(SPEC.md §4.2)
 - `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)

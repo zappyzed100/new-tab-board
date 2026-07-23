@@ -102,6 +102,29 @@ Native Messaging・HTTPを介して疎結合に連携する。
 `http://…#frag` を拾わない)。`# 見出し` は CommonMark が `#` の後に空白を要求するため元から
 一致しない=行頭 `#タグ` は見出しにならず、タグ解釈と描画が矛盾しない。
 
+### ノートプレビューの数式描画(KaTeX)とバンドラのサロゲート潰し(2026-07-23)
+
+ユーザー指示で `$…$` / `$$…$$` / ```` ```math ```` の数式描画を追加(`katex` +
+`@vscode/markdown-it-katex`)。CDNは使わずバンドルするのでMV3のCSPに抵触しない。DOMPurifyの既定
+プロファイルはMathMLの `semantics`/`annotation` を許可しないため、そのままだと要素だけ剥がれて
+中のLaTeXソースが本文として残る(読み上げが数式を二重に読む)——`ADD_TAGS` で明示許可する。
+
+**バンドラ由来の落とし穴を2つ踏んだ。どちらも本番ビルドでしか出ない**(vitestは通る):
+
+1. `@vscode/markdown-it-katex` は `__esModule` + `exports.default` のCJS。interop次第で default が
+   名前空間オブジェクトのまま渡り、markdown-it の `plugin.apply(...)` が
+   `e.apply is not a function` で落ちて**Reactツリーごと白画面**になる。`typeof === "function"`
+   で受け直す。
+2. `katex/dist/katex.js` は正規表現の材料として**単独サロゲート**のエスケープを文字列に持つ。
+   バンドラはこれを実文字へ解釈してから出力をUTF-8で書くため U+FFFD へ潰れ、KaTeXの
+   `tokenRegex` の文字クラスが壊れて `\frac` が `\f`+`rac` に分解される(数式が赤いエラー表示)。
+   minify無効でも同じ=出力段では情報が失われており `renderChunk` では直せないため、
+   `vite.config.ts` の `keepKatexSurrogatesEscaped` プラグインが**入力段**で
+   JS文字列のエスケープを正規表現パターン内のエスケープへ書き換える(意味は同一・katex限定)。
+
+回帰は `e2e/specs/note-katex.spec.ts`(実ビルドを貫通し、組版結果を `getBoundingClientRect` で
+数値検証する)。単体テスト(`MarkdownPreview.test.tsx`)はsanitize設定を守る側の門。
+
 ### src/newtab/components/clipboard/(貼り付け画像の一次保存・2026-07-13)
 Ctrl+Vで貼り付けた画像を一次保存し、ノート類の下で一覧/クリップボードへコピー/削除する
 (ユーザー指示。NASへは出さずローカルのみ)。ノート/検索とは独立した「クリップボード由来の一時
