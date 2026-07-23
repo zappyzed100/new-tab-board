@@ -89,6 +89,15 @@ export function removeNote(notes: Note[], id: string): Note[] {
   return notes.filter((n) => n.id !== id);
 }
 
+/** 新規ノートを表示末尾へ置くための order(=既存の最大 order + 1)。
+ * 削除(removeNote)は order を振り直さないため、件数(length)を order に使うと
+ * 「件数 < 既存の最大 order」の盤面で既存ノートと衝突し、末尾に置いたつもりの
+ * 新規ノートが盤面の途中へ割り込む(2026-07-22: 空ノートへの一文字目で補充ノートが
+ * 編集位置に割り込み、入力中のノートが右へ飛んで見えた実バグの根因)。 */
+export function nextNoteOrder(notes: Note[]): number {
+  return notes.reduce((max, n) => Math.max(max, n.order), -1) + 1;
+}
+
 /** ピン留めを先頭に、それぞれorder昇順で並べたコピーを返す。 */
 export function sortedNotes(notes: Note[]): Note[] {
   return [...notes].sort((a, b) => {
@@ -175,11 +184,9 @@ export function ensureTrailingEmptyNotes(
   const existing = sorted.filter(isGeneratedEmptyPlaceholder);
   const additions: Note[] = [];
   const titles = notes.map((n) => n.title);
-  // 新しい空ノートは既存の最大 order より必ず大きい order を振る。`sorted.length` を使うと、
-  // 削除で order に穴が空く/並べ替えで非空ノートを末尾へ置く等で「件数以上の order を持つ
-  // 非空ノート」があるとき、追加した空ノートがその前に並んで「末尾の空」に数えられず、
-  // 毎コミットで空ノートを量産してしまう(ユーザー報告の空ノート20個・カーソルずれの原因)。
-  let nextOrder = sorted.reduce((max, n) => Math.max(max, n.order), -1) + 1;
+  // length だと削除で疎になった order と衝突して補充が末尾へ並ばず、空ノートを量産する
+  // (nextNoteOrder のヘッダー参照 — 空ノート20個・カーソルずれの原因)。
+  let nextOrder = nextNoteOrder(notes);
   for (let count = existing.length; count < desired; count++) {
     const title = nextNoteLetterTitle(titles);
     if (title === null) break; // MAX_NOTES 上限
@@ -215,7 +222,7 @@ export function pasteResultsIntoNotes(
     else break;
   }
   let result = [...notes];
-  let nextOrder = sorted.length;
+  let nextOrder = nextNoteOrder(notes);
   results.forEach((r, i) => {
     if (i < trailingBlankIds.length) {
       // 白紙ノートを上書き(id/order/pinnedは保つ)。

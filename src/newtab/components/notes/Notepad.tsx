@@ -30,6 +30,10 @@ type Props = {
   /** trueならマウント時にエディタへフォーカスする(既定true)。新規タブを開いた直後の
    * 自動選択では、代わりにオムニバーへフォーカスさせたいためApp.tsx側でfalseを渡す。 */
   autoFocus?: boolean;
+  /** CM6のフォーカス取得/喪失。呼び出し側(NoteEditorPane)が編集シームの編集レジストリへ
+   * 登録/解除し、フォーカス中のノートを同期の巻き戻し/削除/再マウントから守るのに使う。 */
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 // インライン電卓(SPEC.md §7 v1確定): 行末が`= `で終わる算術式で改行すると、
@@ -66,11 +70,16 @@ const editingKeymap = [
 // 行/列(メモ帳風)+カーソル位置(文書先頭からの絶対文字数)/全文字数の両方を表示する。
 type CursorInfo = { line: number; col: number; pos: number; length: number };
 
-export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
+export function Notepad({ content, onContentChange, autoFocus = true, onFocus, onBlur }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
+  // マウント時クロージャのCM6ハンドラが最新のfocus/blurコールバックを読むための鏡。
+  const onFocusRef = useRef(onFocus);
+  onFocusRef.current = onFocus;
+  const onBlurRef = useRef(onBlur);
+  onBlurRef.current = onBlur;
   // IntersectionObserverが無いテスト/旧ブラウザでは従来どおり即マウントして機能を落とさない。
   const [editorMounted, setEditorMounted] = useState(
     () => typeof IntersectionObserver === "undefined",
@@ -132,10 +141,15 @@ export function Notepad({ content, onContentChange, autoFocus = true }: Props) {
         // 他のノート(や他の要素)を触ってフォーカスが外れたら、選択を解除してカーソルへ畳む
         // (ユーザー指示)。drawSelection()の選択ハイライトはblurしても残り続けるため明示的に消す。
         EditorView.domEventHandlers({
+          focus: () => {
+            onFocusRef.current?.();
+            return false;
+          },
           blur: (_event, view) => {
             if (!view.state.selection.main.empty) {
               view.dispatch({ selection: EditorSelection.cursor(view.state.selection.main.head) });
             }
+            onBlurRef.current?.();
             return false;
           },
         }),

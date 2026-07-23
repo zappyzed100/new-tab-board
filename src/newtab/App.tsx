@@ -32,6 +32,7 @@ import { Clock } from "./components/shell/Clock";
 import { DataPanel } from "./components/shell/DataPanel";
 import { MiniCalendar } from "./components/shell/MiniCalendar";
 import { NoteEditorPane } from "./components/notes/NoteEditorPane";
+import { EditingSeamProvider, useEditingSeam } from "./components/notes/editing-seam";
 import { ViewportNote } from "./components/board/ViewportNote";
 import { PastedImagesPanel } from "./components/clipboard/PastedImagesPanel";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
@@ -50,7 +51,7 @@ import {
 } from "../lib/storage/storage";
 import {
   mergeNoteCollections,
-  preserveProtectedNote,
+  preserveProtectedNotes,
   stampChangedNotes,
   updateTombstonesForMutation,
   type NoteTombstones,
@@ -67,6 +68,7 @@ import {
   ensureTrailingEmptyNotes,
   excludeNoSyncNotes,
   isDefaultNoteTitle,
+  nextNoteOrder,
   pasteResultsIntoNotes,
   moveNoteDown,
   moveNoteUp,
@@ -227,6 +229,11 @@ export function App() {
   // これを preserveProtectedNote へ渡し、起動直後に選んだノートを同期処理が動かす/消すのを防ぐ。
   const activeNoteIdRef = useRef<string | null>(null);
   activeNoteIdRef.current = activeNoteId;
+  // 編集中ノートの単一の真実源(ドラフトバッファ＋編集レジストリ)。同期tick/購読/コミット往復が
+  // 「今フォーカス中/未保存のノート全部」を読んで不可侵にするための ref を持つ(editing-seam.tsx)。
+  // seam は Provider で子(NoteEditorPane)へ配り、ref はここで直読みする。
+  const { seam: editingSeam, refs: editingRefs } = useEditingSeam();
+  const { draftContentRef, editingIdsRef } = editingRefs;
   // 同期tick(マウント時のクロージャで動く)が最新のスペシャル凍結項目を読むための鏡。
   const specialItemsRef = useRef<SpecialItem[]>([]);
   specialItemsRef.current = specialItems;
@@ -262,10 +269,16 @@ export function App() {
     setActiveNoteId(noteId);
   }
 
-  /** 同期の再適用(pull/マージ/購読)から守るべき「編集中ノートid」。ユーザーが自分で選んだ時
-   * だけ返す——起動直後の自動選択(notes[0])はまだ「編集中」ではないので保護しない。 */
-  function protectedNoteId(): string | null {
-    return userSelectedNoteRef.current ? activeNoteIdRef.current : null;
+  /** 同期の再適用(pull/マージ/購読/コミット往復)から守るべき「編集中ノートid」の集合。
+   * 中核は editingIdsRef(フォーカス中=編集中のノート全部。本文ペインをクリックしただけの
+   * 非選択ノートも含む)。加えて、起動直後にユーザーが選んだ1件は(フォーカス前でも)従来どおり
+   * 守る——同期がその選択を奪うのを防ぐため。起動時の自動選択(notes[0])は含めない。 */
+  function protectedNoteIds(): Set<string> {
+    const ids = new Set(editingIdsRef.current);
+    if (userSelectedNoteRef.current && activeNoteIdRef.current) {
+      ids.add(activeNoteIdRef.current);
+    }
+    return ids;
   }
 
   useEffect(() => {
@@ -313,29 +326,41 @@ export function App() {
       }
       storageRevisionRef.current = revision;
       const currentNotes = notesRef.current;
-      const protectedId = protectedNoteId();
-      // 別タブの確定revisionでも、こちらで編集中のノートは動かさない/消さない/上書きしない。
-      const next = preserveProtectedNote(incoming.notes ?? [], currentNotes, protectedId);
+      // 別タブの確定revisionでも、こちらで編集中のノート(フォーカス中/未保存の全部)は
+      // 動かさない/消さない/上書きしない——protectedNoteIds() の集合を local 版で不可侵にする。
+      const protectedIds = protectedNoteIds();
+      const next = preserveProtectedNotes(
+        incoming.notes ?? [],
+        currentNotes,
+        protectedIds,
+        incoming.noteTombstones ?? {},
+      );
       noteTombstonesRef.current = incoming.noteTombstones ?? {};
       const notesChanged = JSON.stringify(next) !== JSON.stringify(currentNotes);
       if (notesChanged) {
         setNotes(next);
         // CM6は初期contentをマウント時にだけ読む。ただし全ペインを再マウントすると、本文と
         // 無関係な空ノートIDの収束通知でも入力中エディタを破棄するため、本文差分のあるIDだけ進める。
+        // 編集中(protectedIds)のノートは絶対に再マウントしない——ドラフトバッファが本文を保持して
+        // いても、再マウントはカーソル/選択/undo履歴を捨てるため、版数自体を進めない。
         const currentContent = new Map(currentNotes.map((note) => [note.id, note.content]));
         const changedContentIds = next
           .filter(
-            (note) => currentContent.has(note.id) && currentContent.get(note.id) !== note.content,
+            (note) =>
+              !protectedIds.has(note.id) &&
+              currentContent.has(note.id) &&
+              currentContent.get(note.id) !== note.content,
           )
           .map((note) => note.id);
         // 入力中(protected)ノートが本文差分に入ると、その key が進んでエディタが再マウントされ
-        // カーソルが飛ぶ実害の直接原因。ここを最優先で観測できるよう警告的に出す。
-        const remountsActive = protectedId !== null && changedContentIds.includes(protectedId);
+        // カーソルが飛ぶ実害の直接原因。上のフィルタで除外済みだが、破れたら即分かるよう出す。
+        const remountsActive = changedContentIds.some((id) => protectedIds.has(id));
+        const protectedLabel = [...protectedIds].map((id) => id.slice(0, 8)).join(",") || "none";
         logOp(
           "notes-sub",
           "apply",
           `rev=${revision} cur=${currentNotes.length} next=${next.length} ` +
-            `protected=${protectedId?.slice(0, 8) ?? "none"} ` +
+            `protected=${protectedLabel} ` +
             `remountIds=${changedContentIds.length}[${changedContentIds.map((id) => id.slice(0, 8)).join(",")}] ` +
             `REMOUNTS_ACTIVE=${remountsActive}`,
         );
@@ -383,14 +408,20 @@ export function App() {
   }
 
   function applySafelySyncedNotes(notesFromSync: Note[], tombstones: NoteTombstones) {
-    // 起動直後に選んで編集中のノートは、同期結果に動かされ/消され/上書きされないよう最優先で守る。
-    const guarded = preserveProtectedNote(notesFromSync, notesRef.current ?? [], protectedNoteId());
+    // 編集中(フォーカス中/未保存)のノートは、同期結果に動かされ/消され/上書きされないよう最優先で守る。
+    // ただし明示削除(tombstone)は編集保護より優先する(preserveProtectedNotes 参照)。
+    const guarded = preserveProtectedNotes(
+      notesFromSync,
+      notesRef.current ?? [],
+      protectedNoteIds(),
+      tombstones,
+    );
     const next = ensureTrailingEmptyNotes(guarded, TRAILING_EMPTY_NOTES, clockNow());
     logOp(
       "notes-pull",
       "apply-synced",
       `fromSync=${notesFromSync.length} guarded=${guarded.length} ` +
-        `final=${next.length} protected=${protectedNoteId()?.slice(0, 8) ?? "none"}`,
+        `final=${next.length} protected=${[...protectedNoteIds()].length}`,
     );
     noteTombstonesRef.current = tombstones;
     setNotes(next);
@@ -857,7 +888,17 @@ export function App() {
           `rev=${revision} committed=${committed.notes.length} (was next=${nextNotes.length}, ` +
             `delta=${committed.notes.length - nextNotes.length})`,
         );
-        setNotes(committed.notes);
+        // ただし編集中(フォーカス中/未保存)のノートは、コミット結果より新しいローカルの打鍵を
+        // 保持しているため local 版で不可侵にする(排他ロック中に別tickの構造差分が混ざっても
+        // 編集中ノートの本文を巻き戻さない)。commit往復もここで同じ合流点の保護を通す。
+        setNotes(
+          preserveProtectedNotes(
+            committed.notes,
+            notesRef.current ?? [],
+            protectedNoteIds(),
+            committed.noteTombstones ?? {},
+          ),
+        );
       });
       if (activeNoteId && !nextNotes.some((n) => n.id === activeNoteId)) {
         logOp(
@@ -882,7 +923,12 @@ export function App() {
     });
     // 開いているエディタ(Notepad/CM6)は本文をマウント時にしか読まないため、置換した本文を
     // 画面へ反映するには再マウントさせる合図が要る(上のNoteEditorPane propコメント参照)。
-    if (changedCount > 0) setReplaceContentVersion((v) => v + 1);
+    // 再マウントは content prop(=draft優先)を読み直すので、置換対象のドラフトは破棄しておく——
+    // さもないと置換前の打鍵を保持したドラフトが復活して置換結果を隠す。
+    if (changedCount > 0) {
+      for (const id of targetIds) draftContentRef.current.delete(id);
+      setReplaceContentVersion((v) => v + 1);
+    }
     return changedCount;
   }
 
@@ -1178,7 +1224,8 @@ export function App() {
     content: string,
     meta?: { sourceNoteId?: string; generatedBy?: string },
   ) {
-    const note = createNote(title, sortedNotes(notes ?? []).length, clockNow());
+    // 件数を order に使うと削除で疎になった既存 order と衝突して途中へ割り込む(notes.ts参照)。
+    const note = createNote(title, nextNoteOrder(notes ?? []), clockNow());
     const full = { ...note, content, ...meta };
     // 要約(sourceNoteId付き)は元ノートの直後へ挿入する=列固定masonryで「一つ右(右端なら
     // 一段下の一番左)」に現れる(ユーザー指示)。それ以外(ファイル取り込み等)は末尾へ。
@@ -1523,60 +1570,63 @@ export function App() {
                 {orderedNotes.length > 0 ? (
                   // 実測masonry: order順の全ノートを「その時点で一番低い列」へ入れて縦積みする
                   // (短いノートの真下に次が詰まり、長いノートで隣が伸びない——ユーザー指示)。
-                  // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
-                  <div
-                    className="note-board"
-                    data-testid="note-board"
-                    style={
-                      {
-                        height: `${noteLayout.boardHeight}px`,
-                        "--note-columns": columnCount,
-                      } as CSSProperties
-                    }
-                  >
-                    {orderedNotes.map((note) => (
-                      <ViewportNote
-                        key={note.id}
-                        noteId={note.id}
-                        title={note.title}
-                        linearIndex={noteLinearIndices.get(note.id) ?? -1}
-                        columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
-                        top={noteLayout.placement.get(note.id)?.top ?? 0}
-                        active={note.id === activeNoteId}
-                        estimatedHeight={noteHeights.get(note.id)}
-                        contentVersion={note.updatedAt}
-                        onHeight={reportNoteHeight}
-                        onSuspend={() => void forceSnapshot(note.id, note.content)}
-                      >
-                        <NoteEditorPane
-                          note={note}
-                          notes={notes}
-                          tagCandidates={tagCandidates}
-                          isActive={note.id === activeNoteId}
-                          isFirst={orderedNotes[0]?.id === note.id}
-                          isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
-                          autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
-                          manualSyncSignal={manualSyncSignal}
-                          replaceContentVersion={
-                            replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
-                          }
-                          onNotesChange={updateNotes}
-                          onSelectNote={selectNote}
-                          onSelectNoteByTitle={selectNoteByTitle}
-                          onCreateNote={openFileAsNote}
-                          onAddTodos={addTodos}
-                          onMessage={setDataPanelMessage}
-                          onTogglePin={togglePinNote}
-                          onToggleSpecial={toggleSpecial}
-                          onDeleteNote={deleteNote}
-                          onMoveUp={moveNoteUpOne}
-                          onMoveDown={moveNoteDownOne}
-                          onDragStartNote={handleNoteDragStart}
-                          onDropNote={handleNoteDrop}
-                        />
-                      </ViewportNote>
-                    ))}
-                  </div>
+                  // 編集シーム(ドラフトバッファ＋編集レジストリ)を全ペインへ配る。
+                  <EditingSeamProvider seam={editingSeam}>
+                    // DOMの並びはorder順のまま・列は絶対配置で表現する(上のnoteLayoutのコメント参照)。
+                    <div
+                      className="note-board"
+                      data-testid="note-board"
+                      style={
+                        {
+                          height: `${noteLayout.boardHeight}px`,
+                          "--note-columns": columnCount,
+                        } as CSSProperties
+                      }
+                    >
+                      {orderedNotes.map((note) => (
+                        <ViewportNote
+                          key={note.id}
+                          noteId={note.id}
+                          title={note.title}
+                          linearIndex={noteLinearIndices.get(note.id) ?? -1}
+                          columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
+                          top={noteLayout.placement.get(note.id)?.top ?? 0}
+                          active={note.id === activeNoteId}
+                          estimatedHeight={noteHeights.get(note.id)}
+                          contentVersion={note.updatedAt}
+                          onHeight={reportNoteHeight}
+                          onSuspend={() => void forceSnapshot(note.id, note.content)}
+                        >
+                          <NoteEditorPane
+                            note={note}
+                            notes={notes}
+                            tagCandidates={tagCandidates}
+                            isActive={note.id === activeNoteId}
+                            isFirst={orderedNotes[0]?.id === note.id}
+                            isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
+                            autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
+                            manualSyncSignal={manualSyncSignal}
+                            replaceContentVersion={
+                              replaceContentVersion + (syncedContentVersions[note.id] ?? 0)
+                            }
+                            onNotesChange={updateNotes}
+                            onSelectNote={selectNote}
+                            onSelectNoteByTitle={selectNoteByTitle}
+                            onCreateNote={openFileAsNote}
+                            onAddTodos={addTodos}
+                            onMessage={setDataPanelMessage}
+                            onTogglePin={togglePinNote}
+                            onToggleSpecial={toggleSpecial}
+                            onDeleteNote={deleteNote}
+                            onMoveUp={moveNoteUpOne}
+                            onMoveDown={moveNoteDownOne}
+                            onDragStartNote={handleNoteDragStart}
+                            onDropNote={handleNoteDrop}
+                          />
+                        </ViewportNote>
+                      ))}
+                    </div>
+                  </EditingSeamProvider>
                 ) : (
                   <Card data-testid="no-notes">
                     <Text size="3" weight="medium" color="blue">

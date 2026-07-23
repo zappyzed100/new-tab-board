@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { BacklinksPanel } from "./BacklinksPanel";
 import { SnapshotScheduler } from "./SnapshotScheduler";
+import { useEditingSeamContext } from "./editing-seam";
 import type { DragEvent as ReactDragEvent } from "react";
 import { isDefaultNoteTitle, mergeDroppedContent, updateNote } from "../../../lib/entities/notes";
 import { now as clockNow } from "../../../lib/runtime/clock";
@@ -144,6 +145,10 @@ export function NoteEditorPane({
   const [restoreCounter, setRestoreCounter] = useState(0);
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
+  // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
+  // note.content を巻き戻す/再マウントを起こしても入力を失わない。フォーカス中は編集レジストリへ
+  // 登録して、この1件を全同期経路の合流点で不可侵にする(editing-seam.tsx)。
+  const seam = useEditingSeamContext();
 
   async function handleCopy() {
     try {
@@ -314,6 +319,7 @@ export function NoteEditorPane({
         updatedAt: clockNow(),
       });
     });
+    seam?.clearDraft(note.id); // 意図的な本文置換。古いドラフトを残すと再マウントで取り込み前へ戻る
     setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
     onMessage(`「${file.name}」の内容をノートへ取り込みました`);
   }
@@ -592,6 +598,7 @@ export function NoteEditorPane({
               );
               // Notepad(CM6)はcontentをマウント時しか読まないため、復元と同様に
               // restoreCounterを進めて再マウントし、空になった本文を画面へ反映する。
+              seam?.clearDraft(note.id); // 意図的な初期化。古いドラフトを残すと再マウントで元へ戻る
               setRestoreCounter((c) => c + 1);
             }}
           >
@@ -617,6 +624,7 @@ export function NoteEditorPane({
               currentContent={note.content}
               onRestore={(content) => {
                 onNotesChange((prev) => updateNote(prev, note.id, { content }));
+                seam?.clearDraft(note.id); // 意図的な履歴復元。古いドラフトを残すと再マウントで復元前へ戻る
                 setRestoreCounter((c) => c + 1);
               }}
             />
@@ -628,13 +636,23 @@ export function NoteEditorPane({
           ) : (
             <Notepad
               key={`editor-${note.id}-${restoreCounter}-${replaceContentVersion}`}
-              content={note.content}
+              // マウント時はドラフト(未保存の最新打鍵)を最優先で読む。同期が note.content を
+              // 巻き戻して再マウントを起こしても、ドラフトがあれば入力が生き残る(belt)。
+              content={seam?.getDraft(note.id) ?? note.content}
               autoFocus={autoFocus}
-              onContentChange={(content) =>
+              onFocus={() => seam?.beginEditing(note.id)}
+              // blur=編集終了。レジストリから外し、ドラフトも破棄する(この時点で note.content は
+              // 毎打鍵コミットで最新に追いついているため、以後は通常のマージに委ねてよい)。
+              onBlur={() => {
+                seam?.endEditing(note.id);
+                seam?.clearDraft(note.id);
+              }}
+              onContentChange={(content) => {
+                seam?.setDraft(note.id, content); // 未保存の打鍵を同期的にドラフトへ保持
                 onNotesChange((prev) =>
                   updateNote(prev, note.id, { content, updatedAt: clockNow() }),
-                )
-              }
+                );
+              }}
             />
           )}
         </Suspense>

@@ -138,6 +138,16 @@ describe("pasteResultsIntoNotes", () => {
     const notes = [createNote("ノートA", 0)];
     expect(pasteResultsIntoNotes(notes, [], 1000)).toBe(notes);
   });
+
+  it("削除でorderが疎な盤面でも、白紙が足りない分の追加は既存ノートの後ろへ入る", () => {
+    // 白紙ゼロ・order=5だけが残った盤面(削除でorderが疎)。追加分がorder=件数(1)を
+    // もらうと既存(5)より前へ割り込む——ensureTrailingEmptyNotesと同根のバグの回帰。
+    const notes = [{ ...createNote("既存", 5), content: "本文" }];
+    const after = pasteResultsIntoNotes(notes, [{ title: "r1", content: "c1" }], 1000);
+    const sorted = sortedNotes(after);
+    expect(sorted[0].title).toBe("既存");
+    expect(sorted[1].title).toBe("r1");
+  });
 });
 
 describe("mergeDroppedContent(ファイルドロップの本文取り込み)", () => {
@@ -344,6 +354,28 @@ describe("ensureTrailingEmptyNotes", () => {
     expect(sorted.slice(-3).every((n) => n.content.trim() === "")).toBe(true);
     // 冪等: もう一度かけても増えない(=末尾の空が既に3つある)。
     expect(ensureTrailingEmptyNotes(after, 3, 1000)).toBe(after);
+  });
+
+  it("削除でorderが疎になった盤面でも、補充は表示末尾に付く(編集位置へ割り込まない)", () => {
+    // removeNoteはorderを振り直さない→「件数 < 最大order」の盤面ができる(実運用で常態)。
+    // 2026-07-22: 新しいタブで最初の空ノートに一文字目を入力した瞬間、補充ノートが
+    // order=件数で生成されて編集中ノートの隣へ割り込む実バグの再現経路。
+    const notes = [
+      { ...createNote("会議メモ", 0), content: "本文" },
+      createNote("ノートE", 4),
+      createNote("ノートF", 5),
+      createNote("ノートG", 6),
+    ];
+    // 最初の空ノートEへ一文字目を入力 → 末尾空が2つになり補充が走る。
+    const typed = updateNote(notes, notes[1].id, { content: "あ" });
+    const after = ensureTrailingEmptyNotes(typed, 3);
+    const sorted = sortedNotes(after);
+    const added = sorted.filter((n) => !typed.some((m) => m.id === n.id));
+    expect(added).toHaveLength(1);
+    // 補充分は既存の最大order(6)より後ろ=表示末尾。編集中ノートEの位置(1)は不変。
+    expect(added[0].order).toBeGreaterThan(6);
+    expect(sorted[sorted.length - 1].id).toBe(added[0].id);
+    expect(sorted.findIndex((n) => n.id === notes[1].id)).toBe(1);
   });
 
   it("MAX_NOTES 上限では補充を打ち止める", () => {

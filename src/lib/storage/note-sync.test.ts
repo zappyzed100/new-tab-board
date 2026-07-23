@@ -5,6 +5,7 @@ import { markdownToNote, noteToMarkdown } from "../externalIO/nasArchive";
 import {
   mergeNoteCollections,
   preserveProtectedNote,
+  preserveProtectedNotes,
   stampChangedNotes,
   updateTombstonesForMutation,
 } from "./note-sync";
@@ -163,6 +164,24 @@ describe("preserveProtectedNote(編集中ノートを同期から守る)", () =>
     },
   );
 
+  it("同orderのノートが割り込んでも、編集中ノートは表示位置を明け渡さない(タイに負けない)", () => {
+    // 2026-07-22: 削除で疎になったorderのせいで補充空ノートが編集中ノートと同orderで生まれ、
+    // 別コンテキストの確定通知を再適用した瞬間、旧実装(末尾へ追加してorderで再ソート)では
+    // 安定ソートのタイに負けて編集中ノートが1つ右へ飛んだ(=一文字目が右のノートに飛んで見えた)。
+    const local = [
+      { ...note("a", "本文A", 10), order: 0 },
+      { ...note("edit", "あ", 20), order: 4 },
+      { ...note("f", "", 10), title: "ノートF", order: 5 },
+    ];
+    // 確定コミット(storage配列)では補充分(同order=4)が配列末尾に付いている。
+    const next = [...local, placeholder("filled", "ノートB", 4)];
+    const result = preserveProtectedNote(next, local, "edit");
+    const ids = result.map((n) => n.id);
+    expect(ids.indexOf("edit")).toBeLessThan(ids.indexOf("filled"));
+    // 表示順(安定ソート)でも編集中ノートが元の位置(1)を保つ。
+    expect(ids).toEqual(["a", "edit", "filled", "f"]);
+  });
+
   it("編集中ノート以外の並び順・集合はそのまま(order昇順で返す)", () => {
     const local = [{ ...note("edit", "編集中", 10), order: 5 }];
     const next = [
@@ -171,6 +190,70 @@ describe("preserveProtectedNote(編集中ノートを同期から守る)", () =>
     ];
     const result = preserveProtectedNote(next, local, "edit");
     expect(result.map((n) => n.id)).toEqual(["x", "edit", "y"]); // order 1,5,9
+  });
+});
+
+describe("preserveProtectedNotes(編集中ノート集合を同期から守る)", () => {
+  it("空集合なら何もしない(参照を変えない)", () => {
+    const next = [note("a", "A", 10)];
+    expect(preserveProtectedNotes(next, next, new Set())).toBe(next);
+  });
+
+  it("複数の編集中ノートを同時に守る: 本文はlocalが勝ち、消えたものはlocalで復活する", () => {
+    // ボードは全ノート同時編集可能。単一idの保護では、activeでない方のペインに入力していると
+    // 守られず巻き戻る/消える実害があった。集合で受けて全部を不可侵にする。
+    const local = [
+      { ...note("p1", "編集中1", 20), order: 0 },
+      { ...note("p2", "編集中2", 20), order: 1 },
+      { ...note("other", "他", 10), order: 2 },
+    ];
+    // 外部の古い断面: p1は古い本文へ巻き戻り、p2はそもそも欠落、otherだけ素通し。
+    const next = [
+      { ...note("p1", "外部の古い本文", 10), order: 0 },
+      { ...note("other", "他", 10), order: 2 },
+    ];
+    const result = preserveProtectedNotes(next, local, new Set(["p1", "p2"]));
+    expect(result.find((n) => n.id === "p1")?.content).toBe("編集中1"); // 巻き戻らない
+    expect(result.find((n) => n.id === "p2")?.content).toBe("編集中2"); // 消えない
+    expect(result.map((n) => n.id)).toEqual(["p1", "p2", "other"]); // 並びはlocal順を保つ
+  });
+
+  it("集合に無い(編集していない)ノートは同期結果のまま更新される", () => {
+    const local = [
+      { ...note("edit", "編集中", 20), order: 0 },
+      { ...note("bg", "ローカル旧", 10), order: 1 },
+    ];
+    const next = [
+      { ...note("edit", "外部古い", 10), order: 0 },
+      { ...note("bg", "外部の新しい本文", 30), order: 1 },
+    ];
+    const result = preserveProtectedNotes(next, local, new Set(["edit"]));
+    expect(result.find((n) => n.id === "edit")?.content).toBe("編集中"); // 守る
+    expect(result.find((n) => n.id === "bg")?.content).toBe("外部の新しい本文"); // 守らない=同期反映
+  });
+
+  it("明示削除(tombstone)された編集中ノートは復活させない(削除が全タブで収束する)", () => {
+    // 別タブがフォーカス中ノートを削除→tombstone付きの確定通知が届く。編集保護よりも
+    // 明示削除を優先しないと、削除したノートが編集中タブで生き返り削除が収束しない(実回帰)。
+    const local = [note("edit", "編集中", 20)];
+    const next: Note[] = []; // 削除で同期結果から消えた
+    const result = preserveProtectedNotes(next, local, new Set(["edit"]), { edit: 30 });
+    expect(result.map((n) => n.id)).toEqual([]); // 復活しない
+  });
+
+  it("tombstoneの無い単なる欠落(stale全体保存の取りこぼし)は従来どおり復活させる", () => {
+    const local = [note("edit", "編集中", 20)];
+    const next: Note[] = [];
+    const result = preserveProtectedNotes(next, local, new Set(["edit"]), {}); // tombstone無し
+    expect(result.map((n) => n.id)).toEqual(["edit"]); // 復活する
+  });
+
+  it("単一idラッパーは集合版へ委譲する(既存挙動を保つ)", () => {
+    const local = [note("edit", "編集中の本文", 10)];
+    const next = [note("edit", "リモートの古い本文", 10)];
+    expect(preserveProtectedNote(next, local, "edit").find((n) => n.id === "edit")?.content).toBe(
+      "編集中の本文",
+    );
   });
 });
 

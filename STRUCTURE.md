@@ -90,6 +90,7 @@
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
+- `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
@@ -282,6 +283,7 @@
 - `src/newtab/components/notes/NoteEditorPane.tsx` — NoteEditorPane.tsx — ノート編集エリア1件分(SPEC.md §4.2)
 - `src/newtab/components/notes/Notepad.tsx` — Notepad.tsx — CodeMirror 6ベースの素マークダウンエディタ(SPEC.md §2・§4.2)
 - `src/newtab/components/notes/SnapshotScheduler.tsx` — SnapshotScheduler.tsx — useSnapshotSchedulerを実行するだけの非表示コンポーネント
+- `src/newtab/components/notes/editing-seam.tsx` — editing-seam.tsx — 編集中ノートの単一の真実源(ドラフトバッファ＋編集レジストリ)を配るReact context
 - `src/newtab/components/shell/BookmarkGrid.tsx` — BookmarkGrid.tsx — ブックマークグリッド(SPEC.md §3・§4.1)
 - `src/newtab/components/shell/Clock.tsx` — Clock.tsx — 時計・日付表示(SPEC.md §4.8)
 - `src/newtab/components/shell/DataPanel.tsx` — DataPanel.tsx — JSON全データバックアップ(Drive自動同期+Driveから復元)・ローカル
@@ -751,6 +753,7 @@
 - function updateNote
 - function mergeDroppedContent
 - function removeNote
+- function nextNoteOrder
 - function sortedNotes
 - function reorderNotes
 - function reorderNotesById
@@ -1030,6 +1033,7 @@
 - type NoteMergeResult
 - function mergeTombstones
 - function mergeNoteCollections
+- function preserveProtectedNotes
 - function preserveProtectedNote
 - function updateTombstonesForMutation
 - function stampChangedNotes
@@ -1081,6 +1085,13 @@
 
 ### `src/newtab/components/notes/SnapshotScheduler.tsx`
 - function SnapshotScheduler
+
+### `src/newtab/components/notes/editing-seam.tsx`
+- type EditingSeam
+- type EditingRefs
+- function useEditingSeam
+- function EditingSeamProvider
+- function useEditingSeamContext
 
 ### `src/newtab/components/shell/BookmarkGrid.tsx`
 - function BookmarkGrid

@@ -1,6 +1,6 @@
 // note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
 import type { Note } from "../../types";
-import { isGeneratedEmptyPlaceholder } from "../entities/notes";
+import { isGeneratedEmptyPlaceholder, sortedNotes } from "../entities/notes";
 
 export type NoteTombstones = Record<string, number>;
 
@@ -156,32 +156,67 @@ export function mergeNoteCollections(
   };
 }
 
-/** ユーザーが選んで**編集中**のノートを、同期の再適用(pull/マージ/placeholder畳み込み)から守る。
- * 起動直後に速攻でノートを選んで編集を始めると、その後に届く各種同期処理がそのノートを
+/** ユーザーが**編集中**のノート(フォーカス中/未保存を含む集合)を、同期の再適用
+ * (pull/マージ/placeholder畳み込み)から守る。編集中に届いた各種同期処理がそのノートを
  * 並べ替え・削除・内容上書きして「選択が飛ぶ/入力が消える」実害があった(ユーザー報告)。
- * protectedId のノートは `local`(=編集中の最新ローカル状態)からそのまま採用し、同期結果の
- * 該当ノートを置き換える(=動かさない・消さない・上書きしない=最優先)。
+ * 旧来は「activeNoteId 1件」しか守れず、本文ペインをクリックしただけの非選択ノートや
+ * 経路D/Eを保護できなかったため、**集合**を受け取り全経路の合流点で不可侵にする。
+ * protectedIds の各ノートは `local`(=編集中の最新ローカル状態)からそのまま採用し、同期結果の
+ * 該当ノートを置き換える(=動かさない・消さない・上書きしない=最優先)。local に無いid・
+ * 空集合は何もしない(=起動時の自動選択やまだ知らないノートは保護しない)。
  * 自動空ノート(placeholder)を選んだ直後に、dedupで別idの同名placeholderへ畳まれて選択が
- * 飛ぶのも防ぐ——保護対象がまだ空placeholderなら、同名の空placeholderを退けて protectedId を残す。
- * protectedId が null か、local に存在しなければ何もしない(=起動時の自動選択は保護しない)。 */
+ * 飛ぶのも防ぐ——保護対象がまだ空placeholderなら、同名の空placeholderを退けて保護対象を残す。 */
+export function preserveProtectedNotes(
+  next: Note[],
+  local: Note[],
+  protectedIds: Set<string>,
+  tombstones: NoteTombstones = {},
+): Note[] {
+  if (protectedIds.size === 0) return next;
+  const localById = new Map(local.map((note) => [note.id, note]));
+  const nextIds = new Set(next.map((note) => note.id));
+  const protectedLocals: Note[] = [];
+  for (const id of protectedIds) {
+    const localNote = localById.get(id);
+    if (!localNote) continue;
+    // 明示的な削除(tombstone)があり同期結果にも存在しないなら復活させない——別タブ/PCで
+    // 確定した削除は「編集中」より優先する(でないと削除が全タブで収束しない)。tombstoneの無い
+    // 単なる欠落(stale全体保存がdedup/マージで落とした等)は従来どおり local 版で復活させる。
+    if (!nextIds.has(id) && tombstones[id] !== undefined) continue;
+    protectedLocals.push(localNote);
+  }
+  if (protectedLocals.length === 0) return next;
+  const protectedIdSet = new Set(protectedLocals.map((note) => note.id));
+  // 保護対象がまだ空placeholderなら、dedupで勝った同名の空placeholderを退けて選択を保つ。
+  const placeholderTitles = new Set(
+    protectedLocals.filter(isGeneratedEmptyPlaceholder).map((note) => note.title),
+  );
+  const kept = next.filter((note) => {
+    if (protectedIdSet.has(note.id)) return false; // 保護対象は local 版で入れ直す(下で連結)
+    if (placeholderTitles.has(note.title) && isGeneratedEmptyPlaceholder(note)) return false;
+    return true;
+  });
+  // 表示(sortedNotes)は安定ソートで、同(pinned, order)のタイは配列順で決まる。以前の
+  // 「末尾へ追加して order で再ソート」は、同orderのノート(例: 補充された空ノート)が
+  // いると保護対象がタイに負けて1つ右の表示位置へ飛んだ(=一文字目が右のノートに飛んで
+  // 見えた実バグの後半)。localでの表示位置(rank)をタイの決着に使い、localに無い新参
+  // ノートは保護対象より後ろへ置く——「動かさない」を同orderタイでも守る。
+  const localRank = new Map(sortedNotes(local).map((note, index) => [note.id, index]));
+  const rankOf = (note: Note) => localRank.get(note.id) ?? Number.MAX_SAFE_INTEGER;
+  return [...kept, ...protectedLocals].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    if (a.order !== b.order) return a.order - b.order;
+    return rankOf(a) - rankOf(b);
+  });
+}
+
+/** 単一idの薄いラッパー(既存呼び出し/テスト互換)。中身は集合版へ委譲する。 */
 export function preserveProtectedNote(
   next: Note[],
   local: Note[],
   protectedId: string | null,
 ): Note[] {
-  if (!protectedId) return next;
-  const localNote = local.find((note) => note.id === protectedId);
-  if (!localNote) return next;
-  const placeholder = isGeneratedEmptyPlaceholder(localNote);
-  const kept = next.filter((note) => {
-    if (note.id === protectedId) return false; // 保護対象は local 版で入れ直す(下で push)
-    // 保護対象がまだ空placeholderなら、dedupで勝った同名の空placeholderを退けて選択を保つ。
-    if (placeholder && note.title === localNote.title && isGeneratedEmptyPlaceholder(note)) {
-      return false;
-    }
-    return true;
-  });
-  return [...kept, localNote].sort((a, b) => a.order - b.order);
+  return preserveProtectedNotes(next, local, protectedId ? new Set([protectedId]) : new Set());
 }
 
 /** 編集後の配列との差分から削除tombstoneを作る。再作成/編集されたIDの古いtombstoneは外す。 */

@@ -248,6 +248,59 @@ test("末尾には常に空ノートが3つ確保される(先頭を埋めると
   await expect(panes(page)).toHaveCount(4);
 });
 
+test("削除でorderが疎な盤面でも、空ノートへの一文字目で補充ノートが編集位置へ割り込まない", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  // 削除はorderを振り直さない——「件数(4) < 最大order(6)」の疎盤面を直接seedする
+  // (2026-07-22: 新しいタブで最初の空ノートに書き始めた瞬間、補充ノートがorder=件数で
+  //  生まれて編集位置へ割り込み、一文字目の入ったノートが右へ飛んで見えた実バグ)。
+  await page.evaluate(async () => {
+    // NO-LOG: E2Eの疎order盤面seedで、本番I/Oではない。
+    const mk = (id: string, title: string, order: number, content: string) => ({
+      id,
+      title,
+      content,
+      pinned: false,
+      order,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await chrome.storage.local.set({
+      localData: {
+        notes: [
+          mk("real-1", "会議メモ", 0, "本文"),
+          mk("empty-e", "ノートE", 4, ""),
+          mk("empty-f", "ノートF", 5, ""),
+          mk("empty-g", "ノートG", 6, ""),
+        ],
+      },
+    });
+  });
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect
+    .poll(async () => noteTitlesLinear(page))
+    .toEqual(["会議メモ", "ノートE", "ノートF", "ノートG"]);
+
+  // 最初の空ノートEを選んで一文字目を入力(ユーザーの実操作の再現)。
+  const paneE = page.locator('[data-testid="note-editor-area-empty-e"]');
+  await paneE.locator(".cm-content").click();
+  await page.keyboard.type("あ");
+
+  // 補充は表示末尾(ノートA=未使用の先頭タイトル)に付き、編集中ノートEは位置1のまま。
+  await expect
+    .poll(async () => noteTitlesLinear(page))
+    .toEqual(["会議メモ", "ノートE", "ノートF", "ノートG", "ノートA"]);
+  // 一文字目は選んだノートEに入ったまま(右のノートへ飛ばない)。
+  await expect(paneE.locator(".cm-content")).toHaveText("あ");
+});
+
 test("ピン留めしたノートは最優先で左上(順序列の先頭)に来る", async ({ context, newTabUrl }) => {
   const page = await context.newPage();
   await page.setViewportSize({ width: 1600, height: 900 });
