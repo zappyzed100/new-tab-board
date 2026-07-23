@@ -1,6 +1,9 @@
-// note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
+// note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージするロジック
+// (競合コピーの生成だけは無言にせず logOp で観測点を張る — 過去に競合コピーが無音で
+//  大量増殖した実害があり、次回は「どのIDが・どの差で・どのタイ時刻で」増えたかをログから追う)。
 import type { Note } from "../../types";
 import { isGeneratedEmptyPlaceholder, sortedNotes } from "../entities/notes";
+import { logOp } from "../runtime/log";
 
 export type NoteTombstones = Record<string, number>;
 
@@ -24,8 +27,8 @@ function stableHash(value: string): string {
 
 /** NAS/DriveのMarkdown往復で保持される、ユーザーが競合として確認すべきフィールドだけを比較する。
  * `taggedHash`等のローカル専用メタデータや false/undefined の表現差で競合コピーを作らない。 */
-function sameSyncedNote(a: Note, b: Note): boolean {
-  const comparable = (note: Note) => ({
+function comparableSyncedNote(note: Note): Record<string, unknown> {
+  return {
     id: note.id,
     title: note.title,
     content: note.content,
@@ -39,8 +42,21 @@ function sameSyncedNote(a: Note, b: Note): boolean {
     specialFolder: note.specialFolder ?? null,
     sourceNoteId: note.sourceNoteId ?? null,
     generatedBy: note.generatedBy ?? null,
-  });
-  return JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
+  };
+}
+
+function sameSyncedNote(a: Note, b: Note): boolean {
+  return JSON.stringify(comparableSyncedNote(a)) === JSON.stringify(comparableSyncedNote(b));
+}
+
+/** 競合コピーの原因追跡用: 2ノートで実際に異なる同期対象フィールド名を列挙する
+ * (id/title は競合コピー側で書き換わるため除外——「本文差なのか order 差なのか」を見たい)。 */
+function differingSyncedFields(a: Note, b: Note): string[] {
+  const ca = comparableSyncedNote(a);
+  const cb = comparableSyncedNote(b);
+  return Object.keys(ca).filter(
+    (k) => k !== "id" && k !== "title" && JSON.stringify(ca[k]) !== JSON.stringify(cb[k]),
+  );
 }
 
 /** 旧判定がローカル専用メタデータ差だけで作った偽の競合コピーを安全に除去する。
@@ -133,6 +149,15 @@ export function mergeNoteCollections(
           !(isGeneratedEmptyPlaceholder(local) && isGeneratedEmptyPlaceholder(remote))
         ) {
           conflict = conflictCopy(remote, id);
+          // 無音の競合コピー増殖を追えるよう、生成の瞬間だけ観測点を張る(既存コピーは
+          // 内容一致なら再生成されないためログも出ない=新規に増えた1件だけが記録される)。
+          logOp(
+            "note-sync",
+            "conflict-copy",
+            `id=${id} newId=${conflict.id} tiedAt=${localTime} ` +
+              `fields=${differingSyncedFields(local, remote).join(",") || "(none)"} ` +
+              `localLen=${local.content.length} remoteLen=${remote.content.length}`,
+          );
         }
       }
     }

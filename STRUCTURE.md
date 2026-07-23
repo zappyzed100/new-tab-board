@@ -273,7 +273,7 @@
 - `src/lib/storage/local-data-repository.test.ts` — local-data-repository.test.ts — 排他コミットとノート差分保存の構造的不変条件を検証する
 - `src/lib/storage/local-data-repository.ts` — local-data-repository.ts — localDataへのノート差分コミットと初期化を一元化するrepository
 - `src/lib/storage/note-sync.test.ts` — note-sync.test.ts — ノート和集合マージと削除tombstoneの回帰テスト
-- `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージする純粋ロジック
+- `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージするロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
