@@ -67,12 +67,19 @@ describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () =
   ];
 
   it("tagCounts が本文の#タグを数える", () => {
-    expect(tagCounts(manual)).toEqual([
-      { tag: "数学", count: 2 },
-      { tag: "復習", count: 2 },
-      { tag: "英語", count: 1 },
-      { tag: "線形代数", count: 1 },
-    ]);
+    // 同数タグどうしの並びは localeCompare 依存＝OS/ICUで変わる(Windowsは数学→復習、Linuxは逆)。
+    // 順序ではなく「件数」を検証し、順序については件数降順であることだけを見る。
+    const counts = new Map(tagCounts(manual).map((c) => [c.tag, c.count]));
+    expect(counts).toEqual(
+      new Map([
+        ["数学", 2],
+        ["復習", 2],
+        ["英語", 1],
+        ["線形代数", 1],
+      ]),
+    );
+    const order = tagCounts(manual).map((c) => c.count);
+    expect(order).toEqual([...order].sort((a, b) => b - a));
   });
 
   it("filterNotesByTags が本文の#タグで絞り込める", () => {
