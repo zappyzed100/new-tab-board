@@ -90,6 +90,7 @@
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
+- `e2e/specs/fixed-tags.spec.ts` — fixed-tags.spec.ts — 固定タグモード(ユーザー指示・2026-07-25)の回帰。
 - `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
 - `e2e/specs/note-images.spec.ts` — note-images.spec.ts — ノート添付画像(NASのみ保存・揮発キャッシュ)の回帰(ユーザー指示・2026-07-23)
 - `e2e/specs/note-katex.spec.ts` — note-katex.spec.ts — ノートプレビューのKaTeX数式描画の回帰(ユーザー指示・2026-07-23)。
@@ -190,6 +191,8 @@
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
+- `src/lib/entities/fixedTagPresets.test.ts` — fixedTagPresets.test.ts — 固定タグプリセット(名前付きタグの組)の純粋操作の単体テスト
+- `src/lib/entities/fixedTagPresets.ts` — fixedTagPresets.ts — 固定タグモードのプリセット(名前付きタグの組)の純粋な操作。I/Oは持たない。
 - `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/entities/special.test.ts` — special.test.ts — special.ts(⭐スター/スペシャルの純粋ロジック)の単体テスト
@@ -285,6 +288,7 @@
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/notes/CLAUDE.md`
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
+- `src/newtab/components/notes/FixedTagBar.tsx` — FixedTagBar.tsx — 固定タグモードの切替UI(ノート文字サイズと同じ行に置く・ユーザー指示)。
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.test.tsx` — MarkdownPreview.test.tsx — Markdownプレビュー(KaTeX数式 + sanitize)の単体テスト
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
@@ -759,6 +763,12 @@
 - function sortedBookmarks
 - function reorderBookmarks
 
+### `src/lib/entities/fixedTagPresets.ts`
+- function parseFixedTagInput
+- function addFixedTagPreset
+- function removeFixedTagPreset
+- function activeFixedTags
+
 ### `src/lib/entities/notes.ts`
 - function isNoSyncNote
 - function excludeNoSyncNotes
@@ -801,6 +811,8 @@
 ### `src/lib/entities/tags.ts`
 - function extractTags
 - function resolveNoteTags
+- function normalizeTagName
+- function applyFixedTags
 - function buildTagVocabulary
 
 ### `src/lib/entities/todos.ts`
@@ -1020,6 +1032,7 @@
 - type TagCount
 - function tagCounts
 - function filterNotesByTags
+- function filterNotesByFixedTags
 - function relatedTags
 
 ### `src/lib/search/tokenize.ts`
@@ -1111,6 +1124,9 @@
 ### `src/newtab/components/notes/DiffView.tsx`
 - function DiffView
 
+### `src/newtab/components/notes/FixedTagBar.tsx`
+- function FixedTagBar
+
 ### `src/newtab/components/notes/HistoryPanel.tsx`
 - function HistoryPanel
 
@@ -1173,6 +1189,7 @@
 - type Bookmark
 - type AppLaunch
 - type Settings
+- type FixedTagPreset
 - type SyncData
 - type Note
 - type SpecialItem

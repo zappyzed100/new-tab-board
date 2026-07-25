@@ -1,6 +1,12 @@
 // tags.test.ts — tags.ts(#タグ抽出 / タグ語彙構築)の単体テスト
 import { describe, expect, it } from "vitest";
-import { buildTagVocabulary, extractTags, resolveNoteTags } from "./tags";
+import {
+  applyFixedTags,
+  buildTagVocabulary,
+  extractTags,
+  normalizeTagName,
+  resolveNoteTags,
+} from "./tags";
 
 describe("extractTags", () => {
   it("本文中の#タグを重複無く抽出する", () => {
@@ -109,5 +115,63 @@ describe("buildTagVocabulary", () => {
   it("既定の上限は200", () => {
     const candidates = Array.from({ length: 250 }, (_, i) => `t${i}`);
     expect(buildTagVocabulary(candidates, []).length).toBe(200);
+  });
+});
+
+describe("normalizeTagName", () => {
+  it("先頭の#を落とす", () => {
+    expect(normalizeTagName("#仕事")).toBe("仕事");
+    expect(normalizeTagName("##仕事")).toBe("仕事");
+  });
+
+  it("タグに使えない文字(空白・記号)を落とす", () => {
+    expect(normalizeTagName(" 仕事 2026 ")).toBe("仕事2026");
+    expect(normalizeTagName("a-b/c")).toBe("abc");
+  });
+
+  it("使える文字が無ければ空文字(=登録させない)", () => {
+    expect(normalizeTagName("#")).toBe("");
+    expect(normalizeTagName("   ")).toBe("");
+    expect(normalizeTagName("---")).toBe("");
+  });
+
+  it("正規化した結果は extractTags が本文から拾える形になっている", () => {
+    const tag = normalizeTagName("#仕事 2026");
+    expect(extractTags(`本文\n\n#${tag}`)).toEqual([tag]);
+  });
+});
+
+describe("applyFixedTags", () => {
+  it("本文末尾へ不足している#タグを追記する", () => {
+    expect(applyFixedTags("買い物メモ", ["仕事", "2026"])).toBe("買い物メモ\n\n#仕事 #2026");
+  });
+
+  it("空ノートには付けない(ユーザー指示。空白のみも空扱い)", () => {
+    expect(applyFixedTags("", ["仕事"])).toBe("");
+    expect(applyFixedTags("   \n\n ", ["仕事"])).toBe("   \n\n ");
+  });
+
+  it("既に本文にあるタグは足さない(冪等: 2回通しても増えない)", () => {
+    const once = applyFixedTags("メモ #仕事", ["仕事", "2026"]);
+    expect(once).toBe("メモ #仕事\n\n#2026");
+    expect(applyFixedTags(once, ["仕事", "2026"])).toBe(once);
+  });
+
+  it("固定タグが空(モードOFF)なら本文をそのまま返す", () => {
+    expect(applyFixedTags("メモ", [])).toBe("メモ");
+  });
+
+  it("末尾の余分な空白/改行は畳んでから追記する", () => {
+    expect(applyFixedTags("メモ\n\n\n", ["仕事"])).toBe("メモ\n\n#仕事");
+  });
+
+  it("コードブロック内の#はタグと見なさないので、同名タグは改めて追記される", () => {
+    const content = "```sh\n#仕事 はコメント\n```";
+    expect(applyFixedTags(content, ["仕事"])).toBe(`${content}\n\n#仕事`);
+  });
+
+  it("追記後の本文から extractTags で固定タグが引ける(絞り込みと一致する)", () => {
+    const next = applyFixedTags("メモ", ["仕事", "2026"]);
+    expect(extractTags(next)).toEqual(["仕事", "2026"]);
   });
 });

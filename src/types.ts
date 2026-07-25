@@ -30,6 +30,21 @@ export type Settings = {
    * (ユーザー指示)。TODOリストの下で管理する。chrome.storage.localに乗り・Driveバックアップ
    * にも含まれる。 */
   tagCandidates?: string[];
+  /** 固定タグモードのプリセット(名前付きのタグの組)。ノート文字サイズの行のセレクトで切り替える。 */
+  fixedTagPresets?: FixedTagPreset[];
+  /** 現在選択中の固定タグプリセットid。未設定/該当なし=固定タグモードOFF(通常の全件表示)。 */
+  activeFixedTagPresetId?: string;
+};
+
+/** 固定タグモードのプリセット(ユーザー指示: 固定タグを登録して選択式で切り替える)。
+ * 選択中はこの `tags` を全て満たすノートだけを盤面に出し、編集を終えたノート(空でないもの)の
+ * 本文末尾へ不足分の `#タグ` を追記する。タグはすべて本文の `#タグ` として持つ——手動タグの
+ * 正本が本文だから(entities/tags.ts のヘッダー参照。専用フィールドはNAS往復で note.tags へ
+ * 潰れ、Geminiの自動タグ全置換で消える)。 */
+export type FixedTagPreset = {
+  id: string;
+  name: string;
+  tags: string[];
 };
 
 export type SyncData = {

@@ -38,6 +38,28 @@ export function filterNotesByTags<T extends TaggedNote>(
   });
 }
 
+/** 固定タグモードの盤面フィルタ: 固定タグを**全て**持つノートだけを残す(ユーザー指示)。
+ *
+ * `filterNotesByTags(_, _, "and")` と分けているのは2点で意味が違うため:
+ * - `junk` を除外しない——盤面はゴミ判定ノートも従来どおり表示する(消すのはNAS保管だけ)。
+ * - `alwaysVisibleIds` を素通しする。**これが無いと固定タグモードで何も書き始められない**:
+ *   末尾の空プレースホルダはタグを持たない(=消える)し、書き始めたノートはフォーカスが
+ *   外れるまでタグが付かない(=1文字目で自分が盤面から消える)。App が「空プレースホルダ+
+ *   編集中+選択中」を渡す。
+ * 固定タグが空(モードOFF)なら元の配列をそのまま返す。 */
+export function filterNotesByFixedTags<T extends TaggedNote & { id: string }>(
+  notes: T[],
+  fixedTags: string[],
+  alwaysVisibleIds: ReadonlySet<string>,
+): T[] {
+  if (fixedTags.length === 0) return notes;
+  return notes.filter((n) => {
+    if (alwaysVisibleIds.has(n.id)) return true;
+    const tags = new Set(resolveNoteTags(n));
+    return fixedTags.every((t) => tags.has(t));
+  });
+}
+
 /** 選択タグ(AND一致)のノートに共起する“関連タグ”(選択済みは除く)。件数降順。 */
 export function relatedTags(notes: TaggedNote[], selected: string[]): TagCount[] {
   if (selected.length === 0) return [];

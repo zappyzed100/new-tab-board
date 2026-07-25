@@ -38,6 +38,7 @@ import { EditingSeamProvider, useEditingSeam } from "./components/notes/editing-
 import { ViewportNote } from "./components/board/ViewportNote";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
+import { FixedTagBar } from "./components/notes/FixedTagBar";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { TagCandidatesPanel } from "./components/shell/TagCandidatesPanel";
@@ -69,6 +70,7 @@ import {
   ensureTrailingEmptyNotes,
   excludeNoSyncNotes,
   isDefaultNoteTitle,
+  isGeneratedEmptyPlaceholder,
   nextNoteOrder,
   pasteResultsIntoNotes,
   moveNoteDown,
@@ -104,6 +106,8 @@ import {
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts/shortcuts";
 import { replaceInNotes } from "../lib/search/noteSearch";
+import { filterNotesByFixedTags } from "../lib/search/tagSearch";
+import { activeFixedTags } from "../lib/entities/fixedTagPresets";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
@@ -645,13 +649,47 @@ export function App() {
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
-  const noteLinearIndices = useMemo(
-    () => new Map(orderedNotes.map((note, index) => [note.id, index])),
-    [orderedNotes],
-  );
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
   // タグ候補(TODOリスト下で管理・LLMのタグ推定へ渡す優先候補)。設定にsync/バックアップされる。
   const tagCandidates = sync?.settings.tagCandidates ?? [];
+  // 固定タグモード(ユーザー指示): 選択中プリセットのタグを全て持つノートだけを盤面に出し、
+  // 編集を終えたノートへそのタグを付ける。tags が空ならモードOFF(全件表示・付与もしない)。
+  const fixedTagPresets = useMemo(() => sync?.settings.fixedTagPresets ?? [], [sync]);
+  const fixedTags = useMemo(
+    () => activeFixedTags(fixedTagPresets, sync?.settings.activeFixedTagPresetId),
+    [fixedTagPresets, sync],
+  );
+  // 編集中(フォーカス中)のノートid。固定タグはblurで付くため、編集中のノートはまだ条件を
+  // 満たさない——絞り込みの素通し対象にしないと、空ノートへ1文字目を打った瞬間に自分が
+  // 盤面から消える。seam の editingIdsRef は ref(非反応的)なので、描画に効くこちらを別に持つ。
+  const [editingNoteIds, setEditingNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const handleEditingChange = useCallback((noteId: string, editing: boolean) => {
+    setEditingNoteIds((prev) => {
+      if (prev.has(noteId) === editing) return prev;
+      const next = new Set(prev);
+      if (editing) next.add(noteId);
+      else next.delete(noteId);
+      return next;
+    });
+  }, []);
+  // 盤面に出すノート。固定タグモードOFF(fixedTags が空)なら orderedNotes をそのまま返す。
+  // 素通しするのは「末尾の空プレースホルダ(ここから書き始める)」と「編集中(blurで初めて
+  // タグが付くため、まだ条件を満たさない)」の2種だけ。**選択中(activeNoteId)は素通ししない**
+  // ——条件を満たさないノートが1件だけ盤面に残り続け、絞り込みの意味が壊れる。
+  const visibleNotes = useMemo(() => {
+    if (fixedTags.length === 0) return orderedNotes;
+    const exempt = new Set(editingNoteIds);
+    for (const note of orderedNotes) {
+      if (isGeneratedEmptyPlaceholder(note)) exempt.add(note.id);
+    }
+    return filterNotesByFixedTags(orderedNotes, fixedTags, exempt);
+  }, [orderedNotes, fixedTags, editingNoteIds]);
+  // 論理順序(data-linear-index)は**盤面に出ている列**での位置。実測masonryは列配置を高さで
+  // 決めるため列レイアウトから順序を復元できず、E2Eはこの属性で順序を読む(notes/CLAUDE.md)。
+  const noteLinearIndices = useMemo(
+    () => new Map(visibleNotes.map((note, index) => [note.id, index])),
+    [visibleNotes],
+  );
   // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。実測masonryでは各列の
   // 高さを比べて振り分けるため、列数はJSで知っている必要がある。
   const [columnCount, setColumnCount] = useState(() => noteColumnCountFor(window.innerWidth));
@@ -683,7 +721,8 @@ export function App() {
     const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
     const heights = new Array(columnCount).fill(0);
     const placement = new Map<string, { column: number; top: number }>();
-    for (const note of orderedNotes) {
+    // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
+    for (const note of visibleNotes) {
       let min = 0;
       for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
       placement.set(note.id, { column: min, top: heights[min] });
@@ -692,7 +731,7 @@ export function App() {
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
     return { placement, boardHeight };
-  }, [orderedNotes, columnCount, noteHeights]);
+  }, [visibleNotes, columnCount, noteHeights]);
 
   // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
   // 自動的にDriveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
@@ -1488,8 +1527,10 @@ export function App() {
                 {/* タブバーと全文検索は、下へスクロールしても上端に貼り付いて追従する
                     (position:sticky。ユーザー指示)。2つをまとめて1つのstickyヘッダにする。 */}
                 <div className="note-sticky-head" data-testid="note-sticky-head">
-                  {/* ノート本文の文字サイズを一括調整する(A-/A+。ノート以外の文字には効かない)。 */}
-                  <Flex align="center" gap="2" className="note-font-toolbar">
+                  {/* ノート本文の文字サイズを一括調整する(A-/A+。ノート以外の文字には効かない)。
+                      固定タグの切替も同じ行に置く(ユーザー指示: この行が余っている)。項目が増えて
+                      横に収まらない画面幅では折り返す(wrap)。 */}
+                  <Flex align="center" gap="2" wrap="wrap" className="note-font-toolbar">
                     <Text size="1" color="gray">
                       ノート文字サイズ
                     </Text>
@@ -1516,6 +1557,13 @@ export function App() {
                     >
                       A＋
                     </Button>
+                    <FixedTagBar
+                      presets={fixedTagPresets}
+                      activePresetId={sync.settings.activeFixedTagPresetId}
+                      activeTags={fixedTags}
+                      onPresetsChange={(next) => updateSettings({ fixedTagPresets: next })}
+                      onActivePresetChange={(id) => updateSettings({ activeFixedTagPresetId: id })}
+                    />
                     <Button
                       type="button"
                       variant="soft"
@@ -1601,7 +1649,7 @@ export function App() {
                         } as CSSProperties
                       }
                     >
-                      {orderedNotes.map((note) => (
+                      {visibleNotes.map((note) => (
                         <ViewportNote
                           key={note.id}
                           noteId={note.id}
@@ -1620,8 +1668,8 @@ export function App() {
                             notes={notes}
                             tagCandidates={tagCandidates}
                             isActive={note.id === activeNoteId}
-                            isFirst={orderedNotes[0]?.id === note.id}
-                            isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
+                            isFirst={visibleNotes[0]?.id === note.id}
+                            isLast={visibleNotes[visibleNotes.length - 1]?.id === note.id}
                             autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                             manualSyncSignal={manualSyncSignal}
                             replaceContentVersion={
@@ -1640,6 +1688,8 @@ export function App() {
                             onMoveDown={moveNoteDownOne}
                             onDragStartNote={handleNoteDragStart}
                             onDropNote={handleNoteDrop}
+                            fixedTags={fixedTags}
+                            onEditingChange={handleEditingChange}
                             noteImageUrls={noteImages.urls}
                             onAttachImage={attachNoteImage}
                           />

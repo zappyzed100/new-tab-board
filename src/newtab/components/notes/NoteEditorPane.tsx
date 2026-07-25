@@ -37,7 +37,12 @@ import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
 import { logOp } from "../../../lib/runtime/log";
-import { buildTagVocabulary, extractTags, resolveNoteTags } from "../../../lib/entities/tags";
+import {
+  applyFixedTags,
+  buildTagVocabulary,
+  extractTags,
+  resolveNoteTags,
+} from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
@@ -115,6 +120,11 @@ type Props = {
   onDragStartNote: (noteId: string) => void;
   /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
   onDropNote: (targetNoteId: string) => void;
+  /** 固定タグモードで選択中のタグ(空=モードOFF)。編集を終えた時に本文末尾へ不足分を追記する。 */
+  fixedTags: string[];
+  /** 編集の開始/終了(フォーカスの出入り)をAppへ通知する。Appは固定タグモードの絞り込みで
+   * 編集中のノートを常時表示にするために使う(まだタグが付いていないため)。 */
+  onEditingChange: (noteId: string, editing: boolean) => void;
   /** ノート添付画像の揮発キャッシュ(NAS相対パス → object URL)。NAS未登録なら空=画像は出ない。 */
   noteImageUrls?: ReadonlyMap<string, string>;
   /** 画像の貼り付け/ドロップをNASへ保存し、本文へ挿入する参照テキストを返す(失敗はnull)。 */
@@ -144,6 +154,8 @@ export function NoteEditorPane({
   onMoveDown,
   onDragStartNote,
   onDropNote,
+  fixedTags,
+  onEditingChange,
   noteImageUrls,
   onAttachImage,
 }: Props) {
@@ -165,6 +177,22 @@ export function NoteEditorPane({
   // 本文の `#タグ` は打鍵のたびに変わるので、本文が変わった時だけ再計算する。
   const manualTags = useMemo(() => new Set(extractTags(note.content)), [note.content]);
   const resolvedTags = useMemo(() => resolveNoteTags(note), [note]);
+
+  /** 固定タグモードで、編集を終えた(フォーカスが外れた)このノートの本文末尾へ不足分の
+   * `#タグ` を追記する。**付与はblurの時にしかできない**——CM6は content をマウント時に
+   * しか読まないため、入力中に本文へ差し込んでも画面の編集内容には入らず、次の打鍵の
+   * コミットで丸ごと上書きされて消える。書き込むには履歴復元と同じ再マウント経路
+   * (clearDraft + replaceFromNoteContent + restoreCounter)が要り、それは入力中に
+   * 走らせるとカーソルが飛ぶ。blurなら編集していないので実害が無い。
+   * 空ノートには付けない(ユーザー指示)——判定は applyFixedTags 側。 */
+  function applyFixedTagsOnBlur(written: string) {
+    const next = applyFixedTags(written, fixedTags);
+    if (next === written) return; // モードOFF・空ノート・既に全部付いている
+    logOp("fixed-tags", "apply", `note=${note.id.slice(0, 8)} tags=${fixedTags.length}`);
+    onNotesChange((prev) => updateNote(prev, note.id, { content: next, updatedAt: clockNow() }));
+    setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
+    setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
+  }
 
   async function handleCopy() {
     try {
@@ -667,12 +695,24 @@ export function NoteEditorPane({
                 replaceFromNoteContent ? note.content : (seam?.getDraft(note.id) ?? note.content)
               }
               autoFocus={autoFocus}
-              onFocus={() => seam?.beginEditing(note.id)}
+              onFocus={() => {
+                seam?.beginEditing(note.id);
+                // 固定タグモードの時だけAppへ通知する(絞り込みの素通しにしか使わない)。
+                // モードOFFでも通知すると、フォーカスの出入りのたびにApp全体の再レンダが
+                // 1回増える——初期化/履歴復元の再マウントと同じフレームに載る経路なので、
+                // 使っていない機能のために既存のタイミングを揺らさない。
+                if (fixedTags.length > 0) onEditingChange(note.id, true);
+              }}
               // blur=編集終了。レジストリから外し、ドラフトも破棄する(この時点で note.content は
               // 毎打鍵コミットで最新に追いついているため、以後は通常のマージに委ねてよい)。
               onBlur={() => {
                 seam?.endEditing(note.id);
+                const written = seam?.getDraft(note.id) ?? note.content;
                 seam?.clearDraft(note.id);
+                applyFixedTagsOnBlur(written);
+                // 解除は常に通知する(モードを切った後に取り残されたidが素通しし続けるのを防ぐ)。
+                // 登録が無ければApp側が同一参照を返すので再レンダは起きない。
+                onEditingChange(note.id, false);
               }}
               // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
               onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}

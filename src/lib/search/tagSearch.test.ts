@@ -1,6 +1,6 @@
 // tagSearch.test.ts — タグ絞り込み純粋ロジックの単体テスト
 import { describe, expect, it } from "vitest";
-import { filterNotesByTags, relatedTags, tagCounts } from "./tagSearch";
+import { filterNotesByFixedTags, filterNotesByTags, relatedTags, tagCounts } from "./tagSearch";
 
 const notes = [
   { id: "a", tags: ["開発", "検索"] },
@@ -91,5 +91,44 @@ describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () =
       "m1",
       "m3",
     ]);
+  });
+});
+
+describe("filterNotesByFixedTags(固定タグモードの盤面フィルタ)", () => {
+  const board = [
+    { id: "a", content: "設計メモ #仕事 #2026" },
+    { id: "b", content: "買い物 #private" },
+    { id: "c", content: "議事録 #仕事" }, // 片方しか持たない=AND不一致
+    { id: "d", content: "" }, // 末尾の空プレースホルダ想定
+    { id: "e", content: "ゴミ #仕事", junk: true },
+  ];
+  const none = new Set<string>();
+
+  it("固定タグを全て持つノートだけを残す(AND)", () => {
+    expect(filterNotesByFixedTags(board, ["仕事", "2026"], none).map((n) => n.id)).toEqual(["a"]);
+  });
+
+  it("junkノートは盤面から隠さない(NAS保管の対象外にするだけ・タグ検索とは別の意味)", () => {
+    expect(filterNotesByFixedTags(board, ["仕事"], none).map((n) => n.id)).toEqual(["a", "c", "e"]);
+  });
+
+  it("alwaysVisibleIds はタグを持たなくても残す(空ノート・編集中が消えない)", () => {
+    const ids = filterNotesByFixedTags(board, ["仕事", "2026"], new Set(["d", "b"])).map(
+      (n) => n.id,
+    );
+    expect(ids).toEqual(["a", "b", "d"]);
+  });
+
+  it("固定タグが空(モードOFF)なら元の配列をそのまま返す", () => {
+    expect(filterNotesByFixedTags(board, [], none)).toBe(board);
+  });
+
+  it("Geminiの自動タグ(note.tags)でも条件を満たせる(正本は手動+自動の合流)", () => {
+    const auto = [{ id: "x", content: "本文だけ", tags: ["仕事", "2026"] }];
+    expect(filterNotesByFixedTags(auto, ["仕事", "2026"], none).map((n) => n.id)).toEqual(["x"]);
+  });
+
+  it("該当が1件も無ければ空(空ノートの素通しが無ければ盤面は空になる)", () => {
+    expect(filterNotesByFixedTags(board, ["存在しない"], none)).toEqual([]);
   });
 });
