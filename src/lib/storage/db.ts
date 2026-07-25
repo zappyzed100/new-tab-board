@@ -130,6 +130,12 @@ export async function getIndexEntry(token: string): Promise<IndexEntry | undefin
   return db.get("searchIndex", token);
 }
 
+/** 転置索引から1トークンを消す(重複スナップショット掃除で refs が空になった時)。 */
+export async function deleteIndexEntry(token: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("searchIndex", token);
+}
+
 export async function getAllIndexEntries(): Promise<IndexEntry[]> {
   const db = await getDb();
   return db.getAll("searchIndex");

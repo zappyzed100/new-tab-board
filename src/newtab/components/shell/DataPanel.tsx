@@ -20,6 +20,7 @@ import {
   FolderSymlink,
   KeyRound,
   Settings as SettingsIcon,
+  Trash2,
   Upload,
 } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ import {
   setGeminiApiKey,
   setNasFolderPath,
 } from "../../../lib/storage/db";
+import { dedupeStoredSnapshots } from "../../../lib/history/snapshotCleanup";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
@@ -100,6 +102,9 @@ export function DataPanel({
   // この端末でアラーム(予定前・バッテリー)を鳴らすか。**端末ローカル設定**(db.ts。settings
   // backup/復元で他PCへ伝播しない)。既定=鳴らす。複数PCで同時に鳴るのを避けたい端末でオフにする。
   const [alarmOn, setAlarmOn] = useState(true);
+  // 履歴の重複掃除: 押す→確認ボタンが出る→実行(履歴を消すので二段クリックにする)。
+  const [cleanupArmed, setCleanupArmed] = useState(false);
+  const [cleaningHistory, setCleaningHistory] = useState(false);
   useEffect(() => {
     // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
     // 突合effectと同じ方針)。結果はAppへ返す(常時表示の警告バッジもこの値で出る)。
@@ -116,6 +121,25 @@ export function DataPanel({
     });
     void getAlarmEnabled().then(setAlarmOn);
   }, []);
+
+  /** 溜まってしまった同一内容の履歴を畳む(2026-07-25の増殖バグの後始末。lib側が正本)。 */
+  async function handleCleanupHistory() {
+    setCleaningHistory(true);
+    onMessage("履歴の重複を掃除しています…");
+    try {
+      const { scanned, removed, indexTokensTouched } = await dedupeStoredSnapshots();
+      onMessage(
+        removed === 0
+          ? `履歴に重複はありませんでした(${scanned}件を確認)`
+          : `重複した履歴を${removed}件削除しました(${scanned}件中・検索索引${indexTokensTouched}件を更新)`,
+      );
+    } catch (error) {
+      onMessage(`履歴の掃除に失敗しました: ${String(error)}`);
+    } finally {
+      setCleaningHistory(false);
+      setCleanupArmed(false);
+    }
+  }
 
   async function handleToggleAlarm() {
     const next = !alarmOn;
@@ -485,6 +509,45 @@ export function DataPanel({
           )}
           {alarmOn ? "アラーム: この端末で鳴らす" : "アラーム: この端末では鳴らさない"}
         </Button>
+        {/* 2026-07-25以前に「ペインがマウントしただけ」で積まれた同一内容の履歴を一度だけ畳む
+            (原因側は修正済みだが、既に溜まった分は消えない)。**履歴を消す操作**なので、
+            NASフォルダ設定と同じ二段クリック(押す→確認が出る)にする。window.confirmは
+            このアプリのどこでも使っていないので、既存の展開型の作法に合わせる。 */}
+        <Button
+          type="button"
+          variant={cleanupArmed ? "solid" : "soft"}
+          data-testid="data-cleanup-history"
+          title="同じ内容が連続して重複保存されている履歴を1件に畳む(内容が変わっている履歴・NASへ保管済みの履歴は消しません)"
+          disabled={cleaningHistory}
+          onClick={() => setCleanupArmed((v) => !v)}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+          {cleaningHistory ? "履歴を掃除中…" : "履歴の重複を掃除"}
+        </Button>
+        {cleanupArmed ? (
+          <>
+            <Button
+              type="button"
+              color="red"
+              data-testid="data-cleanup-history-run"
+              title="連続して同じ内容の履歴を1件だけ残して削除する(元に戻せません)"
+              disabled={cleaningHistory}
+              onClick={() => void handleCleanupHistory()}
+            >
+              重複を削除する(戻せません)
+            </Button>
+            <Button
+              type="button"
+              variant="soft"
+              color="gray"
+              data-testid="data-cleanup-history-cancel"
+              disabled={cleaningHistory}
+              onClick={() => setCleanupArmed(false)}
+            >
+              やめる
+            </Button>
+          </>
+        ) : null}
       </div>
     </Flex>
   );

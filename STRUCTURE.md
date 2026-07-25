@@ -237,6 +237,8 @@
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
 - `src/lib/history/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
+- `src/lib/history/snapshotCleanup.test.ts` — snapshotCleanup.test.ts — 重複スナップショット掃除(計画の純粋関数 + 実DB操作)の単体テスト
+- `src/lib/history/snapshotCleanup.ts` — snapshotCleanup.ts — 溜まってしまった重複スナップショットの掃除(明示操作のメンテナンス)
 - `src/lib/history/useSnapshotScheduler.test.tsx` — @vitest-environment jsdom
 - `src/lib/history/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/lib/images/nasImageStore.test.ts` — nasImageStore.test.ts — ノート添付画像のNAS入出力の単体テスト(実NAS・実IndexedDBは経由しない)
@@ -961,6 +963,13 @@
 - const SUMMARY_MAX_CHARS
 - function summarizeSnapshot
 
+### `src/lib/history/snapshotCleanup.ts`
+- type SnapshotDedupPlan
+- function planSnapshotDedup
+- function pruneIndexRefs
+- type SnapshotCleanupResult
+- function dedupeStoredSnapshots
+
 ### `src/lib/history/useSnapshotScheduler.ts`
 - function forceSnapshot
 - function useSnapshotScheduler
@@ -1066,6 +1075,7 @@
 - function markSnapshotArchived
 - function putIndexEntry
 - function getIndexEntry
+- function deleteIndexEntry
 - function getAllIndexEntries
 - function getNasFolderPath
 - function setNasFolderPath

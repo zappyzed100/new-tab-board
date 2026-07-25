@@ -123,3 +123,80 @@ test("スクロールとタブ開閉を繰り返しても履歴は1件も増え�
   await page.keyboard.insertText("追記".repeat(120)); // 240文字 > CHANGE_THRESHOLD_CHARS
   await expect.poll(() => snapshotCount(page)).toBeGreaterThan(0);
 });
+
+test("「履歴の重複を掃除」で、溜まった同一内容の履歴と索引の参照が畳まれる", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  // 修正前の状態を再現する: 同一内容のスナップショットが積まれ、索引がそれを全部指している。
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const req = indexedDB.open("new-tab-board");
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction(["snapshots", "searchIndex"], "readwrite");
+          const store = tx.objectStore("snapshots");
+          const ids: string[] = [];
+          for (let i = 0; i < 20; i++) {
+            const id = `dup-${i}`;
+            ids.push(id);
+            store.put({
+              id,
+              noteId: "dup-note",
+              timestamp: i,
+              content: "SAME-COMPRESSED-BODY",
+              archived: false,
+              contentHash: "same",
+            });
+          }
+          // 内容が変わった1件は残らなければならない。
+          store.put({
+            id: "changed",
+            noteId: "dup-note",
+            timestamp: 100,
+            content: "OTHER-BODY",
+            archived: false,
+            contentHash: "other",
+          });
+          tx.objectStore("searchIndex").put({ token: "dup-token", refs: [...ids, "changed"] });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+        };
+      }),
+  );
+  expect(await snapshotCount(page)).toBe(21);
+
+  await page.getByTestId("toggle-data-panel").click();
+  await page.getByTestId("data-cleanup-history").click();
+  await page.getByTestId("data-cleanup-history-run").click();
+  // 同一内容20件のうち残るのは最初の1件なので、消えるのは19件。
+  await expect(page.getByTestId("data-panel-message")).toContainText("重複した履歴を19件削除");
+
+  // 最初の1件と、内容が変わった1件だけが残る。
+  expect(await snapshotCount(page)).toBe(2);
+  const refs = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const req = indexedDB.open("new-tab-board");
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("searchIndex", "readonly");
+          const get = tx.objectStore("searchIndex").get("dup-token");
+          tx.oncomplete = () => {
+            db.close();
+            resolve((get.result as { refs: string[] } | undefined)?.refs ?? []);
+          };
+        };
+      }),
+  );
+  // 索引の参照も畳まれている(refsが伸びたままだと重さの本体が減らない)。
+  expect(refs.sort()).toEqual(["changed", "dup-0"]);
+});
