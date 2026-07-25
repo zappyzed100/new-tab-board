@@ -105,6 +105,7 @@
 - `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
 - `e2e/stress/CLAUDE.md`
+- `e2e/stress/history-growth.spec.ts` — history-growth.spec.ts — 履歴スナップショットが「無編集で増えない」ことの回帰(2026-07-25)。
 - `e2e/stress/resource-budget.spec.ts` — resource-budget.spec.ts — 500ノート時の詳細ペイン・描画・timer・Observer・DOM上限を検査する。
 
 ## `gas/`
@@ -236,7 +237,7 @@
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
 - `src/lib/history/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
-- `src/lib/history/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
+- `src/lib/history/useSnapshotScheduler.test.tsx` — @vitest-environment jsdom
 - `src/lib/history/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/lib/images/nasImageStore.test.ts` — nasImageStore.test.ts — ノート添付画像のNAS入出力の単体テスト(実NAS・実IndexedDBは経由しない)
 - `src/lib/images/nasImageStore.ts` — nasImageStore.ts — ノート添付画像のNAS入出力(保存/一括読み込み)。ブラウザ側に永続化しない
@@ -1058,6 +1059,7 @@
 ### `src/lib/storage/db.ts`
 - function putSnapshot
 - function getSnapshotsByNote
+- function getLatestSnapshot
 - function getAllSnapshots
 - function getSnapshot
 - function deleteSnapshot

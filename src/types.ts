@@ -185,6 +185,10 @@ export type Snapshot = {
   /** 履歴一覧で本文を展開せずに中身を判別するための一文サマリ(変更箇所 or 本文の最初)。
    * このフィールド追加前の既存スナップショットではundefined(一覧では非表示)。 */
   summary?: string;
+  /** 保存時の本文のハッシュ(contentHash)。同じ内容を二重に刻まないための照合キー——
+   * 本文はgzip済みなので、重複判定のたびに解凍しないで済むようにこれを持つ。
+   * このフィールド追加前の既存スナップショットではundefined(=照合できないので保存する)。 */
+  contentHash?: string;
 };
 
 export type IndexEntry = {

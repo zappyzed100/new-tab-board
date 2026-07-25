@@ -84,6 +84,18 @@ export async function getSnapshotsByNote(noteId: string): Promise<Snapshot[]> {
   return db.getAllFromIndex("snapshots", "by-note", noteId);
 }
 
+/** そのノートの最新スナップショット(timestamp最大)。無ければundefined。
+ * 「同じ内容をもう一度刻もうとしていないか」の照合に使う——複数タブが同じ編集を受け取ると
+ * それぞれが自分のメモリ上の前回内容としか比べられず、同一内容がタブの数だけ増えるため。 */
+export async function getLatestSnapshot(noteId: string): Promise<Snapshot | undefined> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("snapshots", "by-note", noteId);
+  return all.reduce<Snapshot | undefined>(
+    (latest, s) => (latest === undefined || s.timestamp > latest.timestamp ? s : latest),
+    undefined,
+  );
+}
+
 export async function getAllSnapshots(): Promise<Snapshot[]> {
   const db = await getDb();
   return db.getAll("snapshots");
