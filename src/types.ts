@@ -33,10 +33,10 @@ export type Settings = {
    * (ユーザー指示)。TODOリストの下で管理する。chrome.storage.localに乗り・Driveバックアップ
    * にも含まれる。 */
   tagCandidates?: string[];
-  /** 固定タグモードのプリセット(名前付きのタグの組)。ノート文字サイズの行のセレクトで切り替える。 */
+  /** 固定タグモードのプリセット(名前付きのタグの組)。ノート文字サイズの行のセレクトで切り替える。
+   * **登録内容だけが全タブ共有**で、どれを選んでいるかは共有しない(ユーザー指示: タブ毎に
+   * 切り替えたい)——選択中idは storage/tab-session.ts の sessionStorage 側に置く。 */
   fixedTagPresets?: FixedTagPreset[];
-  /** 現在選択中の固定タグプリセットid。未設定/該当なし=固定タグモードOFF(通常の全件表示)。 */
-  activeFixedTagPresetId?: string;
 };
 
 /** 固定タグモードのプリセット(ユーザー指示: 固定タグを登録して選択式で切り替える)。

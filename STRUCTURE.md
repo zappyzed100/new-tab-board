@@ -280,6 +280,8 @@
 - `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージするロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+- `src/lib/storage/tab-session.test.ts` — @vitest-environment jsdom
+- `src/lib/storage/tab-session.ts` — tab-session.ts — 「このタブだけ」の一時設定の唯一の入出口(sessionStorage。GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/board/CLAUDE.md`
 - `src/newtab/components/board/ViewportNote.tsx` — ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
@@ -1103,6 +1105,10 @@
 - function updateLocalData
 - function patchLocalData
 - function subscribeLocalData
+
+### `src/lib/storage/tab-session.ts`
+- function readTabFixedTagPresetId
+- function writeTabFixedTagPresetId
 
 ### `src/newtab/App.tsx`
 - function App

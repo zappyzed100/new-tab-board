@@ -130,3 +130,52 @@ test("固定タグの行は文字サイズの行に収まり、隣の要素と�
   expect(rects.select.right).toBeLessThanOrEqual(rects.bar.right + 1);
   expect(rects.bar.right).toBeLessThanOrEqual(rects.head.right + 1);
 });
+
+test("固定タグの選択はタブ毎に独立し、そのタブのリロードでは維持される", async ({
+  context,
+  newTabUrl,
+}) => {
+  const tab1 = await context.newPage();
+  await tab1.goto(newTabUrl);
+  await expect(tab1.getByTestId("app-root")).toBeVisible();
+
+  // タグの違うノートを2件用意する(どちらのモードでも片方だけが残るように)。
+  await typeAndBlur(tab1, panes(tab1).first(), "仕事のメモ #仕事");
+  await typeAndBlur(tab1, panes(tab1).last(), "勉強のメモ #勉強");
+  await expect(tab1.getByText("仕事のメモ")).toBeVisible();
+  await expect(tab1.getByText("勉強のメモ")).toBeVisible();
+
+  // プリセットは2つとも登録する(登録内容=全タブ共有の設定)。
+  await tab1.getByTestId("fixed-tag-edit-toggle").click();
+  for (const name of ["仕事", "勉強"]) {
+    await tab1.getByTestId("fixed-tag-name-input").fill(name);
+    await tab1.getByTestId("fixed-tag-tags-input").fill(name);
+    await tab1.getByTestId("fixed-tag-add").click();
+  }
+  await tab1.getByTestId("fixed-tag-preset-select").selectOption({ label: "仕事" });
+  await expect(tab1.getByText("勉強のメモ")).toHaveCount(0);
+  await expect(tab1.getByText("仕事のメモ")).toBeVisible();
+
+  // 別タブは「なし」で開く(選択が共有されていない証拠。登録プリセットは見えている)。
+  const tab2 = await context.newPage();
+  await tab2.goto(newTabUrl);
+  await expect(tab2.getByTestId("app-root")).toBeVisible();
+  await expect(tab2.getByTestId("fixed-tag-preset-select")).toHaveValue("");
+  await expect(tab2.getByText("仕事のメモ")).toBeVisible();
+  await expect(tab2.getByText("勉強のメモ")).toBeVisible();
+
+  // 別タブで別のプリセットを選ぶ。
+  await tab2.getByTestId("fixed-tag-preset-select").selectOption({ label: "勉強" });
+  await expect(tab2.getByText("勉強のメモ")).toBeVisible();
+  await expect(tab2.getByText("仕事のメモ")).toHaveCount(0);
+
+  // 1枚目は「仕事」のまま——他タブの切替に引きずられない。
+  await expect(tab1.getByText("仕事のメモ")).toBeVisible();
+  await expect(tab1.getByText("勉強のメモ")).toHaveCount(0);
+
+  // そのタブのリロードでは選択が残る(sessionStorage)。
+  await tab2.reload();
+  await expect(tab2.getByTestId("app-root")).toBeVisible();
+  await expect(tab2.getByText("勉強のメモ")).toBeVisible();
+  await expect(tab2.getByText("仕事のメモ")).toHaveCount(0);
+});

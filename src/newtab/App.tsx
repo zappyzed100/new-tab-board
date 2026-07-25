@@ -109,6 +109,7 @@ import {
 import { replaceInNotes } from "../lib/search/noteSearch";
 import { filterNotesByFixedTags } from "../lib/search/tagSearch";
 import { activeFixedTags } from "../lib/entities/fixedTagPresets";
+import { readTabFixedTagPresetId, writeTabFixedTagPresetId } from "../lib/storage/tab-session";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
@@ -655,15 +656,29 @@ export function App() {
   const tagCandidates = sync?.settings.tagCandidates ?? [];
   // 固定タグモード(ユーザー指示): 選択中プリセットのタグを全て持つノートだけを盤面に出し、
   // 編集を終えたノートへそのタグを付ける。tags が空ならモードOFF(全件表示・付与もしない)。
+  // 登録(プリセット)は全タブ共有の設定、**選択はこのタブだけ**(ユーザー指示: タブ毎に
+  // 切り替えたい)。選択idを設定へ入れると、あるタブでの切替が全タブへ伝播してしまう。
+  // sessionStorageならタブごとに独立し、そのタブのリロードでは維持される。
   const fixedTagPresets = useMemo(() => sync?.settings.fixedTagPresets ?? [], [sync]);
+  const [activeFixedTagPresetId, setActiveFixedTagPresetId] = useState(readTabFixedTagPresetId);
   const fixedTags = useMemo(
-    () => activeFixedTags(fixedTagPresets, sync?.settings.activeFixedTagPresetId),
-    [fixedTagPresets, sync],
+    () => activeFixedTags(fixedTagPresets, activeFixedTagPresetId),
+    [fixedTagPresets, activeFixedTagPresetId],
   );
+  const selectFixedTagPreset = useCallback((presetId: string) => {
+    setActiveFixedTagPresetId(presetId);
+    writeTabFixedTagPresetId(presetId);
+  }, []);
   // 編集中(フォーカス中)のノートid。固定タグはblurで付くため、編集中のノートはまだ条件を
   // 満たさない——絞り込みの素通し対象にしないと、空ノートへ1文字目を打った瞬間に自分が
   // 盤面から消える。seam の editingIdsRef は ref(非反応的)なので、描画に効くこちらを別に持つ。
   const [editingNoteIds, setEditingNoteIds] = useState<ReadonlySet<string>>(new Set());
+  // モードOFFの間は誰も編集中集合を更新しない(NoteEditorPaneがOFF時は通知しない——
+  // 使っていない機能のために毎フォーカスでApp全体を再レンダしないため)。切り替えた瞬間に
+  // 集合ごと捨てて、次にONにした時へ古いidを持ち越さない。
+  useEffect(() => {
+    if (fixedTags.length === 0) setEditingNoteIds((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [fixedTags]);
   const handleEditingChange = useCallback((noteId: string, editing: boolean) => {
     setEditingNoteIds((prev) => {
       if (prev.has(noteId) === editing) return prev;
@@ -1580,10 +1595,10 @@ export function App() {
                     </Button>
                     <FixedTagBar
                       presets={fixedTagPresets}
-                      activePresetId={sync.settings.activeFixedTagPresetId}
+                      activePresetId={activeFixedTagPresetId}
                       activeTags={fixedTags}
                       onPresetsChange={(next) => updateSettings({ fixedTagPresets: next })}
-                      onActivePresetChange={(id) => updateSettings({ activeFixedTagPresetId: id })}
+                      onActivePresetChange={selectFixedTagPreset}
                     />
                     <Button
                       type="button"

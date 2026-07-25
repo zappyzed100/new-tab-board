@@ -714,9 +714,12 @@ export function NoteEditorPane({
                 const written = seam?.getDraft(note.id) ?? note.content;
                 seam?.clearDraft(note.id);
                 applyFixedTagsOnBlur(written);
-                // 解除は常に通知する(モードを切った後に取り残されたidが素通しし続けるのを防ぐ)。
-                // 登録が無ければApp側が同一参照を返すので再レンダは起きない。
-                onEditingChange(note.id, false);
+                // focusと同じくモード中だけ通知する。同値のsetStateでもReactは「bailoutの前に
+                // そのコンポーネントをもう一度レンダリングすることがある」——初期化/履歴復元の
+                // 再マウントと同じフレームに余計な再レンダを差し込むと、既知のレース
+                // (notes-board.spec.ts の初期化テストのコメント参照)を踏みやすくなる。
+                // モードOFFへ切り替えた時の取り残しはApp側のeffectが集合ごと捨てる。
+                if (fixedTags.length > 0) onEditingChange(note.id, false);
               }}
               // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
               onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}
