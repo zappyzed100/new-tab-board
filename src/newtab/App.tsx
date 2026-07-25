@@ -25,6 +25,7 @@ import {
   StickyNote,
   Tag,
   Wrench,
+  WrapText,
 } from "lucide-react";
 import { useForegroundSync } from "./useForegroundSync";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
@@ -809,6 +810,8 @@ export function App() {
   // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles/components.cssの.cm-editorが参照)。
   // ノート以外のUI文字には影響しない(ユーザー指示)。未設定なら既定値。
   const noteFontSize = clampNoteFontSize(sync?.settings.noteFontSize ?? NOTE_FONT_DEFAULT);
+  // 本文の折り返し(ユーザー指示: ボタン一つで切り替える)。未設定はCM6既定=折り返さない。
+  const wrapLines = sync?.settings.noteWrapLines ?? false;
   useEffect(() => {
     document.documentElement.style.setProperty("--note-font-size", `${noteFontSize}px`);
   }, [noteFontSize]);
@@ -1557,6 +1560,24 @@ export function App() {
                     >
                       A＋
                     </Button>
+                    {/* 本文の折り返し(幅固定)をボタン一つで切り替える(ユーザー指示)。
+                        設定に保存されるので次に開いたタブにも効く。 */}
+                    <Button
+                      type="button"
+                      variant={wrapLines ? "solid" : "soft"}
+                      size="1"
+                      data-testid="note-wrap-toggle"
+                      aria-pressed={wrapLines}
+                      title={
+                        wrapLines
+                          ? "折り返しを解除する(長い行は横スクロールになる)"
+                          : "ペイン幅で折り返す(長い行が右へ流れなくなる)"
+                      }
+                      onClick={() => updateSettings({ noteWrapLines: !wrapLines })}
+                    >
+                      <WrapText size={14} aria-hidden="true" />
+                      折り返し
+                    </Button>
                     <FixedTagBar
                       presets={fixedTagPresets}
                       activePresetId={sync.settings.activeFixedTagPresetId}
@@ -1688,6 +1709,7 @@ export function App() {
                             onMoveDown={moveNoteDownOne}
                             onDragStartNote={handleNoteDragStart}
                             onDropNote={handleNoteDrop}
+                            wrapLines={wrapLines}
                             fixedTags={fixedTags}
                             onEditingChange={handleEditingChange}
                             noteImageUrls={noteImages.urls}

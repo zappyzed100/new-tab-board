@@ -120,6 +120,8 @@ type Props = {
   onDragStartNote: (noteId: string) => void;
   /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
   onDropNote: (targetNoteId: string) => void;
+  /** 本文をペイン幅で折り返すか(ツールバーのトグル。falseは横スクロール)。 */
+  wrapLines: boolean;
   /** 固定タグモードで選択中のタグ(空=モードOFF)。編集を終えた時に本文末尾へ不足分を追記する。 */
   fixedTags: string[];
   /** 編集の開始/終了(フォーカスの出入り)をAppへ通知する。Appは固定タグモードの絞り込みで
@@ -154,6 +156,7 @@ export function NoteEditorPane({
   onMoveDown,
   onDragStartNote,
   onDropNote,
+  wrapLines,
   fixedTags,
   onEditingChange,
   noteImageUrls,
@@ -695,6 +698,7 @@ export function NoteEditorPane({
                 replaceFromNoteContent ? note.content : (seam?.getDraft(note.id) ?? note.content)
               }
               autoFocus={autoFocus}
+              wrapLines={wrapLines}
               onFocus={() => {
                 seam?.beginEditing(note.id);
                 // 固定タグモードの時だけAppへ通知する(絞り込みの素通しにしか使わない)。
