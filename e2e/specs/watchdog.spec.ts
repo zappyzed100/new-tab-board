@@ -52,3 +52,27 @@ test("主スレッドを塞ぐと、止まっていた時間が診断ログに�
   await page.getByTestId("data-copy-diagnostics").click();
   await expect(page.getByTestId("data-panel-message")).toContainText("停止1回");
 });
+
+test("「診断ログを消去」で保存済みの記録が空になる(拡張更新後に古い記録と混ざらないため)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  const diagnostics = () =>
+    page.evaluate(async () => {
+      // NO-LOG: 保存結果を読むだけのE2E内観察で、本番I/O経路ではない。
+      const stored = await chrome.storage.local.get("diagnosticsLog");
+      return (stored.diagnosticsLog ?? []) as DiagEvent[];
+    });
+
+  // ウォッチドッグは起動時にstartを1件残すので、消去前は空でないことを確認してから消す。
+  await expect.poll(async () => (await diagnostics()).length).toBeGreaterThan(0);
+
+  await page.getByTestId("toggle-data-panel").click();
+  await page.getByTestId("data-clear-diagnostics").click();
+  await expect(page.getByTestId("data-panel-message")).toContainText("診断ログを消去しました");
+  expect(await diagnostics()).toEqual([]);
+});

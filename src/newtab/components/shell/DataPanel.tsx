@@ -37,6 +37,7 @@ import {
 } from "../../../lib/storage/db";
 import { dedupeStoredSnapshots } from "../../../lib/history/snapshotCleanup";
 import {
+  clearDiagnostics,
   formatDiagnosticsLog,
   readDiagnostics,
   summarizeDiagnostics,
@@ -141,6 +142,13 @@ export function DataPanel({
       // クリップボードが使えない状況でも、要約だけは画面で読めるようにする。
       onMessage(`${summary}(コピーに失敗: ${String(error)})`);
     }
+  }
+
+  /** 診断ログを空にする(ユーザー指示: 拡張を更新した後、古い記録と混ざらないよう
+   * まっさらな状態から検証したい)。過去の記録を消すだけで、以後もウォッチドッグは動き続ける。 */
+  async function handleClearDiagnostics() {
+    await clearDiagnostics();
+    onMessage("診断ログを消去しました");
   }
 
   /** 溜まってしまった同一内容の履歴を畳む(2026-07-25の増殖バグの後始末。lib側が正本)。 */
@@ -541,6 +549,19 @@ export function DataPanel({
         >
           <Activity size={14} aria-hidden="true" />
           診断ログをコピー
+        </Button>
+        {/* 拡張を更新した後、古い記録(修正前の挙動)と混ざらないよう空にする(ユーザー指示)。
+            コピーではなく削除なので確認は挟まない——履歴の重複掃除と違い元に戻す価値のある
+            データではなく、単なる調査用ログのため。 */}
+        <Button
+          type="button"
+          variant="soft"
+          color="gray"
+          data-testid="data-clear-diagnostics"
+          title="蓄積した診断ログを消去する(拡張を更新した後、まっさらな状態から検証したい時に)"
+          onClick={() => void handleClearDiagnostics()}
+        >
+          診断ログを消去
         </Button>
         {/* 2026-07-25以前に「ペインがマウントしただけ」で積まれた同一内容の履歴を一度だけ畳む
             (原因側は修正済みだが、既に溜まった分は消えない)。**履歴を消す操作**なので、
