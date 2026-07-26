@@ -44,7 +44,7 @@ export function SpecialPanel({ notes, specialItems, onSelectNote, onRemove }: Pr
   return (
     <PanelCard
       data-testid="special-panel"
-      title="スペシャル"
+      title="お気に入り"
       icon={<Star size={15} aria-hidden="true" />}
     >
       <Flex direction="column" gap="2">
@@ -101,11 +101,11 @@ export function SpecialPanel({ notes, specialItems, onSelectNote, onRemove }: Pr
 
         {entries.length === 0 ? (
           <Text size="1" color="gray" data-testid="special-empty">
-            ノートの見出し横のスターでスペシャルに保管できます
+            ノートの見出し横のスターでお気に入りに保管できます
           </Text>
         ) : visible.length === 0 ? (
           <Text size="1" color="gray" data-testid="special-no-match">
-            該当するスペシャルがありません
+            該当するお気に入りがありません
           </Text>
         ) : (
           <Flex direction="column" gap="1" asChild>

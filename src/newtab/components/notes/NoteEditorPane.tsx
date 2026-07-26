@@ -240,7 +240,7 @@ export function NoteEditorPane({
     );
     onMessage(
       `「${title || note.title}」に${tags.length}件のタグ${title ? "とタイトル" : ""}を付けました` +
-        `${junk ? "(ゴミ判定: NAS保管対象外)" : ""}`,
+        `${junk ? "(ゴミ判定: 保管庫の保管対象外)" : ""}`,
     );
   }
 
@@ -472,9 +472,7 @@ export function NoteEditorPane({
             variant={note.special ? "solid" : "soft"}
             data-testid={`star-note-${note.id}`}
             title={
-              note.special
-                ? "スターを外す(スペシャルから外す)"
-                : "スターしてスペシャル(保管棚)に入れる"
+              note.special ? "スターを外す(お気に入りから外す)" : "スターしてお気に入りに入れる"
             }
             onClick={() => onToggleSpecial(note.id)}
           >
@@ -503,7 +501,7 @@ export function NoteEditorPane({
             title={
               note.noSync
                 ? "この端末のみ:同期・AI送信しません(平文で端末には残ります)。クリックで同期を再開"
-                : "このノートを同期しない(NAS/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
+                : "このノートを同期しない(保管庫/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
             }
             onClick={() =>
               onNotesChange((prev) => updateNote(prev, note.id, { noSync: !note.noSync }))
@@ -659,7 +657,7 @@ export function NoteEditorPane({
             variant="soft"
             color="red"
             data-testid={`delete-note-${note.id}`}
-            title="このノートを削除する(スター済みならスペシャルへ凍結して残す)"
+            title="このノートを削除する(スター済みならお気に入りへ凍結して残す)"
             onClick={() => onDeleteNote(note.id)}
           >
             <Trash2 size={14} aria-hidden="true" />

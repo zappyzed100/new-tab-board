@@ -126,7 +126,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
   async function handleRebuild() {
     const path = await getNasFolderPath();
     if (!path) {
-      setMsg("NASフォルダが未設定です(データ管理の「NASフォルダを設定」)");
+      setMsg("保管庫フォルダが未設定です(データ管理の「保管庫フォルダを設定」)");
       return;
     }
     setBusy("rebuild");
@@ -137,14 +137,14 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
     setMsg(
       counts
         ? `索引を更新しました(ノート${counts.notes}件・日付フォルダ${counts.dateNotes}件・履歴${counts.snapshots}件)`
-        : "索引の更新に失敗しました(NASブリッジ未導入か到達不可)",
+        : "索引の更新に失敗しました(保管庫ブリッジ未導入か到達不可)",
     );
   }
 
   async function handleSearch() {
     const path = await getNasFolderPath();
     if (!path) {
-      setMsg("NASフォルダが未設定です(データ管理の「NASフォルダを設定」)");
+      setMsg("保管庫フォルダが未設定です(データ管理の「保管庫フォルダを設定」)");
       return;
     }
     const range = preset === "custom" ? customRange(customFrom, customTo) : presetRange(preset);
@@ -200,7 +200,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
         <Heading as="h2" size="3">
           <Flex align="center" gap="1" as="span">
             <Tag size={16} aria-hidden="true" />
-            タグ・本文・期間でNASから検索
+            タグ・本文・期間で保管庫から検索
           </Flex>
         </Heading>
         <Button
@@ -209,7 +209,7 @@ export function TagSearchPanel({ notes, onSelectNote, onPasteResults }: Props) {
           variant="soft"
           color="gray"
           data-testid="rebuild-index"
-          title="NASの.mdからSQLite索引(index.db)を作り直し、上位タグも取り直す"
+          title="保管庫の.mdからSQLite索引(index.db)を作り直し、上位タグも取り直す"
           disabled={busy !== null}
           onClick={() => void handleRebuild()}
         >

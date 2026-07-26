@@ -273,7 +273,7 @@ export function DataPanel({
   async function handleSaveNasPath() {
     const path = nasPathInput.trim();
     if (!path) {
-      onMessage("NASフォルダのパスを入力してください");
+      onMessage("保管庫フォルダのパスを入力してください");
       return;
     }
     // 拡張機能はサンドボックスの都合上パス文字列だけでは読み書きできないため、
@@ -283,14 +283,14 @@ export function DataPanel({
     const reachable = await probeNasPath(path);
     if (!reachable) {
       onMessage(
-        "NASフォルダに到達できませんでした(パスが正しいか、native-host/README.mdの手順で" +
-          "NASブリッジを導入済みか確認してください)",
+        "保管庫フォルダに到達できませんでした(パスが正しいか、native-host/README.mdの手順で" +
+          "保管庫ブリッジを導入済みか確認してください)",
       );
       return;
     }
     await setNasFolderPath(path);
     setShowNasInput(false);
-    onMessage("NASフォルダを設定しました");
+    onMessage("保管庫フォルダを設定しました");
   }
 
   async function handleSaveBatteryConfig() {
@@ -312,7 +312,7 @@ export function DataPanel({
     // 未保管の履歴フラッシュに加え、現在開いているノートもactive/日付フォルダへ即座に反映する
     // (ユーザー指示: ボタンを押した時点で通常のtickを待たずに反映してほしい)。
     await onPushNasActiveNow();
-    onMessage(`NASへ${flushed}件書き出しました(失敗${failed}件)`);
+    onMessage(`保管庫へ${flushed}件書き出しました(失敗${failed}件)`);
   }
 
   return (
@@ -334,21 +334,21 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-flush-nas"
-          title="未保管の履歴を今すぐNASフォルダへ書き出す"
+          title="未保管の履歴を今すぐ保管庫フォルダへ書き出す"
           onClick={() => void handleFlushNow()}
         >
           <Upload size={14} aria-hidden="true" />
-          今すぐNASへ書き出し
+          今すぐ保管庫へ書き出し
         </Button>
         <Button
           type="button"
           variant="soft"
           data-testid="data-restore-from-nas"
-          title="NASに保存された設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補。notesは対象外)から復元する"
+          title="保管庫に保存された設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/お気に入り/タグ候補。notesは対象外)から復元する"
           onClick={onRestoreFromNas}
         >
           <CloudDownload size={14} aria-hidden="true" />
-          NASから復元
+          保管庫から復元
         </Button>
         <Button
           type="button"
@@ -374,17 +374,17 @@ export function DataPanel({
           type="button"
           variant={showNasInput ? "solid" : "soft"}
           data-testid="data-set-nas-folder"
-          title="履歴の長期保管先(NASの共有フォルダ等)のパスを設定する"
+          title="履歴の長期保管先(共有フォルダ等)のパスを設定する"
           onClick={() => setShowNasInput((v) => !v)}
         >
           <FolderOpen size={14} aria-hidden="true" />
-          NASフォルダを設定
+          保管庫フォルダを設定
         </Button>
         {showNasInput ? (
           <>
             <TextField.Root
-              aria-label="NASフォルダのパス"
-              placeholder="例: Z:\NAS\backup"
+              aria-label="保管庫フォルダのパス"
+              placeholder="例: Z:\保管庫\backup"
               data-testid="data-nas-path-input"
               autoFocus
               value={nasPathInput}
@@ -550,7 +550,7 @@ export function DataPanel({
           type="button"
           variant={cleanupArmed ? "solid" : "soft"}
           data-testid="data-cleanup-history"
-          title="同じ内容が連続して重複保存されている履歴を1件に畳む(内容が変わっている履歴・NASへ保管済みの履歴は消しません)"
+          title="同じ内容が連続して重複保存されている履歴を1件に畳む(内容が変わっている履歴・保管庫へ保管済みの履歴は消しません)"
           disabled={cleaningHistory}
           onClick={() => setCleanupArmed((v) => !v)}
         >

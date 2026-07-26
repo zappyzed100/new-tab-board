@@ -1067,7 +1067,7 @@ export function App() {
     const relPath = await noteImages.attach(noteId, blob);
     if (relPath === null) {
       setDataPanelMessage(
-        "画像を保存できませんでした(NASフォルダが未設定か、NASブリッジへ接続できません)",
+        "画像を保存できませんでした(保管庫フォルダが未設定か、保管庫ブリッジへ接続できません)",
       );
       return null;
     }
@@ -1140,7 +1140,7 @@ export function App() {
     setTagging(false);
     setDataPanelMessage(
       `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targetCount}件` +
-        `${junkCount > 0 ? `・ゴミ判定${junkCount}件はNAS保管対象外` : ""})`,
+        `${junkCount > 0 ? `・ゴミ判定${junkCount}件は保管庫の保管対象外` : ""})`,
     );
     // タグが付いたノートを次の5分ティックまで待たせず即座にNAS/Driveへ反映する(ユーザー指示:
     // タグ付けボタンを押したものは待たずに保存対象にしてほしい)。「今すぐNASへ書き出し」/
@@ -1242,11 +1242,11 @@ export function App() {
   // NASからも復元できるように)。notesはNAS active の世代同期(pullActiveFromNas)が別途担う
   // ため、ここでは触らない——2つの復元経路を混ぜるとどちらが正かが曖昧になる。
   async function handleRestoreFromNas() {
-    setDataPanelMessage("NASから復元中…");
+    setDataPanelMessage("保管庫から復元中…");
     const payload = await pullSettingsBackupFromNas();
     if (!payload) {
       setDataPanelMessage(
-        "NASに設定バックアップがまだありません(NAS未設定か、まだ一度も保存されていません)",
+        "保管庫に設定バックアップがまだありません(保管庫未設定か、まだ一度も保存されていません)",
       );
       return;
     }
@@ -1265,7 +1265,7 @@ export function App() {
       specialItems: payload.specialItems,
       specialFolders: payload.specialFolders,
     });
-    setDataPanelMessage("NASから復元しました(ノートは対象外——NASの世代同期が別途復元します)");
+    setDataPanelMessage("保管庫から復元しました(ノートは対象外——保管庫の世代同期が別途復元します)");
   }
 
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
@@ -1459,7 +1459,7 @@ export function App() {
                       title={
                         showDataPanel
                           ? "データ操作パネルを閉じる"
-                          : "データ操作パネルを開く(ファイルを開く/Drive・NAS操作など)"
+                          : "データ操作パネルを開く(ファイルを開く/Drive・保管庫操作など)"
                       }
                       onClick={() => setShowDataPanel((v) => !v)}
                     >
@@ -1657,12 +1657,14 @@ export function App() {
                       size="1"
                       data-testid="toggle-tag-search-panel"
                       title={
-                        showTagSearchPanel ? "NAS検索を閉じる" : "NAS検索を開く(タグ・本文・期間)"
+                        showTagSearchPanel
+                          ? "保管庫検索を閉じる"
+                          : "保管庫検索を開く(タグ・本文・期間)"
                       }
                       onClick={() => setShowTagSearchPanel((v) => !v)}
                     >
                       <Tag size={14} aria-hidden="true" />
-                      NAS検索
+                      保管庫検索
                       {showTagSearchPanel ? (
                         <ChevronUp size={14} aria-hidden="true" />
                       ) : (

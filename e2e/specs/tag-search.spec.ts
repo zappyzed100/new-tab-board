@@ -26,5 +26,5 @@ test("タグ検索パネル: 自由入力タグ・カスタム期間・NAS未設
 
   // 検索(NAS未設定)→ 未設定の案内が出る(外部通信は起きない)。
   await page.getByTestId("search-notes-btn").click();
-  await expect(page.getByTestId("tag-search-message")).toContainText("NASフォルダが未設定");
+  await expect(page.getByTestId("tag-search-message")).toContainText("保管庫フォルダが未設定");
 });

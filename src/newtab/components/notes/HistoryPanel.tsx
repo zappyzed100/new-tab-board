@@ -94,7 +94,7 @@ export function HistoryPanel({ noteId, currentContent, onRestore }: Props) {
                 />
                 {new Date(snapshot.timestamp).toLocaleString()}
                 {snapshot.archived ? (
-                  <span data-testid={`history-archived-${snapshot.id}`}> (NAS保管)</span>
+                  <span data-testid={`history-archived-${snapshot.id}`}> (保管庫保管)</span>
                 ) : null}
               </Text>
             </Flex>
