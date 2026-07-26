@@ -66,6 +66,54 @@ describe("startWatchdog", () => {
     expect(stalls[0].detail).toContain("止まっていた");
   });
 
+  // 2026-07-26の実ログの誤検知: 背景タブは Chrome にタイマーを1分へ絞られるため、
+  // 1秒心拍の遅れが「58996ms止まっていた」として記録されていた(hidden=trueで連続2回)。
+  it("非表示タブの遅れは stall にしない(Chromeのタイマー絞りであって停止ではない)", async () => {
+    const stop = startWatchdog();
+    await advance(1000);
+    // 背景へ回る
+    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    // 60秒ぶん絞られてから1回だけ心拍が回る
+    perfNow += 59_000;
+    await vi.advanceTimersByTimeAsync(1000);
+    stop();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect((await readDiagnostics()).filter((e) => e.kind === "stall")).toHaveLength(0);
+  });
+
+  it("表示へ戻った直後の1発目も stall にしない(絞られていた時間を持ち越さない)", async () => {
+    const hiddenSpy = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    const stop = startWatchdog();
+    await advance(1000);
+    perfNow += 59_000; // 背景で絞られていた
+    // 表示へ復帰: この瞬間に基準が打ち直される
+    hiddenSpy.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(1000);
+    stop();
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect((await readDiagnostics()).filter((e) => e.kind === "stall")).toHaveLength(0);
+  });
+
+  it("表示中の停止には busyMs と wallLagMs を付ける(詰まりか外的要因かの判別材料)", async () => {
+    const stop = startWatchdog();
+    await advance(1000);
+    perfNow += 5000;
+    vi.setSystemTime(new Date("2026-07-26T00:00:06Z"));
+    await vi.advanceTimersByTimeAsync(1000);
+    stop();
+    await vi.advanceTimersByTimeAsync(10);
+
+    const stall = (await readDiagnostics()).find((e) => e.kind === "stall");
+    expect(stall).toBeDefined();
+    expect(stall?.metrics).toHaveProperty("busyMs");
+    expect(stall?.metrics).toHaveProperty("wallLagMs");
+    expect(stall?.metrics?.hidden).toBe(false);
+  });
+
   it("軽い遅れ(閾値未満)では stall を残さない(ノイズを増やさない)", async () => {
     const stop = startWatchdog();
     await advance(1000);

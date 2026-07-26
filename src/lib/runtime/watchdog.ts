@@ -77,6 +77,8 @@ export function startWatchdog(
   let smallLongTaskMs = 0;
   // 診断ログ自身の書き込み中か(logOpからの転送を止める再入ガード)。
   let writing = false;
+  // 直近の心拍以降に主スレッドを占有していた時間(stallが「忙しかった」のか「止められていた」のか)。
+  let longTaskMsSinceTick = 0;
 
   function record(event: DiagEvent, urgent = false) {
     pending.push(event);
@@ -128,23 +130,45 @@ export function startWatchdog(
 
   // ① 心拍: 主スレッドが止まっていた時間を、復帰した瞬間に測って残す。
   //    performance.now() は単調増加(時刻変更やスリープ復帰の影響を受けない)。
+  //
+  // **背景タブの遅れは停止ではない**(2026-07-26の実ログで判明した誤検知): Chromeは
+  // 非表示タブのタイマーを1分に1回まで絞るため、1秒心拍の遅れが59秒として観測される。
+  // 実際「58996ms/59007ms」がhidden=trueで連続して記録され、全部これだった。
+  // よって①非表示の間に跨る区間は一切記録しない ②表示に戻った瞬間に基準を打ち直す
+  // (戻り直後の1発目が「throttleされていた時間」を停止として拾わないように)。
   let lastTick = performance.now();
   let lastSampleAt = performance.now();
+  let lastTickWall = clockNow();
+  // 前回の心拍から今回までの間に一度でも非表示だったか(非表示→表示の往復も拾う)。
+  let hiddenSinceTick = document.hidden;
   const ticker = window.setInterval(() => {
     const nowMs = performance.now();
+    const wallNow = clockNow();
     const lag = nowMs - lastTick - TICK_MS;
+    // 実時刻の進みとの差。performance.nowが進まない端末休止(スリープ)を見分ける。
+    const wallLag = wallNow - lastTickWall - TICK_MS;
+    const busyMs = Math.round(longTaskMsSinceTick);
+    const throttled = hiddenSinceTick || document.hidden;
     lastTick = nowMs;
-    if (lag >= STALL_THRESHOLD_MS) {
+    lastTickWall = wallNow;
+    longTaskMsSinceTick = 0;
+    hiddenSinceTick = document.hidden;
+    if (lag >= STALL_THRESHOLD_MS && !throttled) {
       record(
         makeEvent(tab, "stall", `主スレッドが${Math.round(lag)}ms止まっていた`, {
           stallMs: Math.round(lag),
-          hidden: document.hidden,
+          // 停止中に主スレッドが「忙しかった」時間。lagに近ければ処理で詰まっていた、
+          // ほぼ0ならスレッドは動いておらず外側(OS/ブラウザ)で止められていた、の判別材料
+          // (計測の性質上、長時間タスクの通知が心拍より後に届くと0に見えることがある)。
+          busyMs,
+          wallLagMs: Math.round(wallLag),
+          hidden: false,
           ...browserMetrics(),
           ...(sample?.() ?? {}),
         }),
         true,
       );
-      logOp("watchdog", "stall", `tab=${tab} lag=${Math.round(lag)}ms`);
+      logOp("watchdog", "stall", `tab=${tab} lag=${Math.round(lag)}ms busy=${busyMs}ms`);
     }
     if (nowMs - lastSampleAt >= SAMPLE_MS) {
       lastSampleAt = nowMs;
@@ -168,6 +192,7 @@ export function startWatchdog(
     try {
       observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
+          longTaskMsSinceTick += entry.duration;
           if (entry.duration >= LONGTASK_REPORT_MS) {
             record(
               makeEvent(tab, "longtask", `${Math.round(entry.duration)}msの長時間タスク`, {
@@ -199,11 +224,25 @@ export function startWatchdog(
     record(makeEvent(tab, "error", `未処理のPromise: ${String(event.reason).slice(0, 200)}`), true);
   };
   // ④ 離脱・非表示のタイミングで確実に書き出す(タブを閉じられても直前までが残るように)。
+  //    あわせて可視状態の遷移を心拍側へ伝える——非表示の間はタイマーが絞られるので、
+  //    その区間を跨いだ遅れは停止として数えない(上の①のコメント参照)。
+  const onVisibility = () => {
+    if (document.hidden) {
+      hiddenSinceTick = true;
+    } else {
+      // 表示へ戻った瞬間に基準を打ち直す。これが無いと「絞られていた時間」が
+      // 復帰後の最初の心拍で停止として観測される(実ログの10216msがこれ)。
+      lastTick = performance.now();
+      lastTickWall = clockNow();
+      longTaskMsSinceTick = 0;
+    }
+    void flush();
+  };
   const onHide = () => void flush();
   window.addEventListener("error", onError);
   window.addEventListener("unhandledrejection", onRejection);
   window.addEventListener("pagehide", onHide);
-  document.addEventListener("visibilitychange", onHide);
+  document.addEventListener("visibilitychange", onVisibility);
 
   return () => {
     running = false;
@@ -213,7 +252,7 @@ export function startWatchdog(
     window.removeEventListener("error", onError);
     window.removeEventListener("unhandledrejection", onRejection);
     window.removeEventListener("pagehide", onHide);
-    document.removeEventListener("visibilitychange", onHide);
+    document.removeEventListener("visibilitychange", onVisibility);
     void flush();
   };
 }
