@@ -12,6 +12,7 @@ import {
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
   AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowUp as ArrowUpIcon,
   BatteryWarning,
@@ -21,6 +22,7 @@ import {
   ChevronUp,
   CloudOff,
   Keyboard,
+  KeyRound,
   Search,
   StickyNote,
   Tag,
@@ -97,7 +99,12 @@ import {
   pushSettingsBackupToNas,
 } from "../lib/externalIO/settingsBackupSync";
 import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/fileio/settingsBackup";
-import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
+import {
+  geminiUsageDateKey,
+  getBatteryWebhookConfig,
+  getGeminiApiKey,
+  getGeminiUsageCount,
+} from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildTagVocabulary } from "../lib/entities/tags";
@@ -195,6 +202,20 @@ export function App() {
   // かった(googleAuth.tsのヘッダー参照)。**折りたたみ式のDataPanel内に置くと、開くまで警告が
   // 出ず早期警告にならない**ため、Appが持ってヘッダー(常時表示)へ出す。
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+  // 保管庫フォルダ/Gemini APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
+  // 出さない)。ユーザー指示「各機能未接続状態が見えるようにしよう」——これらはDataPanel内の
+  // ローカル state だけで持っていたため、パネルを開くまで未設定に気づけなかった(Driveの
+  // 上のコメントと同じ理由でAppへ引き上げる)。いずれもchrome.storage/IndexedDBのローカル読み
+  // だけで、OAuthポップアップ等の対話を伴わないため起動時に毎回確認してよい(Driveのトークン
+  // 確認とは違い非対話性を気にする必要が無い)。
+  const [nasConfigured, setNasConfigured] = useState<boolean | null>(null);
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [batteryConfigured, setBatteryConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
+    void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
+    void getBatteryWebhookConfig().then((config) => setBatteryConfigured(Boolean(config)));
+  }, []);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
   // スマホのバッテリー低下警告(GAS Web App中継)が鳴動中か(ユーザー指示: New Tab Boardに
@@ -1489,6 +1510,53 @@ export function App() {
                         Drive未接続
                       </Button>
                     ) : null}
+                    {/* 保管庫/Gemini/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
+                        「各機能未接続状態が見えるようにしよう」)。Driveの警告(壊れた/orange)とは
+                        性質が違う——これらは任意機能で「使わない」選択もありうるため、常時警告色
+                        にはせず控えめなgray/softにする。押すとDataPanelが開き該当欄へ誘導する。
+                        未判定(null)の間は何も出さない(平常時に雑音を足さない、の方針を踏襲)。 */}
+                    {nasConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="nas-unconfigured-badge"
+                        title="保管庫フォルダが未設定です。履歴の長期保管・画像添付・保管庫検索が使えません。押すとデータ操作パネルが開くので「保管庫フォルダを設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <Archive size={14} aria-hidden="true" />
+                        保管庫未設定
+                      </Button>
+                    ) : null}
+                    {geminiConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="gemini-unconfigured-badge"
+                        title="Gemini APIキーが未設定です。タグ付け/要約/TODO抽出が使えません。押すとデータ操作パネルが開くので「Gemini APIキーを設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <KeyRound size={14} aria-hidden="true" />
+                        Gemini未設定
+                      </Button>
+                    ) : null}
+                    {batteryConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="battery-unconfigured-badge"
+                        title="バッテリー低下警告の接続設定が未設定です。スマホからの中継通知を受け取れません。押すとデータ操作パネルが開くので「バッテリー通知を設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <BatteryWarning size={14} aria-hidden="true" />
+                        バッテリー通知未設定
+                      </Button>
+                    ) : null}
                     {/* ヘルプ系は使用頻度が低いため、日常操作のボタンより右に置く(ユーザー指示)。 */}
                     <Button
                       type="button"
@@ -1517,6 +1585,9 @@ export function App() {
                 onPushNasActiveNow={pushNasActiveNow}
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}
+                onNasConfiguredChange={setNasConfigured}
+                onGeminiConfiguredChange={setGeminiConfigured}
+                onBatteryConfiguredChange={setBatteryConfigured}
               />
             ) : null}
 

@@ -77,6 +77,13 @@ type Props = {
   driveConnected: boolean | null;
   /** 接続状態が判明/変化したときにAppへ知らせる(「GDrive設定」での再接続結果を即反映する)。 */
   onDriveConnectionChange: (connected: boolean) => void;
+  /** 保管庫フォルダ/Gemini APIキー/バッテリー中継の設定が変わった時にAppへ知らせる。
+   * Appはヘッダーの常時表示バッジ(未設定の間だけ出す)をこれで更新する——このパネルは
+   * 開いている間しか存在せず、ここだけでstateを持つと閉じるまで/次に開くまでバッジが
+   * 古いままになる(driveConnected/onDriveConnectionChangeと同じ理由)。 */
+  onNasConfiguredChange: (configured: boolean) => void;
+  onGeminiConfiguredChange: (configured: boolean) => void;
+  onBatteryConfiguredChange: (configured: boolean) => void;
 };
 
 export function DataPanel({
@@ -89,6 +96,9 @@ export function DataPanel({
   onPushNasActiveNow,
   driveConnected,
   onDriveConnectionChange,
+  onNasConfiguredChange,
+  onGeminiConfiguredChange,
+  onBatteryConfiguredChange,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -190,6 +200,7 @@ export function DataPanel({
     await setGeminiApiKey(key);
     setGeminiKeyInput("");
     setGeminiKeySet(true);
+    onGeminiConfiguredChange(true);
     setShowGeminiInput(false);
     onMessage("Gemini APIキーを保存しました");
   }
@@ -298,6 +309,7 @@ export function DataPanel({
     }
     await setNasFolderPath(path);
     setShowNasInput(false);
+    onNasConfiguredChange(true);
     onMessage("保管庫フォルダを設定しました");
   }
 
@@ -311,6 +323,7 @@ export function DataPanel({
     await setBatteryWebhookConfig({ url, token });
     setBatteryTokenInput("");
     setBatteryConfigSet(true);
+    onBatteryConfiguredChange(true);
     setShowBatteryInput(false);
     onMessage("バッテリー低下警告の接続設定を保存しました");
   }
