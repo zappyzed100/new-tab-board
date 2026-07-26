@@ -326,9 +326,16 @@ test("下にスクロールしても、タブバーと全文検索のstickyヘ�
   expect(await head.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
 
   // 下へスクロールすると、stickyヘッダは視界上端(top≈0)に貼り付いて残る。
-  await page.evaluate(() => window.scrollTo(0, 600));
+  // **毎回スクロールし直しながら**待つ: 打鍵直後は高さの確定が続いており、その間は
+  // スクロールアンカー(useNoteScrollAnchor)が「読んでいる位置」を保つためにスクロール位置を
+  // 動かす——1回だけscrollToして固定位置を前提にすると、盤面が落ち着くまでの間に引き戻される。
+  // ここで確かめたいのはCSSのsticky(スクロールした状態で上端に貼り付く)であって、
+  // スクロール位置が保存されることではない。
   await expect
-    .poll(async () => head.evaluate((el) => Math.round(el.getBoundingClientRect().top)))
+    .poll(async () => {
+      await page.evaluate(() => window.scrollTo(0, 600));
+      return head.evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    })
     .toBeLessThanOrEqual(1);
   const top = await head.evaluate((el) => Math.round(el.getBoundingClientRect().top));
   expect(top).toBeGreaterThanOrEqual(0);

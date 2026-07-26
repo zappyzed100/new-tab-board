@@ -96,6 +96,7 @@
 - `e2e/specs/note-katex.spec.ts` — note-katex.spec.ts — ノートプレビューのKaTeX数式描画の回帰(ユーザー指示・2026-07-23)。
 - `e2e/specs/note-manual-tags.spec.ts` — note-manual-tags.spec.ts — 本文の `#タグ`(手動タグ)がタグとして認識されることの回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
+- `e2e/specs/note-scroll-anchor.spec.ts` — note-scroll-anchor.spec.ts — 再配置しても「読んでいる位置」が動かないことの回帰(2026-07-27)。
 - `e2e/specs/note-wrap.spec.ts` — note-wrap.spec.ts — 本文の折り返し(幅固定)トグルの回帰(ユーザー指示・2026-07-25)。
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
@@ -322,6 +323,7 @@
 - `src/newtab/styles/tokens.css`
 - `src/newtab/useForegroundSync.test.ts` — useForegroundSync.test.ts — 前景復帰で同期をキックするhookの単体テスト
 - `src/newtab/useForegroundSync.ts` — useForegroundSync.ts — タブが前景に戻った時に同期を1回キックするReact hook
+- `src/newtab/useNoteScrollAnchor.ts` — useNoteScrollAnchor.ts — 再配置でノートが動いても「読んでいる位置」を動かさないスクロールアンカー
 - `src/newtab/useSignatureDebouncedEffect.test.ts` — useSignatureDebouncedEffect.test.ts — 署名デバウンスeffectの単体テスト
 - `src/newtab/useSignatureDebouncedEffect.ts` — useSignatureDebouncedEffect.ts — 「値が実際に変わった時だけデバウンスして走らせる」effect
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
@@ -1217,6 +1219,9 @@
 
 ### `src/newtab/useForegroundSync.ts`
 - function useForegroundSync
+
+### `src/newtab/useNoteScrollAnchor.ts`
+- function useNoteScrollAnchor
 
 ### `src/newtab/useSignatureDebouncedEffect.ts`
 - function useSignatureDebouncedEffect

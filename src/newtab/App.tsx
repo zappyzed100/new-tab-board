@@ -39,6 +39,7 @@ import { EditingSeamProvider, useEditingSeam } from "./components/notes/editing-
 import { ViewportNote } from "./components/board/ViewportNote";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
+import { useNoteScrollAnchor } from "./useNoteScrollAnchor";
 import { FixedTagBar } from "./components/notes/FixedTagBar";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
@@ -749,6 +750,10 @@ export function App() {
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
     return { placement, boardHeight };
   }, [visibleNotes, columnCount, noteHeights]);
+  // 再配置で読んでいる位置が動かないようにスクロールを補正する(ユーザー報告・2026-07-27:
+  // 長いノートを読み下げると配置が変わって読みづらい)。高さの確定・件数の増減・列数の変化を
+  // 問わず、再配置の直後にアンカーノートの画面位置を保つ。
+  useNoteScrollAnchor(noteLayout);
 
   // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
   // 自動的にDriveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
