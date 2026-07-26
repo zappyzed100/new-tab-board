@@ -104,6 +104,7 @@
 - `e2e/specs/special.spec.ts` — special.spec.ts — ⭐スター/スペシャル(保管棚)の回帰。スターでスペシャル一覧に出る、削除で凍結して
 - `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
+- `e2e/specs/watchdog.spec.ts` — watchdog.spec.ts — 「ブラウザが止まった」証拠が本当に残るかの回帰(ユーザー要望・2026-07-26)。
 - `e2e/stress/CLAUDE.md`
 - `e2e/stress/history-growth.spec.ts` — history-growth.spec.ts — 履歴スナップショットが「無編集で増えない」ことの回帰(2026-07-25)。
 - `e2e/stress/resource-budget.spec.ts` — resource-budget.spec.ts — 500ノート時の詳細ペイン・描画・timer・Observer・DOM上限を検査する。
@@ -261,6 +262,8 @@
 - `src/lib/runtime/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/runtime/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/runtime/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/runtime/watchdog.test.ts` — @vitest-environment jsdom
+- `src/lib/runtime/watchdog.ts` — watchdog.ts — 「ブラウザが固まる」の証拠を残す常駐ウォッチドッグ(ユーザー要望・2026-07-26)
 - `src/lib/search/CLAUDE.md`
 - `src/lib/search/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
@@ -1026,7 +1029,19 @@
 - function msUntilNextInterval
 
 ### `src/lib/runtime/log.ts`
+- const SLOW_OP_MS
+- type LogSink
+- function setLogSink
 - function logOp
+
+### `src/lib/runtime/watchdog.ts`
+- type DiagEvent
+- const DIAG_LOG_MAX
+- function startWatchdog
+- function readDiagnostics
+- function clearDiagnostics
+- function formatDiagnosticsLog
+- function summarizeDiagnostics
 
 ### `src/lib/search/diff.ts`
 - type DiffPart
@@ -1116,6 +1131,8 @@
 - function loadLocalData
 - function updateLocalData
 - function patchLocalData
+- function loadDiagnosticsLog
+- function saveDiagnosticsLog
 - function subscribeLocalData
 
 ### `src/lib/storage/tab-session.ts`

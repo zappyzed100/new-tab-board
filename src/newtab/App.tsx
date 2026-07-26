@@ -114,6 +114,7 @@ import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { logOp } from "../lib/runtime/log";
+import { startWatchdog } from "../lib/runtime/watchdog";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import {
   flushAllToNas,
@@ -812,6 +813,21 @@ export function App() {
       ]),
     ),
   });
+
+  // 「固まった」の証拠を残す常駐ウォッチドッグ(ユーザー要望・2026-07-26)。心拍の遅れ=主スレッドが
+  // 止まっていた時間を、復帰した瞬間に chrome.storage.local のリングバッファへ残す。sampleは
+  // アプリ固有の数値だけを渡す(本文・タイトル・タグは入れない——AGENTS.md §7 秘匿)。
+  // notes/sync はrefで読む: 依存に入れるとノート編集のたびにウォッチドッグを張り直してしまう。
+  const watchdogSampleRef = useRef<() => Record<string, number | string | boolean>>(() => ({}));
+  watchdogSampleRef.current = () => ({
+    notes: notes?.length ?? 0,
+    visibleNotes: visibleNotes.length,
+    todos: todos.length,
+    specialItems: specialItems.length,
+    wrapLines,
+    fixedTags: fixedTags.length,
+  });
+  useEffect(() => startWatchdog(() => watchdogSampleRef.current()), []);
 
   // 「既に開いている状態でCmd/Ctrl+Fを再度押す」場合の再フォーカス用(このeffectは
   // ref.currentが既に存在する時だけ意味を持つ)。初回オープン時(SearchPanelはlazy+

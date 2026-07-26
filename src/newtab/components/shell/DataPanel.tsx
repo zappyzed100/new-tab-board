@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
 import {
+  Activity,
   BatteryWarning,
   Bell,
   BellOff,
@@ -35,6 +36,11 @@ import {
   setNasFolderPath,
 } from "../../../lib/storage/db";
 import { dedupeStoredSnapshots } from "../../../lib/history/snapshotCleanup";
+import {
+  formatDiagnosticsLog,
+  readDiagnostics,
+  summarizeDiagnostics,
+} from "../../../lib/runtime/watchdog";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
@@ -121,6 +127,21 @@ export function DataPanel({
     });
     void getAlarmEnabled().then(setAlarmOn);
   }, []);
+
+  /** 「固まった」の証拠(ウォッチドッグの診断ログ)を人が読める形にしてクリップボードへ。
+   * ノートへ書き出すとNAS/Drive同期や自動タグ付けに乗ってしまうため、貼り付けで渡せる
+   * クリップボードにする(渡し先はチャット/issue)。 */
+  async function handleCopyDiagnostics() {
+    const events = await readDiagnostics();
+    const summary = summarizeDiagnostics(events);
+    try {
+      await navigator.clipboard.writeText(formatDiagnosticsLog(events));
+      onMessage(`${summary} — クリップボードへコピーしました`);
+    } catch (error) {
+      // クリップボードが使えない状況でも、要約だけは画面で読めるようにする。
+      onMessage(`${summary}(コピーに失敗: ${String(error)})`);
+    }
+  }
 
   /** 溜まってしまった同一内容の履歴を畳む(2026-07-25の増殖バグの後始末。lib側が正本)。 */
   async function handleCleanupHistory() {
@@ -508,6 +529,18 @@ export function DataPanel({
             <BellOff size={14} aria-hidden="true" />
           )}
           {alarmOn ? "アラーム: この端末で鳴らす" : "アラーム: この端末では鳴らさない"}
+        </Button>
+        {/* 「ブラウザが止まった」の証拠を渡すための書き出し(常駐ウォッチドッグが記録している)。
+            止まった直後でも、復帰後に読めば「何秒止まったか・その時の資源量」が残っている。 */}
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-copy-diagnostics"
+          title="固まった時の記録(主スレッドが止まっていた時間・その時のノート数/エディタ数/メモリ)をクリップボードへコピーする。ノート本文は含みません"
+          onClick={() => void handleCopyDiagnostics()}
+        >
+          <Activity size={14} aria-hidden="true" />
+          診断ログをコピー
         </Button>
         {/* 2026-07-25以前に「ペインがマウントしただけ」で積まれた同一内容の履歴を一度だけ畳む
             (原因側は修正済みだが、既に溜まった分は消えない)。**履歴を消す操作**なので、
