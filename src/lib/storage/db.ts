@@ -20,6 +20,11 @@ const ALARM_ENABLED_KEY = "alarmEnabled";
 // アクセスする。セッションを跨いだ再訪問のたびに名前+親で検索し直すと、複数ペインが
 // ほぼ同時に検索→未発見→作成を行った場合に同名フォルダが複製されるリスクが残るため)。
 const DRIVE_FOLDER_IDS_KEY = "driveFolderIds";
+// 「共有フォルダを選択」(pickSharedFolderViaOAuth)で明示的に選んだかどうかの旗。
+// driveFolderIds["app"]は自動作成(getOrCreateFolder)でも埋まるため、それだけでは
+// 「ユーザーが明示的に共有フォルダを選んだか」を区別できない——この旗だけがその区別を持つ
+// (ユーザー指示: 未選択(自動作成フォルダを使用中)を常時可視化したい)。
+const DRIVE_SHARED_FOLDER_CHOSEN_KEY = "driveSharedFolderChosen";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -223,6 +228,20 @@ export async function saveDriveFolderId(path: string, id: string): Promise<void>
 export async function clearDriveFolderIds(): Promise<void> {
   const db = await getDb();
   await db.delete("settings", DRIVE_FOLDER_IDS_KEY);
+}
+
+/** 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。 */
+export async function getDriveSharedFolderChosen(): Promise<boolean> {
+  const db = await getDb();
+  return Boolean(await db.get("settings", DRIVE_SHARED_FOLDER_CHOSEN_KEY));
+}
+
+/** 「共有フォルダを選択」が成功した時に立てる旗。ピッカーで選び直すたびに呼ぶ
+ * (handlePickSharedFolderが saveDriveFolderId と同じタイミングで呼ぶ)。 */
+export async function setDriveSharedFolderChosen(): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", true, DRIVE_SHARED_FOLDER_CHOSEN_KEY);
+  logOp("db", "put", "settings/driveSharedFolderChosen");
 }
 
 /** 1パス分のフォルダIDだけを永続キャッシュから消す(他パスは残す)。ユーザーがDrive上で

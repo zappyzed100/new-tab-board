@@ -1107,6 +1107,8 @@
 - function getDriveFolderIds
 - function saveDriveFolderId
 - function clearDriveFolderIds
+- function getDriveSharedFolderChosen
+- function setDriveSharedFolderChosen
 - function deleteDriveFolderId
 - function geminiUsageDateKey
 - function getGeminiUsageCount

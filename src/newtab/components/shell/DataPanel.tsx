@@ -32,6 +32,7 @@ import {
   saveDriveFolderId,
   setAlarmEnabled,
   setBatteryWebhookConfig,
+  setDriveSharedFolderChosen,
   setGeminiApiKey,
   setNasFolderPath,
 } from "../../../lib/storage/db";
@@ -84,6 +85,8 @@ type Props = {
   onNasConfiguredChange: (configured: boolean) => void;
   onGeminiConfiguredChange: (configured: boolean) => void;
   onBatteryConfiguredChange: (configured: boolean) => void;
+  /** 「共有フォルダを選択」を実行済みかが変わった時にAppへ知らせる(同じ形の3つと同じ理由)。 */
+  onDriveSharedFolderChosenChange: (chosen: boolean) => void;
 };
 
 export function DataPanel({
@@ -99,6 +102,7 @@ export function DataPanel({
   onNasConfiguredChange,
   onGeminiConfiguredChange,
   onBatteryConfiguredChange,
+  onDriveSharedFolderChosenChange,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -238,6 +242,8 @@ export function DataPanel({
     }
     await resetDriveFolderCache();
     await saveDriveFolderId("app", picked.id);
+    await setDriveSharedFolderChosen();
+    onDriveSharedFolderChosenChange(true); // 常時表示バッジ(未選択の間だけ出す)を即時反映する
     onMessage(
       `共有フォルダ「${picked.name ?? picked.id}」を選択しました(以後このフォルダを使います)`,
     );
@@ -375,11 +381,11 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-backup-to-drive"
-          title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへ退避する"
+          title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへバックアップする"
           onClick={onBackupToDrive}
         >
           <CloudUpload size={14} aria-hidden="true" />
-          Driveへ退避
+          今すぐDriveへバックアップ
         </Button>
         <Button
           type="button"

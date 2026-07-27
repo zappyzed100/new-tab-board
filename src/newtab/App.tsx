@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   CloudOff,
+  FolderSymlink,
   Keyboard,
   KeyRound,
   Search,
@@ -102,6 +103,7 @@ import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/file
 import {
   geminiUsageDateKey,
   getBatteryWebhookConfig,
+  getDriveSharedFolderChosen,
   getGeminiApiKey,
   getGeminiUsageCount,
 } from "../lib/storage/db";
@@ -211,10 +213,15 @@ export function App() {
   const [nasConfigured, setNasConfigured] = useState<boolean | null>(null);
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
   const [batteryConfigured, setBatteryConfigured] = useState<boolean | null>(null);
+  // 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。上の3つと同じ理由・
+  // 同じ形でAppへ引き上げる(ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため
+  // Driveの警告(orange)とは性質が違う——他の3つと同じgray/softの情報表示にする。
+  const [driveSharedFolderChosen, setDriveSharedFolderChosen] = useState<boolean | null>(null);
   useEffect(() => {
     void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
     void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
     void getBatteryWebhookConfig().then((config) => setBatteryConfigured(Boolean(config)));
+    void getDriveSharedFolderChosen().then(setDriveSharedFolderChosen);
   }, []);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
@@ -1212,7 +1219,7 @@ export function App() {
     // 更新するため、クロージャに閉じ込められたbackupJson(useMemo)はタグ付け前のスナップショット
     // のまま古くなる——refsから読み直して最新のタグを含んだJSONを組み直す。
     await tagAllNotes();
-    setDataPanelMessage("Google Driveへ退避中…");
+    setDataPanelMessage("Google Driveへバックアップ中…");
     const freshBackupJson = sync
       ? serializeExport(
           buildExportPayload(
@@ -1242,19 +1249,19 @@ export function App() {
       // 取得済みのはず)を使い回す。
       const token = await getAuthToken(false);
       if (token) await pushDriveActiveNow(token);
-      setDataPanelMessage("Google Driveへ退避しました(以後の変更は自動でも同期されます)");
+      setDataPanelMessage("Google Driveへバックアップしました(以後の変更は自動でも同期されます)");
     } else if (result.status === "unauthenticated") {
       setDataPanelMessage(
         "Googleアカウントにログインできませんでした(「GDrive設定」から接続してください)",
       );
     } else if (result.status === "skipped-empty-guard") {
       setDataPanelMessage(
-        "ブックマークが空のためDriveへの退避を安全のため中止しました" +
+        "ブックマークが空のためDriveへのバックアップを安全のため中止しました" +
           "(既存のDriveバックアップにはブックマークが残っています。" +
           "手元のブックマークが正しいか確認してからもう一度お試しください)",
       );
     } else {
-      setDataPanelMessage("Driveへの退避に失敗しました");
+      setDataPanelMessage("Driveへのバックアップに失敗しました");
     }
   }
 
@@ -1550,11 +1557,28 @@ export function App() {
                         color="gray"
                         size="2"
                         data-testid="battery-unconfigured-badge"
-                        title="バッテリー低下警告の接続設定が未設定です。スマホからの中継通知を受け取れません。押すとデータ操作パネルが開くので「バッテリー通知を設定」から設定してください"
+                        title="GAS連携(バッテリー低下警告のGoogle Apps Script中継)が未設定です。スマホからの中継通知を受け取れません。押すとデータ操作パネルが開くので「バッテリー通知を設定」から設定してください"
                         onClick={() => setShowDataPanel(true)}
                       >
                         <BatteryWarning size={14} aria-hidden="true" />
-                        バッテリー通知未設定
+                        GAS連携未設定
+                      </Button>
+                    ) : null}
+                    {/* 「共有フォルダを選択」の未実行(=自動作成フォルダを使用中)も同じ場所に出す
+                        (ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため、他の3つと
+                        同じ情報表示(gray/soft)にする——Driveの警告(orange)とは性質が違う。 */}
+                    {driveSharedFolderChosen === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="drive-shared-folder-unchosen-badge"
+                        title="共有フォルダが未選択です(自動作成フォルダを使用中)。複数アプリでフォルダを共有したい場合は、押すとデータ操作パネルが開くので「共有フォルダを選択」から選んでください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <FolderSymlink size={14} aria-hidden="true" />
+                        共有フォルダ未選択
                       </Button>
                     ) : null}
                     {/* ヘルプ系は使用頻度が低いため、日常操作のボタンより右に置く(ユーザー指示)。 */}
@@ -1588,6 +1612,7 @@ export function App() {
                 onNasConfiguredChange={setNasConfigured}
                 onGeminiConfiguredChange={setGeminiConfigured}
                 onBatteryConfiguredChange={setBatteryConfigured}
+                onDriveSharedFolderChosenChange={setDriveSharedFolderChosen}
               />
             ) : null}
 

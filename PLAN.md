@@ -84,6 +84,8 @@ Native Messaging・HTTPを介して疎結合に連携する。
 - [x] ノート本文の折り返し（幅固定）をボタン一つで切り替える（CM6 Compartmentで再構成）
 - [x] 保管庫/Gemini/バッテリー中継の「未設定」を常時可視化するバッジを追加する
 - [x] Drive接続(interactive:true)でも`User interaction required`が出る件にprompt=select_accountで対処
+- [x] Driveの共有フォルダ選択/GAS連携も同じ形で常時可視化バッジに追加する
+- [x] 「Driveへ退避」を「今すぐDriveへバックアップ」へ改称する(意味合いの変化に合わせる)
 
 ### 各機能の「未接続/未設定」を常時可視化する(2026-07-27)
 
@@ -101,6 +103,35 @@ DataPanelでの保存操作は`onXxxConfiguredChange`でAppへ即時反映する
 **Driveの警告(orange/solid)とは色を変えた**——保管庫/Gemini/バッテリーは任意機能で「使わない」
 選択も正当なため、常時警告色にすると誤解を招く。gray/softの控えめな表示にし、未設定の間だけ
 出す(平常時に雑音を足さない、というDrive警告の既存方針を踏襲)。
+
+### 共有フォルダ選択/GAS連携も同じ形の常時可視化バッジにする(2026-07-27)
+
+ユーザー指示「共有フォルダを選択、GAS連携も可視化してほしい」。上の3つ(保管庫/Gemini/
+バッテリー)と同じ形で2つ追加した:
+
+- **共有フォルダ未選択**: `driveFolderIds["app"]`(フォルダIDの永続キャッシュ)は自動作成
+  (`getOrCreateFolder`)でも埋まるため、それだけでは「ユーザーが明示的に共有フォルダを
+  選んだか」を区別できない。専用の旗(`driveSharedFolderChosen`・db.ts)を新設し、
+  `handlePickSharedFolder`成功時にだけ立てる。自動作成フォルダでもDrive同期自体は
+  機能する(壊れてはいない)ため、Driveの警告(orange)ではなく他の3つと同じgray/softの
+  情報表示にする。
+- **GAS連携未設定**: 前回追加した「バッテリー通知未設定」バッジと実体は同じ(GAS Web App
+  中継の設定有無)。ユーザーは「設定の有無だけでよい(疎通確認は不要)」を選んだため、
+  ロジックは変えずラベル/titleにGASの語を足しただけ(`battery-unconfigured-badge`の
+  testidは据え置き)。
+
+「共有フォルダを選択」の実行自体は本物のGoogle認証を伴うためE2Eでは検証できない
+(GDrive接続の成功パスと同じ既知の制約)——バッジの出現/消滅だけをIndexedDB直接操作で検証する。
+
+### 「Driveへ退避」→「今すぐDriveへバックアップ」への改称(2026-07-27)
+
+ユーザー指摘「Driveへ退避も意味合いが変わってきてるよね」。「退避」(緊急避難先)という
+語感は、Driveが保管庫(旧NAS)とは独立した「もしもの時の逃がし先」だった頃のもの。今は
+per-noteの自動ミラー(5分周期)に加え全データJSONバックアップも自動(debounce)で常時走って
+おり、このボタンは「その自動同期を待たずに今すぐ」という位置づけに変わっている——保管庫側の
+「今すぐ保管庫へ書き出し」と対になる表現へ揃えた。**表示文言のみ**(ボタン・title・
+setDataPanelMessageの案内文)を変更し、コード側の識別子(`onBackupToDrive`・
+`handleBackupToDrive`・`data-backup-to-drive`等)は据え置き(NAS→保管庫改称と同じ方針)。
 
 ### Drive接続(GDriveへ接続ボタン)が`User interaction required`で失敗する件(2026-07-27)
 

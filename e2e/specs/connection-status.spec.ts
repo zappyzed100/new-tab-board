@@ -1,11 +1,16 @@
 // connection-status.spec.ts — 各機能の「未接続/未設定」状態を常時可視化する回帰
-// (ユーザー指示・2026-07-27「各機能未接続状態が見えるようにしよう」)。
+// (ユーザー指示・2026-07-27「各機能未接続状態が見えるようにしよう」「共有フォルダを選択、
+// GAS連携も可視化してほしい」)。
 //
-// 保管庫フォルダ/Gemini APIキー/バッテリー低下警告の接続設定は、以前はDataPanel内の
-// ローカルstateだけで持っていたため、パネルを開いて初めて未設定に気づけた
-// (Driveの既存の警告バッジと同じ問題——App.tsxのdriveConnectedのヘッダー参照)。
+// 保管庫フォルダ/Gemini APIキー/バッテリー低下警告(GAS連携)/Driveの共有フォルダ選択は、
+// 以前はDataPanel内のローカルstateだけで持っていたため、パネルを開いて初めて未設定に
+// 気づけた(Driveの既存の警告バッジと同じ問題——App.tsxのdriveConnectedのヘッダー参照)。
 // 起動時にローカル読み(chrome.storage/IndexedDB。OAuthを伴わないので毎回確認してよい)で
 // 判定し、未設定の間だけ控えめなバッジを常時表示する。押すとDataPanelが開く。
+//
+// 「共有フォルダを選択」は実際の選択操作(pickSharedFolderViaOAuth)が本物のGoogle認証を
+// 伴うためE2Eでは実行できない——バッジの出現/消滅(IndexedDBへ直接値を書いて再現)だけを
+// 検証し、選択操作自体の成功パスはE2E対象外(GDrive接続の成功パスと同じ既知の制約)。
 import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 
@@ -42,6 +47,7 @@ test("保管庫/Gemini/バッテリーが未設定なら、パネルを開く前
   await expect(page.getByTestId("nas-unconfigured-badge")).toBeVisible();
   await expect(page.getByTestId("gemini-unconfigured-badge")).toBeVisible();
   await expect(page.getByTestId("battery-unconfigured-badge")).toBeVisible();
+  await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toBeVisible();
 
   // 押すとデータ操作パネルが開き、該当欄が見える。
   await page.getByTestId("gemini-unconfigured-badge").click();
@@ -57,12 +63,29 @@ test("設定済みのものはバッジが出ない(平常時に雑音を足さ�
   await seedSetting(page, "nasFolderPath", "Z:\\保管庫\\backup");
   await seedSetting(page, "geminiApiKey", "dummy-key");
   await seedSetting(page, "batteryWebhookConfig", { url: "https://example.com", token: "t" });
+  await seedSetting(page, "driveSharedFolderChosen", true);
   await page.reload();
   await expect(page.getByTestId("app-root")).toBeVisible();
 
   await expect(page.getByTestId("nas-unconfigured-badge")).toHaveCount(0);
   await expect(page.getByTestId("gemini-unconfigured-badge")).toHaveCount(0);
   await expect(page.getByTestId("battery-unconfigured-badge")).toHaveCount(0);
+  await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toHaveCount(0);
+});
+
+test("共有フォルダを選択済みならバッジが出ない(未実行なら見える)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toBeVisible();
+
+  await seedSetting(page, "driveSharedFolderChosen", true);
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toHaveCount(0);
 });
 
 test("Gemini APIキーを保存すると、リロードなしでバッジが消える", async ({ context, newTabUrl }) => {

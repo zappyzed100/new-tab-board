@@ -7,6 +7,7 @@ import {
   getAllIndexEntries,
   getAllSnapshots,
   getBatteryWebhookConfig,
+  getDriveSharedFolderChosen,
   getGeminiUsageCount,
   getIndexEntry,
   getNasFolderPath,
@@ -18,6 +19,7 @@ import {
   recordGeminiUsage,
   setAlarmEnabled,
   setBatteryWebhookConfig,
+  setDriveSharedFolderChosen,
   setNasFolderPath,
 } from "./db";
 
@@ -119,6 +121,17 @@ describe("バッテリー低下警告のGAS Web App接続設定", () => {
       url: "https://script.google.com/macros/s/xxx/exec",
       token: "secret-token",
     });
+  });
+});
+
+describe("「共有フォルダを選択」を実行済みか", () => {
+  it("未実行ならfalseを返す(自動作成フォルダを使用中)", async () => {
+    expect(await getDriveSharedFolderChosen()).toBe(false);
+  });
+
+  it("setDriveSharedFolderChosen後はtrueを返す", async () => {
+    await setDriveSharedFolderChosen();
+    expect(await getDriveSharedFolderChosen()).toBe(true);
   });
 });
 
