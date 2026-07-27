@@ -511,4 +511,14 @@ test("初期化ボタンでノートの内容が空に戻る(削除とは違い�
   await expect(page.getByTestId(firstPaneId)).toHaveAttribute("data-empty", "true");
   // 空へ戻ったぶん末尾の余剰プレースホルダが1つ減り、空はまた常にちょうど3つになる。
   await expect(panes(page)).toHaveCount(3);
+
+  // 初期化直後の古いCM6インスタンスからの書き込みを止める抑止(suppressContentChangeRef)は、
+  // 新インスタンスの再マウント完了で必ず解除されなければならない——解除されないと、
+  // 初期化した直後にそのノートへ書いた内容が一切保存されなくなる(2026-07-27の回帰。
+  // 意図的置換4箇所で古いCM6の遅延イベントがnote.contentを上書きするレースを断つ修正の対)。
+  await page.getByTestId(firstPaneId).locator(".cm-content").click();
+  await page.keyboard.type("初期化後の新しい本文");
+  await expect(page.getByTestId(firstPaneId).locator(".cm-content")).toHaveText(
+    "初期化後の新しい本文",
+  );
 });

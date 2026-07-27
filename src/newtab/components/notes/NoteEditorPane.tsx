@@ -2,7 +2,7 @@
 // 複数ノートを横並び表示する際、1ペイン=1コンポーネントインスタンスとして完全に独立させる
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import {
   ArrowDown,
@@ -171,6 +171,19 @@ export function NoteEditorPane({
   // (2026-07-24。ローカルは速く再現しないがLinux/xvfbで再現)。viewport再マウント等の非意図的な
   // 再マウント(=新しいNoteEditorPaneインスタンス)では既定の false のままドラフトbeltが効く。
   const [replaceFromNoteContent, setReplaceFromNoteContent] = useState(false);
+  // 上のコメントの続き: replaceFromNoteContent は「remountがどちらを読むか」しか守らない。
+  // note.content 自体が、意図的置換のonNotesChange(空/復元後/追記後の値)より**後**に
+  // 古いCM6のonContentChangeが割り込んで上書きする経路は守れない(2026-07-27のCI再発:
+  // 初期化直後に受け取った本文が空でなく末尾が数文字欠けた値になっていた——CJKの
+  // 疑似IME合成/CM6のcompositionend処理がLinux/xvfbで実本文確定より遅れて発火し、
+  // clearDraftの後に古いonContentChangeがnote.contentを書き戻したものと見られる)。
+  // 意図的置換の4箇所(初期化/履歴復元/取込/固定タグのblur追記)で同期的に立て、
+  // 新インスタンスの再マウントが完了するeffectで下ろす——その間のonContentChangeは
+  // 「古いCM6からの遅延イベント」とみなして丸ごと無視する。
+  const suppressContentChangeRef = useRef(false);
+  useEffect(() => {
+    suppressContentChangeRef.current = false;
+  }, [restoreCounter, replaceContentVersion]);
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
   // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
@@ -193,6 +206,7 @@ export function NoteEditorPane({
     if (next === written) return; // モードOFF・空ノート・既に全部付いている
     logOp("fixed-tags", "apply", `note=${note.id.slice(0, 8)} tags=${fixedTags.length}`);
     onNotesChange((prev) => updateNote(prev, note.id, { content: next, updatedAt: clockNow() }));
+    suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
     setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
     setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
   }
@@ -367,6 +381,7 @@ export function NoteEditorPane({
       });
     });
     seam?.clearDraft(note.id); // 意図的な本文置換。古いドラフトを残すと再マウントで取り込み前へ戻る
+    suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
     setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
     setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
     onMessage(`「${file.name}」の内容をノートへ取り込みました`);
@@ -645,6 +660,7 @@ export function NoteEditorPane({
               // Notepad(CM6)はcontentをマウント時しか読まないため、復元と同様に
               // restoreCounterを進めて再マウントし、空になった本文を画面へ反映する。
               seam?.clearDraft(note.id); // 意図的な初期化。古いドラフトを残すと再マウントで元へ戻る
+              suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
               setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
               setRestoreCounter((c) => c + 1);
             }}
@@ -672,6 +688,7 @@ export function NoteEditorPane({
               onRestore={(content) => {
                 onNotesChange((prev) => updateNote(prev, note.id, { content }));
                 seam?.clearDraft(note.id); // 意図的な履歴復元。古いドラフトを残すと再マウントで復元前へ戻る
+                suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
                 setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
                 setRestoreCounter((c) => c + 1);
               }}
@@ -722,6 +739,11 @@ export function NoteEditorPane({
               // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
               onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}
               onContentChange={(content) => {
+                // 意図的置換(初期化/履歴復元/取込/固定タグ追記)の直後は、破棄されるはずの
+                // 古いCM6インスタンスからの遅延イベントを無視する(suppressContentChangeRef
+                // のヘッダー参照——2026-07-27のCI再発: 初期化直後の本文が空でなく末尾が
+                // 数文字欠けた値になっていた)。
+                if (suppressContentChangeRef.current) return;
                 seam?.setDraft(note.id, content); // 未保存の打鍵を同期的にドラフトへ保持
                 onNotesChange((prev) =>
                   updateNote(prev, note.id, { content, updatedAt: clockNow() }),
