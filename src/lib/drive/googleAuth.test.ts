@@ -234,3 +234,34 @@ describe("invalidateToken", () => {
     expect(store.driveAccessToken).toBeDefined();
   });
 });
+
+describe("invalidateOnAuthError", () => {
+  it("HTTP 401を含むエラーならトークンを無効化する", async () => {
+    const store: Record<string, unknown> = {};
+    const launch = vi
+      .fn()
+      .mockResolvedValueOnce(redirectWith("first"))
+      .mockResolvedValueOnce(redirectWith("second"));
+    const { getAuthToken, invalidateOnAuthError } = await load(launch, store);
+    expect(await getAuthToken(true)).toBe("first");
+
+    await invalidateOnAuthError(new Error("Drive検索失敗: HTTP 401"), "first");
+
+    expect(store.driveAccessToken).toBeUndefined();
+    expect(await getAuthToken(true)).toBe("second");
+  });
+
+  it("401以外のエラーではトークンをそのまま残す", async () => {
+    const store: Record<string, unknown> = {};
+    const launch = vi.fn().mockResolvedValueOnce(redirectWith("first"));
+    const { getAuthToken, invalidateOnAuthError } = await load(launch, store);
+    expect(await getAuthToken(true)).toBe("first");
+
+    await invalidateOnAuthError(new Error("Drive検索失敗: HTTP 500"), "first");
+    await invalidateOnAuthError("network down", "first");
+
+    expect(store.driveAccessToken).toBeDefined();
+    expect(await getAuthToken(true)).toBe("first");
+    expect(launch).toHaveBeenCalledTimes(1);
+  });
+});

@@ -8,7 +8,7 @@
 // getAuthToken/fetchNextEventは外部I/O(OAuth・Calendar API)のためvi.mockでフェイクに差し替える
 // (AGENTS.md §9.5 非決定/外部I/Oの検疫と同じ設計)。
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { getAuthToken } from "../lib/drive/googleAuth";
+import { getAuthToken, invalidateOnAuthError } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { getAlarmEnabled, getBatteryWebhookConfig, getNasFolderPath } from "../lib/storage/db";
 import { rebuildNasIndex } from "../lib/externalIO/nasNativeHost";
@@ -17,7 +17,10 @@ import { copyNotesToDriveDateFolder } from "../lib/drive/driveActiveMirror";
 import { syncDriveNotesSafely } from "../lib/drive/driveSafeSync";
 import type { LocalData } from "../types";
 
-vi.mock("../lib/drive/googleAuth", () => ({ getAuthToken: vi.fn() }));
+vi.mock("../lib/drive/googleAuth", () => ({
+  getAuthToken: vi.fn(),
+  invalidateOnAuthError: vi.fn(),
+}));
 vi.mock("../lib/nextEvent/calendar", () => ({ fetchNextEvent: vi.fn() }));
 vi.mock("../lib/storage/db", () => ({
   getNasFolderPath: vi.fn(),
@@ -122,9 +125,12 @@ function makeFakeChrome(initialStore: Record<string, unknown> = {}) {
 /** モックしたPromise群(getAuthToken/fetchNextEvent/chrome.storage等)が解決するまで
  * マイクロタスクキューを回す。実タイマーは使わない(test-sleep対策)。scheduleOrClearPreEventAlarmが
  * loadLocalData/saveLocalDataをもう1往復するようになった分(2026-07-16 予定前アラーム重複発火の
- * 是正)、8では足りずタイムアウト前に打ち切られていたため16へ増やした。 */
+ * 是正)、8では足りずタイムアウト前に打ち切られていたため16へ増やした。runDriveNoteSyncが
+ * driveConnectedの記録用にpatchLocalDataをもう1往復するようになった分(接続状態の定期再判定の
+ * 追加)、16でも足りずcommitMergedNotesの保存が完了する前にアサーションへ進んでいたため
+ * 32へ増やした。 */
 async function flushMicrotasks(): Promise<void> {
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 32; i++) {
     await Promise.resolve();
   }
 }
@@ -202,6 +208,33 @@ describe("drive-note-sync アラーム", () => {
     expect(syncDriveNotesSafely).toHaveBeenCalledWith([localNote], {}, "token-abc", FIXED_NOW);
     expect((fake.store.localData as LocalData).notes).toEqual([localNote, remoteNote]);
     expect((fake.store.localData as LocalData).noteTombstones).toEqual({ gone: 10 });
+  });
+
+  it(
+    "トークン取得の成否を毎回driveConnectedへ記録する(タブの一度きりの判定に固定されず、" +
+      "5分毎に再判定させて『接続が勝手に切れたまま戻らない』を防ぐための観測点)",
+    async () => {
+      const fake = makeFakeChrome({ localData: { notes: [] } });
+      vi.stubGlobal("chrome", fake.chromeStub);
+      vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+      vi.mocked(syncDriveNotesSafely).mockResolvedValue(null);
+
+      handlers.onAlarm({ name: DRIVE_SYNC_ALARM_NAME });
+      await flushMicrotasks();
+      expect((fake.store.localData as LocalData).driveConnected).toBe(true);
+    },
+  );
+
+  it("トークン取得に失敗すればdriveConnected=falseを記録し、同期は試みない", async () => {
+    const fake = makeFakeChrome({ localData: { notes: [] } });
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue(null);
+
+    handlers.onAlarm({ name: DRIVE_SYNC_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect((fake.store.localData as LocalData).driveConnected).toBe(false);
+    expect(syncDriveNotesSafely).not.toHaveBeenCalled();
   });
 });
 
@@ -294,6 +327,21 @@ describe("next-event-poll アラーム", () => {
     });
   });
 
+  it("fetchNextEventがendsAtを返せばnextEventCacheへ保存する(予定終了検知に使う)", async () => {
+    const fake = makeFakeChrome();
+    vi.stubGlobal("chrome", fake.chromeStub);
+    const startsAt = FIXED_NOW + 30 * 60_000;
+    const endsAt = FIXED_NOW + 60 * 60_000;
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    vi.mocked(fetchNextEvent).mockResolvedValue({ title: "MTG", startsAt, endsAt });
+
+    handlers.onAlarm({ name: POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    const saved = fake.store.localData as LocalData;
+    expect(saved.nextEventCache).toEqual({ title: "MTG", startsAt, endsAt, fetchedAt: FIXED_NOW });
+  });
+
   it(
     "同じ予定に対しては次のポーリングで再スケジュールしない(2026-07-16 是正の回帰テスト: " +
       "予定開始まで10分未満の間はalarmTimeが既に過去になりnowへ丸められるため、対策が無いと" +
@@ -360,6 +408,19 @@ describe("next-event-poll アラーム", () => {
 
     expect(fake.store.localData).toBeUndefined();
     expect(fake.calls.alarmsClear).toEqual([]);
+  });
+
+  it("Calendar取得がHTTP 401で失敗すればトークンを無効化する(死んだままの再利用を防ぐ)", async () => {
+    const fake = makeFakeChrome();
+    vi.stubGlobal("chrome", fake.chromeStub);
+    vi.mocked(getAuthToken).mockResolvedValue("token-abc");
+    const authError = new Error("Calendar取得失敗: HTTP 401");
+    vi.mocked(fetchNextEvent).mockRejectedValue(authError);
+
+    handlers.onAlarm({ name: POLL_ALARM_NAME });
+    await flushMicrotasks();
+
+    expect(invalidateOnAuthError).toHaveBeenCalledWith(authError, "token-abc");
   });
 });
 

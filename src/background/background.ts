@@ -1,7 +1,7 @@
 // background.ts — サービスワーカー(インストールログ + Calendar次予定の定期ポーリング +
 // 予定前アラーム。SPEC.md §4.9・§4.11)
 import { logOp } from "../lib/runtime/log";
-import { getAuthToken } from "../lib/drive/googleAuth";
+import { getAuthToken, invalidateOnAuthError } from "../lib/drive/googleAuth";
 import { fetchNextEvent } from "../lib/nextEvent/calendar";
 import { resolveAlarmTime } from "../lib/nextEvent/preEventAlarm";
 import { loadLocalData, patchLocalData } from "../lib/storage/storage";
@@ -60,6 +60,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function runDriveNoteSync(): Promise<void> {
   const token = await getAuthToken(false);
+  // 5分毎に実トークン取得の成否を記録する(タブの一度きりの判定に固定されないための観測点。
+  // App.tsxの30秒ポーリングがこれを読み直しdriveConnectedへ反映する)。
+  await patchLocalData({ driveConnected: token !== null });
   if (!token) return;
   try {
     const local = await loadLocalData();
@@ -93,12 +96,18 @@ async function pollNextEvent(): Promise<void> {
     const event = await fetchNextEvent(token);
     await patchLocalData({
       nextEventCache: event
-        ? { title: event.title, startsAt: event.startsAt, fetchedAt: clockNow() }
+        ? {
+            title: event.title,
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            fetchedAt: clockNow(),
+          }
         : undefined,
     });
     await scheduleOrClearPreEventAlarm(event);
   } catch (err) {
     logOp("background", "poll-next-event-error", "", { error: err });
+    await invalidateOnAuthError(err, token);
   }
 }
 

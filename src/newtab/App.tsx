@@ -645,6 +645,11 @@ export function App() {
         setNextEventCache(local.nextEventCache);
         setAlarmActive(local.alarmActive ?? false);
         setBatteryAlarmActive(local.batteryAlarmActive ?? false);
+        // background.tsのrunDriveNoteSyncが5分毎に実トークン取得の成否を記録している。
+        // undefined(background側がまだ一度も書いていない起動直後)は無視し、タブ読み込み時の
+        // runDriveSyncTickによる初回判定値をそのまま初期表示に使う——「接続が一度失敗すると
+        // タブを開いている間ずっと未接続表示のまま」を防ぐのがこの反映の目的。
+        if (local.driveConnected !== undefined) setDriveConnected(local.driveConnected);
       });
     }, 30_000);
     return () => clearInterval(interval);

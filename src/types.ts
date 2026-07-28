@@ -136,9 +136,13 @@ export type LocalData = {
   nextEventCache?: {
     title: string;
     startsAt: number;
+    endsAt?: number;
     fetchedAt: number;
   };
   alarmActive?: boolean;
+  /** Google接続状態(background.tsのrunDriveNoteSyncが5分毎に実トークン取得の成否で更新)。
+   * newtabのApp.tsxが30秒毎に読み直し、DataPanelの未接続表示へ反映する。 */
+  driveConnected?: boolean;
   /** 日次メンテ(Drive日付フォルダ格納 + SQLite再生成)を最後に実行した日 "YYYY/M/D"。
    * 同じ日には二重実行しないためのガード(background.ts の runDailyMaintenance)。 */
   lastDailyMaintenanceDay?: string;

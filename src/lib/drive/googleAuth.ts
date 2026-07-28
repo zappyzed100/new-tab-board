@@ -215,3 +215,13 @@ export async function invalidateToken(token: string): Promise<void> {
   if (stored?.token === token) await writeStoredToken(null);
   logOp("googleAuth", "invalidateToken", "token removed from memory and storage");
 }
+
+/** エラーがHTTP 401(認可切れ)を示していればinvalidateTokenを呼ぶ。それ以外(ネットワーク等の
+ * 一時的失敗)では何もしない——毎回無効化すると2026-07-20に潰した「1時間ごとの再認可」が
+ * 別の形で復活するため。Drive/Calendar側のエラーは全て`"...失敗: HTTP ${status}"`形式で
+ * 投げられている(calendar.ts/drive.ts)ため、この文字列判定で拾える。 */
+export async function invalidateOnAuthError(err: unknown, token: string): Promise<void> {
+  if (err instanceof Error && /HTTP 401/.test(err.message)) {
+    await invalidateToken(token);
+  }
+}

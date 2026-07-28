@@ -14,6 +14,18 @@ describe("computeCountdown", () => {
     expect(computeCountdown(cache, 2000)).toEqual({ kind: "in-progress" });
   });
 
+  it("endsAtが未到来なら開始後もin-progressのまま", () => {
+    const cache = { title: "会議", startsAt: 1000, endsAt: 5000 };
+    expect(computeCountdown(cache, 1000)).toEqual({ kind: "in-progress" });
+    expect(computeCountdown(cache, 4999)).toEqual({ kind: "in-progress" });
+  });
+
+  it("endsAtを過ぎていればnone(予定終了)", () => {
+    const cache = { title: "会議", startsAt: 1000, endsAt: 5000 };
+    expect(computeCountdown(cache, 5000)).toEqual({ kind: "none" });
+    expect(computeCountdown(cache, 9000)).toEqual({ kind: "none" });
+  });
+
   it("開始前は残り分数を切り上げて日・時間・分に分解する", () => {
     const cache = { title: "会議", startsAt: 10 * 60_000 };
     // 9分30秒後 → 切り上げで10分

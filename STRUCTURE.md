@@ -740,6 +740,7 @@
 - function getAuthToken
 - function getAuthTokenWithError
 - function invalidateToken
+- function invalidateOnAuthError
 
 ### `src/lib/drive/jsonBackup.ts`
 - type FetchLike
