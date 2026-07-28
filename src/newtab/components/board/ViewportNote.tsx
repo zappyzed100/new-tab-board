@@ -44,7 +44,12 @@ type Props = {
   active: boolean;
   estimatedHeight?: number;
   contentVersion?: number;
-  onHeight: (id: string, height: number) => void;
+  /** isFirstSinceMount: このResizeObserverインスタンスが(再)生成されてから最初の報告ならtrue。
+   * 窓化で一度アンマウントされたノートが再び画面へ近づいてマウントし直された直後は、CodeMirrorの
+   * 内部レイアウトが数フレームで落ち着くまで実際と異なる高さを報告することがある——呼び出し側
+   * (App.tsx)はこのフラグを使って、その一時的な報告だけ確定を遅らせ、既にマウント済みのノートの
+   * 折り返し切替等による本物の高さ変化(2回目以降の報告)は即座に反映する。 */
+  onHeight: (id: string, height: number, isFirstSinceMount: boolean) => void;
   onSuspend?: () => void;
   children: ReactNode;
 };
@@ -98,8 +103,10 @@ export function ViewportNote({
   useEffect(() => {
     const cell = cellRef.current;
     if (!mounted || !cell || typeof ResizeObserver === "undefined") return;
+    let isFirst = true;
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) onHeight(noteId, entry.contentRect.height);
+      for (const entry of entries) onHeight(noteId, entry.contentRect.height, isFirst);
+      isFirst = false;
     });
     observer.observe(cell);
     return () => observer.disconnect();

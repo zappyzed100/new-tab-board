@@ -168,6 +168,13 @@ const NAS_SYNC_INTERVAL_MS = 300_000;
 // するだけでDrive APIを連打しかねないため、この間隔でまとめて1回に落とす。
 const FOREGROUND_SYNC_MIN_INTERVAL_MS = 30_000;
 
+// 窓化(ViewportNote/Notepad)がノートを再マウントした直後、CodeMirrorのレイアウトが落ち着く
+// までの間ResizeObserverが報告する一時的な高さのブレを吸収するための猶予(2026-07-28実測:
+// 窓化を無効化すると上スクロール中の配置ジャンプが0pxまで消えたことで裏付け——詳細はreportNoteHeight)。
+// 実測(2026-07-28)では150msでは不十分・400msで安定・600msでも安定だったため、余裕を見て500msに
+// する(短いノートの通常の初回確定には影響しない——初回測定は分岐で即時確定するため)。
+const NOTE_HEIGHT_SETTLE_MS = 500;
+
 // ノートボードの列数(1列あたり概ね280px、最大3列)。実測masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
   return Math.max(1, Math.min(3, Math.floor(width / 280)));
@@ -753,14 +760,45 @@ export function App() {
   // order(優先度)順に「その時点で一番低い列」へ入れていく(最密詰め)。列幅は一定なので列を
   // 移っても高さは変わらず、内容変更でのみ高さが変わる=再配置は入力時のみ起きる(ユーザー了承済み)。
   const [noteHeights, setNoteHeights] = useState<Map<string, number>>(new Map());
-  const reportNoteHeight = useCallback((id: string, h: number) => {
-    setNoteHeights((prev) => {
-      // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
-      if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
-      const next = new Map(prev);
-      next.set(id, h);
-      return next;
-    });
+  // 窓化(ViewportNote/Notepad)がノートを再マウントした直後は、CodeMirrorの内部レイアウトが
+  // 1〜数フレームかけて落ち着くまでの間、ResizeObserverが一時的に実際と異なる高さを報告する
+  // ことがある。これをそのままmasonryへ流すと再マウントのたびに列詰め直しが走り、リスト順で
+  // 後ろにいる(=現在の読書位置を含みうる)ノートまで巻き込んで動かす——上スクロールで
+  // 既読のノートを何度も再マウントするたびに大きな配置ジャンプが起きる原因だった(ユーザー報告・
+  // 2026-07-28実測: 窓化を無効化すると上スクロールのズレが0pxまで消えることで裏付け)。
+  // ResizeObserverインスタンスが(再)生成されてから**最初の**報告(isFirstSinceMount=true。
+  // ViewportNote.tsx参照)だけ少し待って値が落ち着いてから確定させる——これが窓化の再マウント
+  // 直後に起こりうる一時的なブレの発生源そのものだから。2回目以降の報告(=既にマウント済みの
+  // ノートが折り返し切替・文字サイズ変更・入力等で本当に高さを変えた場合)は従来どおり即座に
+  // 確定する。ここを「idを知っているか」で分岐すると、折り返し一括切替のような正当な全件変化
+  // まで一律に遅延してしまい、既存の統合テストが規定時間に収まらなくなった(実測で確認済み)。
+  const noteHeightTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => {
+    const timers = noteHeightTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+  const reportNoteHeight = useCallback((id: string, h: number, isFirstSinceMount: boolean) => {
+    const timers = noteHeightTimersRef.current;
+    const existing = timers.get(id);
+    if (existing !== undefined) clearTimeout(existing);
+    const commit = () => {
+      timers.delete(id);
+      setNoteHeights((prev) => {
+        // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
+        if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
+        const next = new Map(prev);
+        next.set(id, h);
+        return next;
+      });
+    };
+    if (isFirstSinceMount) {
+      timers.set(id, setTimeout(commit, NOTE_HEIGHT_SETTLE_MS));
+    } else {
+      commit();
+    }
   }, []);
   // 各ノートの置き場所(列index・列内のtop座標)と、ボード全体の高さ。**DOMの並びは常に
   // order順のまま**にして、列は絶対配置(CSSのleft)＋topのpxで表現する。列ごとの<div>へ振り分けて
