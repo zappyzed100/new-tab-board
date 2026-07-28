@@ -21,10 +21,13 @@ function startOfDay(ts: number): number {
 }
 
 export function computeCountdown(
-  cache: { title: string; startsAt: number } | null | undefined,
+  cache: { title: string; startsAt: number; endsAt?: number } | null | undefined,
   now: number,
 ): CountdownState {
   if (!cache) return { kind: "none" };
+  // 終了時刻が分かっていて既に過ぎていれば、開始直後かどうかに関わらず「予定なし」に戻す
+  // (endsAtが無い古いキャッシュ/異常系では従来通りin-progressに留まる)。
+  if (cache.endsAt !== undefined && now >= cache.endsAt) return { kind: "none" };
   const diffMs = cache.startsAt - now;
   if (diffMs <= 0) return { kind: "in-progress" };
 

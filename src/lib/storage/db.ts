@@ -20,6 +20,11 @@ const ALARM_ENABLED_KEY = "alarmEnabled";
 // アクセスする。セッションを跨いだ再訪問のたびに名前+親で検索し直すと、複数ペインが
 // ほぼ同時に検索→未発見→作成を行った場合に同名フォルダが複製されるリスクが残るため)。
 const DRIVE_FOLDER_IDS_KEY = "driveFolderIds";
+// 「共有フォルダを選択」(pickSharedFolderViaOAuth)で明示的に選んだかどうかの旗。
+// driveFolderIds["app"]は自動作成(getOrCreateFolder)でも埋まるため、それだけでは
+// 「ユーザーが明示的に共有フォルダを選んだか」を区別できない——この旗だけがその区別を持つ
+// (ユーザー指示: 未選択(自動作成フォルダを使用中)を常時可視化したい)。
+const DRIVE_SHARED_FOLDER_CHOSEN_KEY = "driveSharedFolderChosen";
 
 interface AppDB extends DBSchema {
   snapshots: {
@@ -84,6 +89,18 @@ export async function getSnapshotsByNote(noteId: string): Promise<Snapshot[]> {
   return db.getAllFromIndex("snapshots", "by-note", noteId);
 }
 
+/** そのノートの最新スナップショット(timestamp最大)。無ければundefined。
+ * 「同じ内容をもう一度刻もうとしていないか」の照合に使う——複数タブが同じ編集を受け取ると
+ * それぞれが自分のメモリ上の前回内容としか比べられず、同一内容がタブの数だけ増えるため。 */
+export async function getLatestSnapshot(noteId: string): Promise<Snapshot | undefined> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex("snapshots", "by-note", noteId);
+  return all.reduce<Snapshot | undefined>(
+    (latest, s) => (latest === undefined || s.timestamp > latest.timestamp ? s : latest),
+    undefined,
+  );
+}
+
 export async function getAllSnapshots(): Promise<Snapshot[]> {
   const db = await getDb();
   return db.getAll("snapshots");
@@ -116,6 +133,12 @@ export async function putIndexEntry(entry: IndexEntry): Promise<void> {
 export async function getIndexEntry(token: string): Promise<IndexEntry | undefined> {
   const db = await getDb();
   return db.get("searchIndex", token);
+}
+
+/** 転置索引から1トークンを消す(重複スナップショット掃除で refs が空になった時)。 */
+export async function deleteIndexEntry(token: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("searchIndex", token);
 }
 
 export async function getAllIndexEntries(): Promise<IndexEntry[]> {
@@ -205,6 +228,20 @@ export async function saveDriveFolderId(path: string, id: string): Promise<void>
 export async function clearDriveFolderIds(): Promise<void> {
   const db = await getDb();
   await db.delete("settings", DRIVE_FOLDER_IDS_KEY);
+}
+
+/** 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。 */
+export async function getDriveSharedFolderChosen(): Promise<boolean> {
+  const db = await getDb();
+  return Boolean(await db.get("settings", DRIVE_SHARED_FOLDER_CHOSEN_KEY));
+}
+
+/** 「共有フォルダを選択」が成功した時に立てる旗。ピッカーで選び直すたびに呼ぶ
+ * (handlePickSharedFolderが saveDriveFolderId と同じタイミングで呼ぶ)。 */
+export async function setDriveSharedFolderChosen(): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", true, DRIVE_SHARED_FOLDER_CHOSEN_KEY);
+  logOp("db", "put", "settings/driveSharedFolderChosen");
 }
 
 /** 1パス分のフォルダIDだけを永続キャッシュから消す(他パスは残す)。ユーザーがDrive上で

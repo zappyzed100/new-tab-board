@@ -4,6 +4,7 @@ import { logOp } from "../runtime/log";
 
 const SYNC_KEY = "syncData";
 const LOCAL_KEY = "localData";
+const DIAG_KEY = "diagnosticsLog";
 const STORAGE_WRITER_ID = crypto.randomUUID();
 const LOCAL_DATA_LOCK = "new-tab-board:local-data";
 let fallbackWriteQueue: Promise<void> = Promise.resolve();
@@ -159,6 +160,18 @@ export async function updateLocalData(
 /** 指定フィールドだけを最新のlocalDataへ原子的に反映する。 */
 export async function patchLocalData(patch: Partial<LocalShape>): Promise<LocalShape> {
   return updateLocalData((current) => ({ ...current, ...patch }));
+}
+
+/** ウォッチドッグの診断ログ(runtime/watchdog.ts が正本)。**localDataとは別キーにする**——
+ * subscribeLocalData は `localData` の変化だけを購読しているので、ここへ書いてもアプリの
+ * 再同期(ノートの再適用)を誘発しない。診断のために本体を重くしては本末転倒なので、
+ * この分離が要件そのもの。中身は数値だけでノート本文は入らない(watchdog.ts のヘッダー)。 */
+export async function loadDiagnosticsLog<T>(): Promise<T[]> {
+  return readArea<T[]>("local", DIAG_KEY, []);
+}
+
+export async function saveDiagnosticsLog<T>(events: T[]): Promise<void> {
+  await writeArea("local", DIAG_KEY, events);
 }
 
 /** 同一PCの別タブがlocalDataを保存した通知を購読する。UI層がchrome.storageへ直接触れないためのseam。 */

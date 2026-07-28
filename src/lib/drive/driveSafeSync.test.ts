@@ -45,4 +45,16 @@ describe("syncDriveNotesSafely", () => {
 
     expect(result).toEqual({ notes: [], tombstones: { gone: 20 } });
   });
+
+  it("HTTP 401で失敗すればトークンを無効化してnullを返す(死んだトークンの再利用を防ぐ)", async () => {
+    const invalidateOnAuthError = vi.fn();
+    const authError = new Error("Drive検索失敗: HTTP 401");
+    const result = await syncDriveNotesSafely([note("a", "A", 10)], {}, "token", 100, {
+      pullActiveFromDrive: vi.fn().mockRejectedValue(authError),
+      invalidateOnAuthError,
+    });
+
+    expect(result).toBeNull();
+    expect(invalidateOnAuthError).toHaveBeenCalledWith(authError, "token");
+  });
 });

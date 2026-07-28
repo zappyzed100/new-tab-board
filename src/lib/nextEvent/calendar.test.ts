@@ -51,4 +51,32 @@ describe("fetchNextEvent", () => {
     const fetchImpl = vi.fn().mockResolvedValue(fakeResponse({}, false, 401));
     await expect(fetchNextEvent("token-abc", fetchImpl)).rejects.toThrow("HTTP 401");
   });
+
+  it("end.dateTimeがあればendsAtとして返す(予定終了検知に使う)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      fakeResponse({
+        items: [
+          {
+            summary: "会議",
+            start: { dateTime: "2026-07-10T15:00:00+09:00" },
+            end: { dateTime: "2026-07-10T16:00:00+09:00" },
+          },
+        ],
+      }),
+    );
+    const result = await fetchNextEvent("token-abc", fetchImpl);
+    expect(result?.endsAt).toBe(new Date("2026-07-10T16:00:00+09:00").getTime());
+  });
+
+  it("end.dateTimeが無ければendsAtはundefined", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        fakeResponse({
+          items: [{ summary: "会議", start: { dateTime: "2026-07-10T15:00:00+09:00" } }],
+        }),
+      );
+    const result = await fetchNextEvent("token-abc", fetchImpl);
+    expect(result?.endsAt).toBeUndefined();
+  });
 });

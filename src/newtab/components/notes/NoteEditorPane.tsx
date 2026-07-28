@@ -2,7 +2,7 @@
 // 複数ノートを横並び表示する際、1ペイン=1コンポーネントインスタンスとして完全に独立させる
 // (プレビュー/履歴表示・Drive同期状態はペインごとに別々でよい概念のため)。全文検索だけは
 // 「全ノート横断」という性質上グローバル据え置き(App.tsx側のまま)。
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Card, Checkbox, Flex, IconButton, Text } from "@radix-ui/themes";
 import {
   ArrowDown,
@@ -37,7 +37,12 @@ import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
 import { logOp } from "../../../lib/runtime/log";
-import { buildTagVocabulary, extractTags, resolveNoteTags } from "../../../lib/entities/tags";
+import {
+  applyFixedTags,
+  buildTagVocabulary,
+  extractTags,
+  resolveNoteTags,
+} from "../../../lib/entities/tags";
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
@@ -115,6 +120,13 @@ type Props = {
   onDragStartNote: (noteId: string) => void;
   /** ドラッグ交換: このペインへdropされた時、掴んだノートをここへ移動する。 */
   onDropNote: (targetNoteId: string) => void;
+  /** 本文をペイン幅で折り返すか(ツールバーのトグル。falseは横スクロール)。 */
+  wrapLines: boolean;
+  /** 固定タグモードで選択中のタグ(空=モードOFF)。編集を終えた時に本文末尾へ不足分を追記する。 */
+  fixedTags: string[];
+  /** 編集の開始/終了(フォーカスの出入り)をAppへ通知する。Appは固定タグモードの絞り込みで
+   * 編集中のノートを常時表示にするために使う(まだタグが付いていないため)。 */
+  onEditingChange: (noteId: string, editing: boolean) => void;
   /** ノート添付画像の揮発キャッシュ(NAS相対パス → object URL)。NAS未登録なら空=画像は出ない。 */
   noteImageUrls?: ReadonlyMap<string, string>;
   /** 画像の貼り付け/ドロップをNASへ保存し、本文へ挿入する参照テキストを返す(失敗はnull)。 */
@@ -144,6 +156,9 @@ export function NoteEditorPane({
   onMoveDown,
   onDragStartNote,
   onDropNote,
+  wrapLines,
+  fixedTags,
+  onEditingChange,
   noteImageUrls,
   onAttachImage,
 }: Props) {
@@ -156,6 +171,19 @@ export function NoteEditorPane({
   // (2026-07-24。ローカルは速く再現しないがLinux/xvfbで再現)。viewport再マウント等の非意図的な
   // 再マウント(=新しいNoteEditorPaneインスタンス)では既定の false のままドラフトbeltが効く。
   const [replaceFromNoteContent, setReplaceFromNoteContent] = useState(false);
+  // 上のコメントの続き: replaceFromNoteContent は「remountがどちらを読むか」しか守らない。
+  // note.content 自体が、意図的置換のonNotesChange(空/復元後/追記後の値)より**後**に
+  // 古いCM6のonContentChangeが割り込んで上書きする経路は守れない(2026-07-27のCI再発:
+  // 初期化直後に受け取った本文が空でなく末尾が数文字欠けた値になっていた——CJKの
+  // 疑似IME合成/CM6のcompositionend処理がLinux/xvfbで実本文確定より遅れて発火し、
+  // clearDraftの後に古いonContentChangeがnote.contentを書き戻したものと見られる)。
+  // 意図的置換の4箇所(初期化/履歴復元/取込/固定タグのblur追記)で同期的に立て、
+  // 新インスタンスの再マウントが完了するeffectで下ろす——その間のonContentChangeは
+  // 「古いCM6からの遅延イベント」とみなして丸ごと無視する。
+  const suppressContentChangeRef = useRef(false);
+  useEffect(() => {
+    suppressContentChangeRef.current = false;
+  }, [restoreCounter, replaceContentVersion]);
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
   // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
@@ -165,6 +193,23 @@ export function NoteEditorPane({
   // 本文の `#タグ` は打鍵のたびに変わるので、本文が変わった時だけ再計算する。
   const manualTags = useMemo(() => new Set(extractTags(note.content)), [note.content]);
   const resolvedTags = useMemo(() => resolveNoteTags(note), [note]);
+
+  /** 固定タグモードで、編集を終えた(フォーカスが外れた)このノートの本文末尾へ不足分の
+   * `#タグ` を追記する。**付与はblurの時にしかできない**——CM6は content をマウント時に
+   * しか読まないため、入力中に本文へ差し込んでも画面の編集内容には入らず、次の打鍵の
+   * コミットで丸ごと上書きされて消える。書き込むには履歴復元と同じ再マウント経路
+   * (clearDraft + replaceFromNoteContent + restoreCounter)が要り、それは入力中に
+   * 走らせるとカーソルが飛ぶ。blurなら編集していないので実害が無い。
+   * 空ノートには付けない(ユーザー指示)——判定は applyFixedTags 側。 */
+  function applyFixedTagsOnBlur(written: string) {
+    const next = applyFixedTags(written, fixedTags);
+    if (next === written) return; // モードOFF・空ノート・既に全部付いている
+    logOp("fixed-tags", "apply", `note=${note.id.slice(0, 8)} tags=${fixedTags.length}`);
+    onNotesChange((prev) => updateNote(prev, note.id, { content: next, updatedAt: clockNow() }));
+    suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
+    setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
+    setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
+  }
 
   async function handleCopy() {
     try {
@@ -209,7 +254,7 @@ export function NoteEditorPane({
     );
     onMessage(
       `「${title || note.title}」に${tags.length}件のタグ${title ? "とタイトル" : ""}を付けました` +
-        `${junk ? "(ゴミ判定: NAS保管対象外)" : ""}`,
+        `${junk ? "(ゴミ判定: 保管庫の保管対象外)" : ""}`,
     );
   }
 
@@ -336,6 +381,7 @@ export function NoteEditorPane({
       });
     });
     seam?.clearDraft(note.id); // 意図的な本文置換。古いドラフトを残すと再マウントで取り込み前へ戻る
+    suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
     setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
     setRestoreCounter((c) => c + 1); // CM6はマウント時しかcontentを読まないので再マウントで反映
     onMessage(`「${file.name}」の内容をノートへ取り込みました`);
@@ -441,9 +487,7 @@ export function NoteEditorPane({
             variant={note.special ? "solid" : "soft"}
             data-testid={`star-note-${note.id}`}
             title={
-              note.special
-                ? "スターを外す(スペシャルから外す)"
-                : "スターしてスペシャル(保管棚)に入れる"
+              note.special ? "スターを外す(お気に入りから外す)" : "スターしてお気に入りに入れる"
             }
             onClick={() => onToggleSpecial(note.id)}
           >
@@ -472,7 +516,7 @@ export function NoteEditorPane({
             title={
               note.noSync
                 ? "この端末のみ:同期・AI送信しません(平文で端末には残ります)。クリックで同期を再開"
-                : "このノートを同期しない(NAS/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
+                : "このノートを同期しない(保管庫/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
             }
             onClick={() =>
               onNotesChange((prev) => updateNote(prev, note.id, { noSync: !note.noSync }))
@@ -616,6 +660,7 @@ export function NoteEditorPane({
               // Notepad(CM6)はcontentをマウント時しか読まないため、復元と同様に
               // restoreCounterを進めて再マウントし、空になった本文を画面へ反映する。
               seam?.clearDraft(note.id); // 意図的な初期化。古いドラフトを残すと再マウントで元へ戻る
+              suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
               setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
               setRestoreCounter((c) => c + 1);
             }}
@@ -628,7 +673,7 @@ export function NoteEditorPane({
             variant="soft"
             color="red"
             data-testid={`delete-note-${note.id}`}
-            title="このノートを削除する(スター済みならスペシャルへ凍結して残す)"
+            title="このノートを削除する(スター済みならお気に入りへ凍結して残す)"
             onClick={() => onDeleteNote(note.id)}
           >
             <Trash2 size={14} aria-hidden="true" />
@@ -643,6 +688,7 @@ export function NoteEditorPane({
               onRestore={(content) => {
                 onNotesChange((prev) => updateNote(prev, note.id, { content }));
                 seam?.clearDraft(note.id); // 意図的な履歴復元。古いドラフトを残すと再マウントで復元前へ戻る
+                suppressContentChangeRef.current = true; // 古いCM6からの遅延イベントでこのnote.contentを上書きさせない
                 setReplaceFromNoteContent(true); // この再マウントはドラフトを見ずに note.content を採る
                 setRestoreCounter((c) => c + 1);
               }}
@@ -667,16 +713,37 @@ export function NoteEditorPane({
                 replaceFromNoteContent ? note.content : (seam?.getDraft(note.id) ?? note.content)
               }
               autoFocus={autoFocus}
-              onFocus={() => seam?.beginEditing(note.id)}
+              wrapLines={wrapLines}
+              onFocus={() => {
+                seam?.beginEditing(note.id);
+                // 固定タグモードの時だけAppへ通知する(絞り込みの素通しにしか使わない)。
+                // モードOFFでも通知すると、フォーカスの出入りのたびにApp全体の再レンダが
+                // 1回増える——初期化/履歴復元の再マウントと同じフレームに載る経路なので、
+                // 使っていない機能のために既存のタイミングを揺らさない。
+                if (fixedTags.length > 0) onEditingChange(note.id, true);
+              }}
               // blur=編集終了。レジストリから外し、ドラフトも破棄する(この時点で note.content は
               // 毎打鍵コミットで最新に追いついているため、以後は通常のマージに委ねてよい)。
               onBlur={() => {
                 seam?.endEditing(note.id);
+                const written = seam?.getDraft(note.id) ?? note.content;
                 seam?.clearDraft(note.id);
+                applyFixedTagsOnBlur(written);
+                // focusと同じくモード中だけ通知する。同値のsetStateでもReactは「bailoutの前に
+                // そのコンポーネントをもう一度レンダリングすることがある」——初期化/履歴復元の
+                // 再マウントと同じフレームに余計な再レンダを差し込むと、既知のレース
+                // (notes-board.spec.ts の初期化テストのコメント参照)を踏みやすくなる。
+                // モードOFFへ切り替えた時の取り残しはApp側のeffectが集合ごと捨てる。
+                if (fixedTags.length > 0) onEditingChange(note.id, false);
               }}
               // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
               onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}
               onContentChange={(content) => {
+                // 意図的置換(初期化/履歴復元/取込/固定タグ追記)の直後は、破棄されるはずの
+                // 古いCM6インスタンスからの遅延イベントを無視する(suppressContentChangeRef
+                // のヘッダー参照——2026-07-27のCI再発: 初期化直後の本文が空でなく末尾が
+                // 数文字欠けた値になっていた)。
+                if (suppressContentChangeRef.current) return;
                 seam?.setDraft(note.id, content); // 未保存の打鍵を同期的にドラフトへ保持
                 onNotesChange((prev) =>
                   updateNote(prev, note.id, { content, updatedAt: clockNow() }),

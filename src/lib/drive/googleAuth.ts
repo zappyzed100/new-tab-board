@@ -10,6 +10,18 @@
 // ともにサインイン済みの実機で同じエラーが再現した**。仮説は誤りで、この道は条件を問わず
 // 閉じている。三度目を試さないこと。
 //
+// 【対話接続でも`User interaction required`が起きる件 — 2026-07-27】
+// 「GDriveへ接続」ボタン(interactive=true)を押しても、ブラウザプロフィールが既に
+// サインイン済み+同意済みだと、Googleの認可ページが実際の画面遷移を1回も発生させずに
+// 即座にリダイレクトで完了することがある。launchWebAuthFlowは`interactive:true`でも
+// 内部的に「ユーザーが実際に何か操作したか」を見ており、無操作で完結するとChromeが
+// 非対話時と同じ`User interaction required. Try setting abortOnLoadForNonInteractive...`
+// を投げる(interactive:trueの文脈では的外れなメッセージだが、これがChrome側の実装)。
+// 対話フローの認可URLにだけ`prompt=select_account`を足し、アカウント選択という実際の
+// クリックを1回強制することで、この経路を回避する。非対話(バックグラウンド定期同期)側は
+// 従来どおりpromptを付けない——付けると毎回無言の自動更新が効かなくなり、2026-07-20に
+// 潰した「1時間ごとの再認可」が別の形で復活する。
+//
 // 【1時間ごとの再認可を消すための2点 — 2026-07-20】
 // implicitフロー(response_type=token)には更新トークンが無く、アクセストークンは約1時間で失効
 // する。以前はこの再取得が毎回失敗し、Drive連携が丸2日間まるごと停止していたのに無症状だった
@@ -97,12 +109,15 @@ async function writeStoredToken(entry: CachedToken | null): Promise<void> {
   }
 }
 
-function buildAuthUrl(config: OAuthConfig, redirectUri: string): string {
+function buildAuthUrl(config: OAuthConfig, redirectUri: string, interactive: boolean): string {
   const url = new URL(AUTH_ENDPOINT);
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("response_type", "token");
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("scope", config.scopes.join(" "));
+  // 対話フローだけアカウント選択を強制する(上のヘッダー(2026-07-27)参照)。非対話側は
+  // 付けない——付けると無言の自動更新のたびに操作を要求してしまう。
+  if (interactive) url.searchParams.set("prompt", "select_account");
   return url.toString();
 }
 
@@ -118,7 +133,7 @@ function parseTokenFromRedirect(redirectUrl: string): CachedToken | null {
 
 async function fetchToken(interactive: boolean): Promise<CachedToken | null> {
   const redirectUri = chrome.identity.getRedirectURL();
-  const authUrl = buildAuthUrl(readOAuthConfig(), redirectUri);
+  const authUrl = buildAuthUrl(readOAuthConfig(), redirectUri, interactive);
   const details: Parameters<typeof chrome.identity.launchWebAuthFlow>[0] = {
     url: authUrl,
     interactive,
@@ -199,4 +214,14 @@ export async function invalidateToken(token: string): Promise<void> {
   const stored = await readStoredToken();
   if (stored?.token === token) await writeStoredToken(null);
   logOp("googleAuth", "invalidateToken", "token removed from memory and storage");
+}
+
+/** エラーがHTTP 401(認可切れ)を示していればinvalidateTokenを呼ぶ。それ以外(ネットワーク等の
+ * 一時的失敗)では何もしない——毎回無効化すると2026-07-20に潰した「1時間ごとの再認可」が
+ * 別の形で復活するため。Drive/Calendar側のエラーは全て`"...失敗: HTTP ${status}"`形式で
+ * 投げられている(calendar.ts/drive.ts)ため、この文字列判定で拾える。 */
+export async function invalidateOnAuthError(err: unknown, token: string): Promise<void> {
+  if (err instanceof Error && /HTTP 401/.test(err.message)) {
+    await invalidateToken(token);
+  }
 }

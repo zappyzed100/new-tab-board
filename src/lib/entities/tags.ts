@@ -42,6 +42,31 @@ export function resolveNoteTags(note: { content?: string; tags?: string[] }): st
   return out;
 }
 
+/** ユーザーが入力した文字列を、本文の `#タグ` として成立する形へ正規化する(先頭の`#`や空白・
+ * 記号を落とし、TAG_PATTERN が拾える文字だけ残す)。成立しなければ空文字を返す。
+ * 固定タグの登録時に通す——`#` を含めて書かれても、区切り記号が混ざっても、本文へ書いた
+ * `#タグ` と検索側の抽出結果が食い違わないようにするため。 */
+export function normalizeTagName(raw: string): string {
+  return [...raw.replace(/^#+/, "")].filter((ch) => /[\p{L}\p{N}_]/u.test(ch)).join("");
+}
+
+/** 固定タグモードで、本文へ不足している `#タグ` を末尾へ追記した本文を返す(冪等)。
+ *
+ * - **空ノートには付けない**(ユーザー指示)——本文が空白のみならそのまま返す。末尾の空
+ *   プレースホルダ3つが固定タグで汚れると、盤面の「常に空が3つ」の述語
+ *   (isGeneratedEmptyPlaceholder)からも外れて補充が暴れる。
+ * - 既に本文にあるタグは足さない(resolveNoteTags ではなく extractTags で見る——Geminiの
+ *   自動タグ `note.tags` は再タグ付けで全置換されるため、それを根拠に「もう付いている」と
+ *   判断すると次のタグ付けで固定タグが消える)。
+ * - 追記位置は**末尾**。先頭へ入れると、既存ノートの見出し行より前に出て読み味が変わる。 */
+export function applyFixedTags(content: string, fixedTags: string[]): string {
+  if (content.trim() === "") return content;
+  const have = new Set(extractTags(content));
+  const missing = fixedTags.filter((t) => t !== "" && !have.has(t));
+  if (missing.length === 0) return content;
+  return `${content.replace(/\s+$/, "")}\n\n${missing.map((t) => `#${t}`).join(" ")}`;
+}
+
 /** Geminiのタグ付けへ渡す「タグ語彙」を作る(ユーザー指示: タグをある程度統一する)。
  * 並びの優先: ①ユーザーが並べたタグ候補(最優先) → ②既存ノートで頻出のタグ(頻度降順。
  * 既存タグを再利用させて表記ゆれ/乱立を抑える)。重複を除き最大 limit 個(既定200)に切る。

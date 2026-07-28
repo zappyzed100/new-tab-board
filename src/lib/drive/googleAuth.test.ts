@@ -92,6 +92,22 @@ describe("getAuthToken", () => {
     expect(arg.timeoutMsForNonInteractive).toBeUndefined();
   });
 
+  it("対話時はprompt=select_accountを付ける(無操作で完結してinteractive:trueでも`User interaction required`になる回帰・2026-07-27)", async () => {
+    const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
+    const { getAuthToken } = await load(launch);
+    await getAuthToken(true);
+    const arg = launch.mock.calls[0][0] as { url: string };
+    expect(new URL(arg.url).searchParams.get("prompt")).toBe("select_account");
+  });
+
+  it("非対話時はpromptを付けない(付けると無言の自動更新のたびに操作を要求してしまう)", async () => {
+    const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
+    const { getAuthToken } = await load(launch);
+    await getAuthToken(false);
+    const arg = launch.mock.calls[0][0] as { url: string };
+    expect(new URL(arg.url).searchParams.get("prompt")).toBeNull();
+  });
+
   it("回帰: 新しいタブ(モジュール再読み込み)でも認可フローを再実行せず永続トークンを再利用する", async () => {
     // 実害の再現条件そのもの。キャッシュがモジュール変数だけだった頃は、タブを開くたびに
     // 空から始まってサイレント認可が走り、それが失敗してDrive連携が丸ごと停止していた。
@@ -216,5 +232,36 @@ describe("invalidateToken", () => {
     await getAuthToken(true);
     await invalidateToken("someone-elses-token");
     expect(store.driveAccessToken).toBeDefined();
+  });
+});
+
+describe("invalidateOnAuthError", () => {
+  it("HTTP 401を含むエラーならトークンを無効化する", async () => {
+    const store: Record<string, unknown> = {};
+    const launch = vi
+      .fn()
+      .mockResolvedValueOnce(redirectWith("first"))
+      .mockResolvedValueOnce(redirectWith("second"));
+    const { getAuthToken, invalidateOnAuthError } = await load(launch, store);
+    expect(await getAuthToken(true)).toBe("first");
+
+    await invalidateOnAuthError(new Error("Drive検索失敗: HTTP 401"), "first");
+
+    expect(store.driveAccessToken).toBeUndefined();
+    expect(await getAuthToken(true)).toBe("second");
+  });
+
+  it("401以外のエラーではトークンをそのまま残す", async () => {
+    const store: Record<string, unknown> = {};
+    const launch = vi.fn().mockResolvedValueOnce(redirectWith("first"));
+    const { getAuthToken, invalidateOnAuthError } = await load(launch, store);
+    expect(await getAuthToken(true)).toBe("first");
+
+    await invalidateOnAuthError(new Error("Drive検索失敗: HTTP 500"), "first");
+    await invalidateOnAuthError("network down", "first");
+
+    expect(store.driveAccessToken).toBeDefined();
+    expect(await getAuthToken(true)).toBe("first");
+    expect(launch).toHaveBeenCalledTimes(1);
   });
 });

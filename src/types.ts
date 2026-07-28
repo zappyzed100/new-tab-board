@@ -26,10 +26,28 @@ export type Settings = {
   /** ノート本文(エディタ)の文字サイズ(px)。A-/A+で一括調整する(ユーザー指示)。
    * 未設定なら既定13px。ノート以外のUI文字には影響しない。 */
   noteFontSize?: number;
+  /** ノート本文を「ペイン幅で固定して折り返す」か(ユーザー指示: ボタン一つで切り替える)。
+   * 未設定/false は CM6 の既定=折り返さず横スクロール(長い行は右へ流れる)。 */
+  noteWrapLines?: boolean;
   /** タグ候補(ユーザーが手で並べる語彙)。LLMのタグ推定時に「優先的に選ぶ候補」として渡す
    * (ユーザー指示)。TODOリストの下で管理する。chrome.storage.localに乗り・Driveバックアップ
    * にも含まれる。 */
   tagCandidates?: string[];
+  /** 固定タグモードのプリセット(名前付きのタグの組)。ノート文字サイズの行のセレクトで切り替える。
+   * **登録内容だけが全タブ共有**で、どれを選んでいるかは共有しない(ユーザー指示: タブ毎に
+   * 切り替えたい)——選択中idは storage/tab-session.ts の sessionStorage 側に置く。 */
+  fixedTagPresets?: FixedTagPreset[];
+};
+
+/** 固定タグモードのプリセット(ユーザー指示: 固定タグを登録して選択式で切り替える)。
+ * 選択中はこの `tags` を全て満たすノートだけを盤面に出し、編集を終えたノート(空でないもの)の
+ * 本文末尾へ不足分の `#タグ` を追記する。タグはすべて本文の `#タグ` として持つ——手動タグの
+ * 正本が本文だから(entities/tags.ts のヘッダー参照。専用フィールドはNAS往復で note.tags へ
+ * 潰れ、Geminiの自動タグ全置換で消える)。 */
+export type FixedTagPreset = {
+  id: string;
+  name: string;
+  tags: string[];
 };
 
 export type SyncData = {
@@ -118,9 +136,13 @@ export type LocalData = {
   nextEventCache?: {
     title: string;
     startsAt: number;
+    endsAt?: number;
     fetchedAt: number;
   };
   alarmActive?: boolean;
+  /** Google接続状態(background.tsのrunDriveNoteSyncが5分毎に実トークン取得の成否で更新)。
+   * newtabのApp.tsxが30秒毎に読み直し、DataPanelの未接続表示へ反映する。 */
+  driveConnected?: boolean;
   /** 日次メンテ(Drive日付フォルダ格納 + SQLite再生成)を最後に実行した日 "YYYY/M/D"。
    * 同じ日には二重実行しないためのガード(background.ts の runDailyMaintenance)。 */
   lastDailyMaintenanceDay?: string;
@@ -167,6 +189,10 @@ export type Snapshot = {
   /** 履歴一覧で本文を展開せずに中身を判別するための一文サマリ(変更箇所 or 本文の最初)。
    * このフィールド追加前の既存スナップショットではundefined(一覧では非表示)。 */
   summary?: string;
+  /** 保存時の本文のハッシュ(contentHash)。同じ内容を二重に刻まないための照合キー——
+   * 本文はgzip済みなので、重複判定のたびに解凍しないで済むようにこれを持つ。
+   * このフィールド追加前の既存スナップショットではundefined(=照合できないので保存する)。 */
+  contentHash?: string;
 };
 
 export type IndexEntry = {

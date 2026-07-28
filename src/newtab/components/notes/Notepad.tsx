@@ -3,7 +3,7 @@
 // ノート切替時は呼び出し側が key={noteId} を指定して本コンポーネントを再マウントする設計
 // (CM6のEditorStateとReactのcontentプロパティを双方向同期する複雑さを避けるため)。
 import { useEffect, useRef, useState } from "react";
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { Compartment, EditorSelection, EditorState } from "@codemirror/state";
 import { drawSelection, EditorView, keymap, type Command } from "@codemirror/view";
 import {
   copyLineDown,
@@ -37,6 +37,8 @@ type Props = {
   /** 画像の貼り付け/ドロップ(ユーザー指示・2026-07-23)。保存先はNASのみで、成功したら
    * 本文へ挿入する参照テキストを返す。NAS未登録などで保存できなければnull(何も挿入しない)。 */
   onAttachImage?: (blob: Blob) => Promise<string | null>;
+  /** trueならペイン幅で折り返す(EditorView.lineWrapping)。falseはCM6既定の横スクロール。 */
+  wrapLines?: boolean;
 };
 
 /** DataTransfer から画像を取り出す(貼り付け・ドロップ共通)。画像が無ければ空配列。 */
@@ -93,9 +95,15 @@ export function Notepad({
   onFocus,
   onBlur,
   onAttachImage,
+  wrapLines = false,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // 折り返しの切替は Compartment で**再構成**する(再マウントしない)。key を変えて作り直すと
+  // 表示中の全ノートのEditorViewが破棄され、入力中のカーソル/選択とundo履歴が消える——
+  // 表示設定のトグル1回でそれを起こすのは割に合わない(notes/CLAUDE.md の再マウント事故と同根)。
+  const wrapCompartment = useRef(new Compartment());
+  const viewRef = useRef<EditorView | null>(null);
   const onContentChangeRef = useRef(onContentChange);
   onContentChangeRef.current = onContentChange;
   const onAttachImageRef = useRef(onAttachImage);
@@ -186,6 +194,8 @@ export function Notepad({
           ...historyKeymap,
         ]),
         markdown(),
+        // 初期値だけここで決める。以降の切替は下のeffectがreconfigureで差し替える。
+        wrapCompartment.current.of(wrapLines ? EditorView.lineWrapping : []),
         // 他のノート(や他の要素)を触ってフォーカスが外れたら、選択を解除してカーソルへ畳む
         // (ユーザー指示)。drawSelection()の選択ハイライトはblurしても残り続けるため明示的に消す。
         EditorView.domEventHandlers({
@@ -222,16 +232,29 @@ export function Notepad({
       ],
     });
     const view = new EditorView({ state: editState, parent: containerRef.current });
+    viewRef.current = view;
     setCursor(readCursor(editState));
     // ノート切替(key propによる再マウント)のたびに即フォーカスし、選択の1クリックで
     // すぐ入力できるようにする(フォーカスが無いと本文クリックがもう1回要る——実害あり)。
     // ただし新規タブを開いた直後の自動選択ではオムニバー側にフォーカスさせたいので、
     // 呼び出し側がautoFocus=falseを渡した時だけ奪わない。
     if (autoFocus) view.focus();
-    return () => view.destroy();
+    return () => {
+      viewRef.current = null;
+      view.destroy();
+    };
     // content/onContentChangeは初回マウント時のみ使用する(意図的な依存配列省略——
     // ノート切替時はkey prop、画面外から戻った時はeditorMountedで再マウントされる)。
   }, [editorMounted]);
+
+  // 折り返し設定の切替を、生きているEditorViewへ再構成で流し込む(本文もカーソルも触らない)。
+  // マウント直後は初期値と同じ内容の再構成になるが、docChanged/selectionSetのどちらも立たない
+  // ため onContentChange も発火しない(無害な冪等dispatch)。
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: wrapCompartment.current.reconfigure(wrapLines ? EditorView.lineWrapping : []),
+    });
+  }, [wrapLines, editorMounted]);
 
   return (
     <div

@@ -12,6 +12,7 @@ import {
 import { pullActiveFromDrive } from "./driveActiveSync";
 import { reconcileDriveActive } from "./driveActiveMirror";
 import { syncNoteToDrive } from "./driveSync";
+import { invalidateOnAuthError } from "./googleAuth";
 
 const TOMBSTONE_FOLDER_PATH = ["app", "New Tab Board", "sync", "v2", "tombstones"];
 
@@ -25,6 +26,7 @@ export type DriveSafeSyncDeps = {
   pullActiveFromDrive?: typeof pullActiveFromDrive;
   syncNoteToDrive?: typeof syncNoteToDrive;
   reconcileDriveActive?: typeof reconcileDriveActive;
+  invalidateOnAuthError?: typeof invalidateOnAuthError;
   fetchImpl?: FetchLike;
 };
 
@@ -155,6 +157,10 @@ export async function syncDriveNotesSafely(
     return { notes, tombstones: merged.tombstones };
   } catch (err) {
     logOp("driveSafeSync", "sync-error", "", { error: err });
+    // syncDriveNotesSafelyは例外を外へ投げず握りつぶす設計のため、401の無効化配線は
+    // ここで行う(background.ts側のcatchには届かない)。
+    const _invalidateOnAuthError = deps.invalidateOnAuthError ?? invalidateOnAuthError;
+    await _invalidateOnAuthError(err, token);
     return null;
   }
 }

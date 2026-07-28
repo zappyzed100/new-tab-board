@@ -34,8 +34,9 @@ test("NASフォルダのパスが空欄なら保存を試みず案内する", as
   await page.getByTestId("data-set-nas-folder").click();
   await page.getByTestId("data-save-nas-path").click();
 
+  // UI文言は「保管庫」へ改称済み(2026-07-27)——testid/テスト名は据え置き。
   await expect(page.getByTestId("data-panel-message")).toContainText(
-    "NASフォルダのパスを入力してください",
+    "保管庫フォルダのパスを入力してください",
   );
 });
 
@@ -55,7 +56,7 @@ test("NASブリッジ未導入のパスを保存しようとすると、到達�
   // このテスト環境にはnative-host/nas_bridge.pyが導入されていないため、
   // probeNasPath()のchrome.runtime.connectNativeが必ず失敗する。
   await expect(page.getByTestId("data-panel-message")).toContainText(
-    "NASフォルダに到達できませんでした",
+    "保管庫フォルダに到達できませんでした",
   );
 });
 
@@ -72,6 +73,6 @@ test("「NASから復元」はNAS未設定なら復元を試みず案内する(n
   await page.getByTestId("data-restore-from-nas").click();
 
   await expect(page.getByTestId("data-panel-message")).toContainText(
-    "NASに設定バックアップがまだありません",
+    "保管庫に設定バックアップがまだありません",
   );
 });

@@ -2,7 +2,8 @@
 // 変更量閾値/最長キャップ)をhistory.tsの判定関数へ配線し、gzip圧縮してdb.tsへ保存する(SPEC.md §4.3)。
 import { useEffect, useRef } from "react";
 import { now as clockNow } from "../runtime/clock";
-import { putSnapshot } from "../storage/db";
+import { getLatestSnapshot, putSnapshot } from "../storage/db";
+import { contentHash } from "../gemini/tagging";
 import { gzipCompress } from "./gzip";
 import {
   exceedsChangeThreshold,
@@ -32,6 +33,9 @@ export async function forceSnapshot(noteId: string, content: string): Promise<vo
     content: compressed,
     archived: false,
     summary: summarizeSnapshot(content, null),
+    // 明示保存(Cmd/Ctrl+S・画面外退避)は重複でも必ず1件残す契約だが、ハッシュは書いておく
+    // ——後続の自動保存がこれと照合して同内容の刻み直しを避けられるように。
+    contentHash: contentHash(content),
   });
   await indexSnapshot(snapshotId, content);
   logOp("history", "snapshot", `note=${noteId} reason=manual`);
@@ -39,7 +43,16 @@ export async function forceSnapshot(noteId: string, content: string): Promise<vo
 
 export function useSnapshotScheduler(noteId: string, content: string): void {
   const lastSnapshotAtRef = useRef<number | null>(null);
-  const lastContentRef = useRef<string | null>(null);
+  // **マウント時点の本文を「前回の内容」の初期値にする**。null 始まりだと
+  // exceedsChangeThreshold(null, content) が 200文字以上のノートで常に true になり、
+  // *編集していなくてもペインがマウントしただけで* スナップショットが1件書かれていた。
+  // ペインはスクロール(ViewportNoteの窓化)とタブを開くたびにマウントするため、これは
+  // 無編集のまま無限に増える——実測(2026-07-25)で300ノート時、初回ロードで18件・上下
+  // スクロール1往復ごとに+20件・タブを3回開閉するだけで+48件。1件ごとに gzip +
+  // IndexedDB put + indexSnapshot(全トークンの refs 配列を読んで書き戻す)が走り、
+  // refs は溜まったスナップショット数に比例して伸びるので**溜まるほど1件が重くなる**。
+  // これがユーザー報告「放置していたら重くなる/ブラウザが止まる」の増分の正体。
+  const lastContentRef = useRef<string | null>(content);
   const contentRef = useRef(content);
   contentRef.current = content;
 
@@ -57,6 +70,16 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
     ) {
       return;
     }
+    // 二重の歯止め: 保存済みの最新スナップショットと同じ内容なら書かない。上のガードは
+    // このタブのメモリ上の前回内容しか見ないため、複数タブが同じ編集を受け取ると同一内容が
+    // タブの数だけ積まれる(lastContentRefはタブごとに独立しているため)。
+    const hash = contentHash(currentContent);
+    const latest = await getLatestSnapshot(noteId);
+    if (latest?.contentHash === hash) {
+      lastContentRef.current = currentContent; // 以後この内容では再挑戦しない
+      logOp("history", "snapshot-skip", `note=${noteId} reason=${reason} (同内容が保存済み)`);
+      return;
+    }
     const compressed = await gzipCompress(currentContent);
     const snapshotId = crypto.randomUUID();
     await putSnapshot({
@@ -66,6 +89,7 @@ export function useSnapshotScheduler(noteId: string, content: string): void {
       content: compressed,
       archived: false,
       summary: summarizeSnapshot(currentContent, lastContentRef.current),
+      contentHash: hash,
     });
     await indexSnapshot(snapshotId, currentContent);
     logOp("history", "snapshot", `note=${noteId} reason=${reason}`);

@@ -86,15 +86,19 @@
 - `e2e/fixtures.ts` — fixtures.ts — ビルド済み拡張機能を実際にロードするPlaywright fixture(GUARDRAILS.md §12.4)
 - `e2e/specs/board.spec.ts` — board.spec.ts — golden path E2E: ブックマーク追加→ノート編集→履歴確認(SPEC.md準拠。M9)
 - `e2e/specs/bookmarks.spec.ts` — bookmarks.spec.ts — ブックマークグリッドの追加/編集/削除E2E(SPEC.md §4.1)
+- `e2e/specs/connection-status.spec.ts` — connection-status.spec.ts — 各機能の「未接続/未設定」状態を常時可視化する回帰
 - `e2e/specs/data-panel-alarm.spec.ts` — data-panel-alarm.spec.ts — この端末でアラーム(予定前・バッテリー)を鳴らすかのトグルUIの回帰
 - `e2e/specs/data-panel-battery.spec.ts` — data-panel-battery.spec.ts — スマホのバッテリー低下警告(GAS Web App中継)接続設定UIの回帰
 - `e2e/specs/data-panel-fileio.spec.ts` — data-panel-fileio.spec.ts — 「ファイルを開く」の回帰(2026-07-12)
 - `e2e/specs/data-panel-nas.spec.ts` — data-panel-nas.spec.ts — 「NASフォルダを設定」のパス入力方式の回帰(2026-07-12)
+- `e2e/specs/fixed-tags.spec.ts` — fixed-tags.spec.ts — 固定タグモード(ユーザー指示・2026-07-25)の回帰。
 - `e2e/specs/note-editing-protection.spec.ts` — note-editing-protection.spec.ts — 編集中ノートを外部同期の巻き戻し/削除から構造的に守る回帰
 - `e2e/specs/note-images.spec.ts` — note-images.spec.ts — ノート添付画像(NASのみ保存・揮発キャッシュ)の回帰(ユーザー指示・2026-07-23)
 - `e2e/specs/note-katex.spec.ts` — note-katex.spec.ts — ノートプレビューのKaTeX数式描画の回帰(ユーザー指示・2026-07-23)。
 - `e2e/specs/note-manual-tags.spec.ts` — note-manual-tags.spec.ts — 本文の `#タグ`(手動タグ)がタグとして認識されることの回帰
 - `e2e/specs/note-nosync.spec.ts` — note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
+- `e2e/specs/note-scroll-anchor.spec.ts` — note-scroll-anchor.spec.ts — 再配置しても「読んでいる位置」が動かないことの回帰(2026-07-27)。
+- `e2e/specs/note-wrap.spec.ts` — note-wrap.spec.ts — 本文の折り返し(幅固定)トグルの回帰(ユーザー指示・2026-07-25)。
 - `e2e/specs/notes-board.spec.ts` — notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 - `e2e/specs/notes.spec.ts` — notes.spec.ts — ノート編集エリアのE2E(SPEC.md §4.2)
 - `e2e/specs/search-backlinks.spec.ts` — search-backlinks.spec.ts — 全文検索/バックリンクのE2E(SPEC.md §7 v1確定)
@@ -102,7 +106,9 @@
 - `e2e/specs/special.spec.ts` — special.spec.ts — ⭐スター/スペシャル(保管棚)の回帰。スターでスペシャル一覧に出る、削除で凍結して
 - `e2e/specs/tag-search.spec.ts` — tag-search.spec.ts — タグ/本文/期間でNAS検索するパネルのUI回帰(2026-07-13)
 - `e2e/specs/todo-list.spec.ts` — todo-list.spec.ts — 単体TODOリストのE2E(ノート本文からは独立。TodoMVC相当)
+- `e2e/specs/watchdog.spec.ts` — watchdog.spec.ts — 「ブラウザが止まった」証拠が本当に残るかの回帰(ユーザー要望・2026-07-26)。
 - `e2e/stress/CLAUDE.md`
+- `e2e/stress/history-growth.spec.ts` — history-growth.spec.ts — 履歴スナップショットが「無編集で増えない」ことの回帰(2026-07-25)。
 - `e2e/stress/resource-budget.spec.ts` — resource-budget.spec.ts — 500ノート時の詳細ペイン・描画・timer・Observer・DOM上限を検査する。
 
 ## `gas/`
@@ -190,6 +196,8 @@
 - `src/lib/drive/useJsonBackupSync.ts` — useJsonBackupSync.ts — 全データJSONバックアップをdebounceしてDrive同期をキックするReact hook
 - `src/lib/entities/bookmarks.test.ts` — bookmarks.test.ts — bookmarks.ts の純粋関数の単体テスト
 - `src/lib/entities/bookmarks.ts` — bookmarks.ts — ブックマークの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.1)
+- `src/lib/entities/fixedTagPresets.test.ts` — fixedTagPresets.test.ts — 固定タグプリセット(名前付きタグの組)の純粋操作の単体テスト
+- `src/lib/entities/fixedTagPresets.ts` — fixedTagPresets.ts — 固定タグモードのプリセット(名前付きタグの組)の純粋な操作。I/Oは持たない。
 - `src/lib/entities/notes.test.ts` — notes.test.ts — notes.ts の純粋関数の単体テスト
 - `src/lib/entities/notes.ts` — notes.ts — ノートの純粋な状態更新関数(I/Oを持たない。SPEC.md §4.2)
 - `src/lib/entities/special.test.ts` — special.test.ts — special.ts(⭐スター/スペシャルの純粋ロジック)の単体テスト
@@ -232,7 +240,9 @@
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
 - `src/lib/history/history.test.ts` — history.test.ts — history.ts(スナップショット判定)の単体テスト
 - `src/lib/history/history.ts` — history.ts — 編集区切り(undoグループ境界相当)の自動検出とスナップショット判定(SPEC.md §4.3 ★核心機能)
-- `src/lib/history/useSnapshotScheduler.test.ts` — useSnapshotScheduler.test.ts — forceSnapshot(即時保存。SPEC.md §6)の単体テスト
+- `src/lib/history/snapshotCleanup.test.ts` — snapshotCleanup.test.ts — 重複スナップショット掃除(計画の純粋関数 + 実DB操作)の単体テスト
+- `src/lib/history/snapshotCleanup.ts` — snapshotCleanup.ts — 溜まってしまった重複スナップショットの掃除(明示操作のメンテナンス)
+- `src/lib/history/useSnapshotScheduler.test.tsx` — @vitest-environment jsdom
 - `src/lib/history/useSnapshotScheduler.ts` — useSnapshotScheduler.ts — 編集区切りシグナル(アイドル/blur/visibilitychange/pagehide/paste/
 - `src/lib/images/nasImageStore.test.ts` — nasImageStore.test.ts — ノート添付画像のNAS入出力の単体テスト(実NAS・実IndexedDBは経由しない)
 - `src/lib/images/nasImageStore.ts` — nasImageStore.ts — ノート添付画像のNAS入出力(保存/一括読み込み)。ブラウザ側に永続化しない
@@ -254,6 +264,8 @@
 - `src/lib/runtime/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/runtime/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
 - `src/lib/runtime/log.ts` — log.ts — ログの唯一の出口(GUARDRAILS.md §8.2)。他ファイルでのconsole直呼びはhard log-direct-callが止める
+- `src/lib/runtime/watchdog.test.ts` — @vitest-environment jsdom
+- `src/lib/runtime/watchdog.ts` — watchdog.ts — 「ブラウザが固まる」の証拠を残す常駐ウォッチドッグ(ユーザー要望・2026-07-26)
 - `src/lib/search/CLAUDE.md`
 - `src/lib/search/diff.test.ts` — diff.test.ts — diff.ts(2版間の差分算出)の単体テスト
 - `src/lib/search/diff.ts` — diff.ts — 2つのスナップショット本文の差分を表示時に算出する(保存は常にフル。SPEC.md §4.3)
@@ -276,6 +288,8 @@
 - `src/lib/storage/note-sync.ts` — note-sync.ts — 端末内/Drive間でノートを欠落させずに和集合マージするロジック
 - `src/lib/storage/storage.test.ts` — storage.test.ts — storage.ts(chrome.storage⇔localStorageフォールバック)の単体テスト
 - `src/lib/storage/storage.ts` — storage.ts — chrome.storage(local) ⇔ localStorage フォールバックの唯一の入出口(GUARDRAILS.md §8.2)
+- `src/lib/storage/tab-session.test.ts` — @vitest-environment jsdom
+- `src/lib/storage/tab-session.ts` — tab-session.ts — 「このタブだけ」の一時設定の唯一の入出口(sessionStorage。GUARDRAILS.md §8.2)
 - `src/newtab/App.tsx` — App.tsx — 新しいタブのルートコンポーネント(SPEC.md準拠の再構築中。M3以降で機能を積み上げる)
 - `src/newtab/components/board/CLAUDE.md`
 - `src/newtab/components/board/ViewportNote.tsx` — ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
@@ -285,6 +299,7 @@
 - `src/newtab/components/notes/BacklinksPanel.tsx` — BacklinksPanel.tsx — 現在のノートへ[[リンク]]しているノート一覧(バックリンク。SPEC.md §7 v1確定)
 - `src/newtab/components/notes/CLAUDE.md`
 - `src/newtab/components/notes/DiffView.tsx` — DiffView.tsx — 2スナップショット間の差分を色分け表示(表示時に算出。SPEC.md §4.3)
+- `src/newtab/components/notes/FixedTagBar.tsx` — FixedTagBar.tsx — 固定タグモードの切替UI(ノート文字サイズと同じ行に置く・ユーザー指示)。
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.test.tsx` — MarkdownPreview.test.tsx — Markdownプレビュー(KaTeX数式 + sanitize)の単体テスト
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
@@ -309,6 +324,7 @@
 - `src/newtab/styles/tokens.css`
 - `src/newtab/useForegroundSync.test.ts` — useForegroundSync.test.ts — 前景復帰で同期をキックするhookの単体テスト
 - `src/newtab/useForegroundSync.ts` — useForegroundSync.ts — タブが前景に戻った時に同期を1回キックするReact hook
+- `src/newtab/useNoteScrollAnchor.ts` — useNoteScrollAnchor.ts — 再配置でノートが動いても「読んでいる位置」を動かさないスクロールアンカー
 - `src/newtab/useSignatureDebouncedEffect.test.ts` — useSignatureDebouncedEffect.test.ts — 署名デバウンスeffectの単体テスト
 - `src/newtab/useSignatureDebouncedEffect.ts` — useSignatureDebouncedEffect.ts — 「値が実際に変わった時だけデバウンスして走らせる」effect
 - `src/offscreen/offscreen.ts` — offscreen.ts — 予定前アラームのループ音再生(SPEC.md §4.11)。停止はbackground.tsが
@@ -724,6 +740,7 @@
 - function getAuthToken
 - function getAuthTokenWithError
 - function invalidateToken
+- function invalidateOnAuthError
 
 ### `src/lib/drive/jsonBackup.ts`
 - type FetchLike
@@ -758,6 +775,12 @@
 - function removeBookmark
 - function sortedBookmarks
 - function reorderBookmarks
+
+### `src/lib/entities/fixedTagPresets.ts`
+- function parseFixedTagInput
+- function addFixedTagPreset
+- function removeFixedTagPreset
+- function activeFixedTags
 
 ### `src/lib/entities/notes.ts`
 - function isNoSyncNote
@@ -801,6 +824,8 @@
 ### `src/lib/entities/tags.ts`
 - function extractTags
 - function resolveNoteTags
+- function normalizeTagName
+- function applyFixedTags
 - function buildTagVocabulary
 
 ### `src/lib/entities/todos.ts`
@@ -945,6 +970,13 @@
 - const SUMMARY_MAX_CHARS
 - function summarizeSnapshot
 
+### `src/lib/history/snapshotCleanup.ts`
+- type SnapshotDedupPlan
+- function planSnapshotDedup
+- function pruneIndexRefs
+- type SnapshotCleanupResult
+- function dedupeStoredSnapshots
+
 ### `src/lib/history/useSnapshotScheduler.ts`
 - function forceSnapshot
 - function useSnapshotScheduler
@@ -1001,7 +1033,19 @@
 - function msUntilNextInterval
 
 ### `src/lib/runtime/log.ts`
+- const SLOW_OP_MS
+- type LogSink
+- function setLogSink
 - function logOp
+
+### `src/lib/runtime/watchdog.ts`
+- type DiagEvent
+- const DIAG_LOG_MAX
+- function startWatchdog
+- function readDiagnostics
+- function clearDiagnostics
+- function formatDiagnosticsLog
+- function summarizeDiagnostics
 
 ### `src/lib/search/diff.ts`
 - type DiffPart
@@ -1020,6 +1064,7 @@
 - type TagCount
 - function tagCounts
 - function filterNotesByTags
+- function filterNotesByFixedTags
 - function relatedTags
 
 ### `src/lib/search/tokenize.ts`
@@ -1042,12 +1087,14 @@
 ### `src/lib/storage/db.ts`
 - function putSnapshot
 - function getSnapshotsByNote
+- function getLatestSnapshot
 - function getAllSnapshots
 - function getSnapshot
 - function deleteSnapshot
 - function markSnapshotArchived
 - function putIndexEntry
 - function getIndexEntry
+- function deleteIndexEntry
 - function getAllIndexEntries
 - function getNasFolderPath
 - function setNasFolderPath
@@ -1061,6 +1108,8 @@
 - function getDriveFolderIds
 - function saveDriveFolderId
 - function clearDriveFolderIds
+- function getDriveSharedFolderChosen
+- function setDriveSharedFolderChosen
 - function deleteDriveFolderId
 - function geminiUsageDateKey
 - function getGeminiUsageCount
@@ -1088,7 +1137,13 @@
 - function loadLocalData
 - function updateLocalData
 - function patchLocalData
+- function loadDiagnosticsLog
+- function saveDiagnosticsLog
 - function subscribeLocalData
+
+### `src/lib/storage/tab-session.ts`
+- function readTabFixedTagPresetId
+- function writeTabFixedTagPresetId
 
 ### `src/newtab/App.tsx`
 - function App
@@ -1110,6 +1165,9 @@
 
 ### `src/newtab/components/notes/DiffView.tsx`
 - function DiffView
+
+### `src/newtab/components/notes/FixedTagBar.tsx`
+- function FixedTagBar
 
 ### `src/newtab/components/notes/HistoryPanel.tsx`
 - function HistoryPanel
@@ -1166,6 +1224,9 @@
 ### `src/newtab/useForegroundSync.ts`
 - function useForegroundSync
 
+### `src/newtab/useNoteScrollAnchor.ts`
+- function useNoteScrollAnchor
+
 ### `src/newtab/useSignatureDebouncedEffect.ts`
 - function useSignatureDebouncedEffect
 
@@ -1173,6 +1234,7 @@
 - type Bookmark
 - type AppLaunch
 - type Settings
+- type FixedTagPreset
 - type SyncData
 - type Note
 - type SpecialItem

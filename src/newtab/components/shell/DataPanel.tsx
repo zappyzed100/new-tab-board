@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { Button, Flex, TextField } from "@radix-ui/themes";
 import {
+  Activity,
   BatteryWarning,
   Bell,
   BellOff,
@@ -20,6 +21,7 @@ import {
   FolderSymlink,
   KeyRound,
   Settings as SettingsIcon,
+  Trash2,
   Upload,
 } from "lucide-react";
 import {
@@ -30,9 +32,17 @@ import {
   saveDriveFolderId,
   setAlarmEnabled,
   setBatteryWebhookConfig,
+  setDriveSharedFolderChosen,
   setGeminiApiKey,
   setNasFolderPath,
 } from "../../../lib/storage/db";
+import { dedupeStoredSnapshots } from "../../../lib/history/snapshotCleanup";
+import {
+  clearDiagnostics,
+  formatDiagnosticsLog,
+  readDiagnostics,
+  summarizeDiagnostics,
+} from "../../../lib/runtime/watchdog";
 import { parseImportPayload } from "../../../lib/fileio/exportImport";
 import { pickAndReadTextFile } from "../../../lib/fileio/fileSystem";
 import { flushAllToNas } from "../../../lib/externalIO/nasArchive";
@@ -68,6 +78,15 @@ type Props = {
   driveConnected: boolean | null;
   /** 接続状態が判明/変化したときにAppへ知らせる(「GDrive設定」での再接続結果を即反映する)。 */
   onDriveConnectionChange: (connected: boolean) => void;
+  /** 保管庫フォルダ/Gemini APIキー/バッテリー中継の設定が変わった時にAppへ知らせる。
+   * Appはヘッダーの常時表示バッジ(未設定の間だけ出す)をこれで更新する——このパネルは
+   * 開いている間しか存在せず、ここだけでstateを持つと閉じるまで/次に開くまでバッジが
+   * 古いままになる(driveConnected/onDriveConnectionChangeと同じ理由)。 */
+  onNasConfiguredChange: (configured: boolean) => void;
+  onGeminiConfiguredChange: (configured: boolean) => void;
+  onBatteryConfiguredChange: (configured: boolean) => void;
+  /** 「共有フォルダを選択」を実行済みかが変わった時にAppへ知らせる(同じ形の3つと同じ理由)。 */
+  onDriveSharedFolderChosenChange: (chosen: boolean) => void;
 };
 
 export function DataPanel({
@@ -80,6 +99,10 @@ export function DataPanel({
   onPushNasActiveNow,
   driveConnected,
   onDriveConnectionChange,
+  onNasConfiguredChange,
+  onGeminiConfiguredChange,
+  onBatteryConfiguredChange,
+  onDriveSharedFolderChosenChange,
 }: Props) {
   const [nasPathInput, setNasPathInput] = useState("");
   // パス入力欄は常時表示だと見苦しいため(ユーザー指摘)、「NASフォルダを設定」を
@@ -100,6 +123,9 @@ export function DataPanel({
   // この端末でアラーム(予定前・バッテリー)を鳴らすか。**端末ローカル設定**(db.ts。settings
   // backup/復元で他PCへ伝播しない)。既定=鳴らす。複数PCで同時に鳴るのを避けたい端末でオフにする。
   const [alarmOn, setAlarmOn] = useState(true);
+  // 履歴の重複掃除: 押す→確認ボタンが出る→実行(履歴を消すので二段クリックにする)。
+  const [cleanupArmed, setCleanupArmed] = useState(false);
+  const [cleaningHistory, setCleaningHistory] = useState(false);
   useEffect(() => {
     // 非対話で問い合わせる——日常の画面表示でOAuthポップアップを出さないため(App.tsxの
     // 突合effectと同じ方針)。結果はAppへ返す(常時表示の警告バッジもこの値で出る)。
@@ -116,6 +142,47 @@ export function DataPanel({
     });
     void getAlarmEnabled().then(setAlarmOn);
   }, []);
+
+  /** 「固まった」の証拠(ウォッチドッグの診断ログ)を人が読める形にしてクリップボードへ。
+   * ノートへ書き出すとNAS/Drive同期や自動タグ付けに乗ってしまうため、貼り付けで渡せる
+   * クリップボードにする(渡し先はチャット/issue)。 */
+  async function handleCopyDiagnostics() {
+    const events = await readDiagnostics();
+    const summary = summarizeDiagnostics(events);
+    try {
+      await navigator.clipboard.writeText(formatDiagnosticsLog(events));
+      onMessage(`${summary} — クリップボードへコピーしました`);
+    } catch (error) {
+      // クリップボードが使えない状況でも、要約だけは画面で読めるようにする。
+      onMessage(`${summary}(コピーに失敗: ${String(error)})`);
+    }
+  }
+
+  /** 診断ログを空にする(ユーザー指示: 拡張を更新した後、古い記録と混ざらないよう
+   * まっさらな状態から検証したい)。過去の記録を消すだけで、以後もウォッチドッグは動き続ける。 */
+  async function handleClearDiagnostics() {
+    await clearDiagnostics();
+    onMessage("診断ログを消去しました");
+  }
+
+  /** 溜まってしまった同一内容の履歴を畳む(2026-07-25の増殖バグの後始末。lib側が正本)。 */
+  async function handleCleanupHistory() {
+    setCleaningHistory(true);
+    onMessage("履歴の重複を掃除しています…");
+    try {
+      const { scanned, removed, indexTokensTouched } = await dedupeStoredSnapshots();
+      onMessage(
+        removed === 0
+          ? `履歴に重複はありませんでした(${scanned}件を確認)`
+          : `重複した履歴を${removed}件削除しました(${scanned}件中・検索索引${indexTokensTouched}件を更新)`,
+      );
+    } catch (error) {
+      onMessage(`履歴の掃除に失敗しました: ${String(error)}`);
+    } finally {
+      setCleaningHistory(false);
+      setCleanupArmed(false);
+    }
+  }
 
   async function handleToggleAlarm() {
     const next = !alarmOn;
@@ -137,6 +204,7 @@ export function DataPanel({
     await setGeminiApiKey(key);
     setGeminiKeyInput("");
     setGeminiKeySet(true);
+    onGeminiConfiguredChange(true);
     setShowGeminiInput(false);
     onMessage("Gemini APIキーを保存しました");
   }
@@ -174,6 +242,8 @@ export function DataPanel({
     }
     await resetDriveFolderCache();
     await saveDriveFolderId("app", picked.id);
+    await setDriveSharedFolderChosen();
+    onDriveSharedFolderChosenChange(true); // 常時表示バッジ(未選択の間だけ出す)を即時反映する
     onMessage(
       `共有フォルダ「${picked.name ?? picked.id}」を選択しました(以後このフォルダを使います)`,
     );
@@ -228,7 +298,7 @@ export function DataPanel({
   async function handleSaveNasPath() {
     const path = nasPathInput.trim();
     if (!path) {
-      onMessage("NASフォルダのパスを入力してください");
+      onMessage("保管庫フォルダのパスを入力してください");
       return;
     }
     // 拡張機能はサンドボックスの都合上パス文字列だけでは読み書きできないため、
@@ -238,14 +308,15 @@ export function DataPanel({
     const reachable = await probeNasPath(path);
     if (!reachable) {
       onMessage(
-        "NASフォルダに到達できませんでした(パスが正しいか、native-host/README.mdの手順で" +
-          "NASブリッジを導入済みか確認してください)",
+        "保管庫フォルダに到達できませんでした(パスが正しいか、native-host/README.mdの手順で" +
+          "保管庫ブリッジを導入済みか確認してください)",
       );
       return;
     }
     await setNasFolderPath(path);
     setShowNasInput(false);
-    onMessage("NASフォルダを設定しました");
+    onNasConfiguredChange(true);
+    onMessage("保管庫フォルダを設定しました");
   }
 
   async function handleSaveBatteryConfig() {
@@ -258,6 +329,7 @@ export function DataPanel({
     await setBatteryWebhookConfig({ url, token });
     setBatteryTokenInput("");
     setBatteryConfigSet(true);
+    onBatteryConfiguredChange(true);
     setShowBatteryInput(false);
     onMessage("バッテリー低下警告の接続設定を保存しました");
   }
@@ -267,7 +339,7 @@ export function DataPanel({
     // 未保管の履歴フラッシュに加え、現在開いているノートもactive/日付フォルダへ即座に反映する
     // (ユーザー指示: ボタンを押した時点で通常のtickを待たずに反映してほしい)。
     await onPushNasActiveNow();
-    onMessage(`NASへ${flushed}件書き出しました(失敗${failed}件)`);
+    onMessage(`保管庫へ${flushed}件書き出しました(失敗${failed}件)`);
   }
 
   return (
@@ -289,31 +361,31 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-flush-nas"
-          title="未保管の履歴を今すぐNASフォルダへ書き出す"
+          title="未保管の履歴を今すぐ保管庫フォルダへ書き出す"
           onClick={() => void handleFlushNow()}
         >
           <Upload size={14} aria-hidden="true" />
-          今すぐNASへ書き出し
+          今すぐ保管庫へ書き出し
         </Button>
         <Button
           type="button"
           variant="soft"
           data-testid="data-restore-from-nas"
-          title="NASに保存された設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/スペシャル/タグ候補。notesは対象外)から復元する"
+          title="保管庫に保存された設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/お気に入り/タグ候補。notesは対象外)から復元する"
           onClick={onRestoreFromNas}
         >
           <CloudDownload size={14} aria-hidden="true" />
-          NASから復元
+          保管庫から復元
         </Button>
         <Button
           type="button"
           variant="soft"
           data-testid="data-backup-to-drive"
-          title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへ退避する"
+          title="現在の全データ(ノート/ブックマーク/設定/TODO)を今すぐGoogle Driveへバックアップする"
           onClick={onBackupToDrive}
         >
           <CloudUpload size={14} aria-hidden="true" />
-          Driveへ退避
+          今すぐDriveへバックアップ
         </Button>
         <Button
           type="button"
@@ -329,17 +401,17 @@ export function DataPanel({
           type="button"
           variant={showNasInput ? "solid" : "soft"}
           data-testid="data-set-nas-folder"
-          title="履歴の長期保管先(NASの共有フォルダ等)のパスを設定する"
+          title="履歴の長期保管先(共有フォルダ等)のパスを設定する"
           onClick={() => setShowNasInput((v) => !v)}
         >
           <FolderOpen size={14} aria-hidden="true" />
-          NASフォルダを設定
+          保管庫フォルダを設定
         </Button>
         {showNasInput ? (
           <>
             <TextField.Root
-              aria-label="NASフォルダのパス"
-              placeholder="例: Z:\NAS\backup"
+              aria-label="保管庫フォルダのパス"
+              placeholder="例: Z:\保管庫\backup"
               data-testid="data-nas-path-input"
               autoFocus
               value={nasPathInput}
@@ -485,6 +557,70 @@ export function DataPanel({
           )}
           {alarmOn ? "アラーム: この端末で鳴らす" : "アラーム: この端末では鳴らさない"}
         </Button>
+        {/* 「ブラウザが止まった」の証拠を渡すための書き出し(常駐ウォッチドッグが記録している)。
+            止まった直後でも、復帰後に読めば「何秒止まったか・その時の資源量」が残っている。 */}
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-copy-diagnostics"
+          title="固まった時の記録(主スレッドが止まっていた時間・その時のノート数/エディタ数/メモリ)をクリップボードへコピーする。ノート本文は含みません"
+          onClick={() => void handleCopyDiagnostics()}
+        >
+          <Activity size={14} aria-hidden="true" />
+          診断ログをコピー
+        </Button>
+        {/* 拡張を更新した後、古い記録(修正前の挙動)と混ざらないよう空にする(ユーザー指示)。
+            コピーではなく削除なので確認は挟まない——履歴の重複掃除と違い元に戻す価値のある
+            データではなく、単なる調査用ログのため。 */}
+        <Button
+          type="button"
+          variant="soft"
+          color="gray"
+          data-testid="data-clear-diagnostics"
+          title="蓄積した診断ログを消去する(拡張を更新した後、まっさらな状態から検証したい時に)"
+          onClick={() => void handleClearDiagnostics()}
+        >
+          診断ログを消去
+        </Button>
+        {/* 2026-07-25以前に「ペインがマウントしただけ」で積まれた同一内容の履歴を一度だけ畳む
+            (原因側は修正済みだが、既に溜まった分は消えない)。**履歴を消す操作**なので、
+            NASフォルダ設定と同じ二段クリック(押す→確認が出る)にする。window.confirmは
+            このアプリのどこでも使っていないので、既存の展開型の作法に合わせる。 */}
+        <Button
+          type="button"
+          variant={cleanupArmed ? "solid" : "soft"}
+          data-testid="data-cleanup-history"
+          title="同じ内容が連続して重複保存されている履歴を1件に畳む(内容が変わっている履歴・保管庫へ保管済みの履歴は消しません)"
+          disabled={cleaningHistory}
+          onClick={() => setCleanupArmed((v) => !v)}
+        >
+          <Trash2 size={14} aria-hidden="true" />
+          {cleaningHistory ? "履歴を掃除中…" : "履歴の重複を掃除"}
+        </Button>
+        {cleanupArmed ? (
+          <>
+            <Button
+              type="button"
+              color="red"
+              data-testid="data-cleanup-history-run"
+              title="連続して同じ内容の履歴を1件だけ残して削除する(元に戻せません)"
+              disabled={cleaningHistory}
+              onClick={() => void handleCleanupHistory()}
+            >
+              重複を削除する(戻せません)
+            </Button>
+            <Button
+              type="button"
+              variant="soft"
+              color="gray"
+              data-testid="data-cleanup-history-cancel"
+              disabled={cleaningHistory}
+              onClick={() => setCleanupArmed(false)}
+            >
+              やめる
+            </Button>
+          </>
+        ) : null}
       </div>
     </Flex>
   );

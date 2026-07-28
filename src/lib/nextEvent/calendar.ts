@@ -9,11 +9,13 @@ export type FetchLike = typeof fetch;
 export type NextEvent = {
   title: string;
   startsAt: number; // epoch ms
+  endsAt?: number; // epoch ms(end.dateTimeが取れない異常系ではundefined)
 };
 
 type GCalEvent = {
   summary?: string;
   start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
 };
 
 /** 次の予定(終日を除く直近の1件)を取得する。予定が無ければnull。 */
@@ -46,5 +48,6 @@ export async function fetchNextEvent(
   return {
     title: next.summary ?? "(無題の予定)",
     startsAt: new Date(next.start.dateTime).getTime(),
+    endsAt: next.end?.dateTime ? new Date(next.end.dateTime).getTime() : undefined,
   };
 }

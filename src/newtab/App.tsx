@@ -12,6 +12,7 @@ import {
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
   AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowUp as ArrowUpIcon,
   BatteryWarning,
@@ -20,11 +21,14 @@ import {
   ChevronDown,
   ChevronUp,
   CloudOff,
+  FolderSymlink,
   Keyboard,
+  KeyRound,
   Search,
   StickyNote,
   Tag,
   Wrench,
+  WrapText,
 } from "lucide-react";
 import { useForegroundSync } from "./useForegroundSync";
 import { BookmarkGrid } from "./components/shell/BookmarkGrid";
@@ -38,6 +42,8 @@ import { EditingSeamProvider, useEditingSeam } from "./components/notes/editing-
 import { ViewportNote } from "./components/board/ViewportNote";
 import { ShortcutsModal } from "./components/discovery/ShortcutsModal";
 import { TagSearchPanel } from "./components/discovery/TagSearchPanel";
+import { useNoteScrollAnchor } from "./useNoteScrollAnchor";
+import { FixedTagBar } from "./components/notes/FixedTagBar";
 import { ThemeToggle } from "./components/shell/ThemeToggle";
 import { TodoList } from "./components/shell/TodoList";
 import { TagCandidatesPanel } from "./components/shell/TagCandidatesPanel";
@@ -69,6 +75,7 @@ import {
   ensureTrailingEmptyNotes,
   excludeNoSyncNotes,
   isDefaultNoteTitle,
+  isGeneratedEmptyPlaceholder,
   nextNoteOrder,
   pasteResultsIntoNotes,
   moveNoteDown,
@@ -93,7 +100,13 @@ import {
   pushSettingsBackupToNas,
 } from "../lib/externalIO/settingsBackupSync";
 import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/fileio/settingsBackup";
-import { geminiUsageDateKey, getGeminiApiKey, getGeminiUsageCount } from "../lib/storage/db";
+import {
+  geminiUsageDateKey,
+  getBatteryWebhookConfig,
+  getDriveSharedFolderChosen,
+  getGeminiApiKey,
+  getGeminiUsageCount,
+} from "../lib/storage/db";
 import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildTagVocabulary } from "../lib/entities/tags";
@@ -104,10 +117,14 @@ import {
   SHORTCUT_REGISTRY,
 } from "../lib/shortcuts/shortcuts";
 import { replaceInNotes } from "../lib/search/noteSearch";
+import { filterNotesByFixedTags } from "../lib/search/tagSearch";
+import { activeFixedTags } from "../lib/entities/fixedTagPresets";
+import { readTabFixedTagPresetId, writeTabFixedTagPresetId } from "../lib/storage/tab-session";
 import { resolveTheme } from "../lib/display/theme";
 import { clampNoteFontSize, NOTE_FONT_DEFAULT, NOTE_FONT_STEP } from "../lib/display/noteFont";
 import { now as clockNow } from "../lib/runtime/clock";
 import { logOp } from "../lib/runtime/log";
+import { startWatchdog } from "../lib/runtime/watchdog";
 import { computeCountdown, formatCountdown } from "../lib/nextEvent/nextEventCountdown";
 import {
   flushAllToNas,
@@ -187,6 +204,25 @@ export function App() {
   // かった(googleAuth.tsのヘッダー参照)。**折りたたみ式のDataPanel内に置くと、開くまで警告が
   // 出ず早期警告にならない**ため、Appが持ってヘッダー(常時表示)へ出す。
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+  // 保管庫フォルダ/Gemini APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
+  // 出さない)。ユーザー指示「各機能未接続状態が見えるようにしよう」——これらはDataPanel内の
+  // ローカル state だけで持っていたため、パネルを開くまで未設定に気づけなかった(Driveの
+  // 上のコメントと同じ理由でAppへ引き上げる)。いずれもchrome.storage/IndexedDBのローカル読み
+  // だけで、OAuthポップアップ等の対話を伴わないため起動時に毎回確認してよい(Driveのトークン
+  // 確認とは違い非対話性を気にする必要が無い)。
+  const [nasConfigured, setNasConfigured] = useState<boolean | null>(null);
+  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [batteryConfigured, setBatteryConfigured] = useState<boolean | null>(null);
+  // 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。上の3つと同じ理由・
+  // 同じ形でAppへ引き上げる(ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため
+  // Driveの警告(orange)とは性質が違う——他の3つと同じgray/softの情報表示にする。
+  const [driveSharedFolderChosen, setDriveSharedFolderChosen] = useState<boolean | null>(null);
+  useEffect(() => {
+    void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
+    void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
+    void getBatteryWebhookConfig().then((config) => setBatteryConfigured(Boolean(config)));
+    void getDriveSharedFolderChosen().then(setDriveSharedFolderChosen);
+  }, []);
   const [nextEventCache, setNextEventCache] = useState<LocalData["nextEventCache"]>(undefined);
   const [alarmActive, setAlarmActive] = useState(false);
   // スマホのバッテリー低下警告(GAS Web App中継)が鳴動中か(ユーザー指示: New Tab Boardに
@@ -609,6 +645,11 @@ export function App() {
         setNextEventCache(local.nextEventCache);
         setAlarmActive(local.alarmActive ?? false);
         setBatteryAlarmActive(local.batteryAlarmActive ?? false);
+        // background.tsのrunDriveNoteSyncが5分毎に実トークン取得の成否を記録している。
+        // undefined(background側がまだ一度も書いていない起動直後)は無視し、タブ読み込み時の
+        // runDriveSyncTickによる初回判定値をそのまま初期表示に使う——「接続が一度失敗すると
+        // タブを開いている間ずっと未接続表示のまま」を防ぐのがこの反映の目的。
+        if (local.driveConnected !== undefined) setDriveConnected(local.driveConnected);
       });
     }, 30_000);
     return () => clearInterval(interval);
@@ -645,13 +686,61 @@ export function App() {
   // notes/syncがnullの間もHooksは同じ順番で呼ぶ必要があるため、早期returnより前に
   // (SPEC.md §4.6の単一レジストリを)構築する。中身が空でも安全なようbuild*関数側でガードする。
   const orderedNotes = useMemo(() => (notes ? sortedNotes(notes) : []), [notes]);
-  const noteLinearIndices = useMemo(
-    () => new Map(orderedNotes.map((note, index) => [note.id, index])),
-    [orderedNotes],
-  );
   const orderedBookmarks = useMemo(() => (sync ? sortedBookmarks(sync.bookmarks) : []), [sync]);
   // タグ候補(TODOリスト下で管理・LLMのタグ推定へ渡す優先候補)。設定にsync/バックアップされる。
   const tagCandidates = sync?.settings.tagCandidates ?? [];
+  // 固定タグモード(ユーザー指示): 選択中プリセットのタグを全て持つノートだけを盤面に出し、
+  // 編集を終えたノートへそのタグを付ける。tags が空ならモードOFF(全件表示・付与もしない)。
+  // 登録(プリセット)は全タブ共有の設定、**選択はこのタブだけ**(ユーザー指示: タブ毎に
+  // 切り替えたい)。選択idを設定へ入れると、あるタブでの切替が全タブへ伝播してしまう。
+  // sessionStorageならタブごとに独立し、そのタブのリロードでは維持される。
+  const fixedTagPresets = useMemo(() => sync?.settings.fixedTagPresets ?? [], [sync]);
+  const [activeFixedTagPresetId, setActiveFixedTagPresetId] = useState(readTabFixedTagPresetId);
+  const fixedTags = useMemo(
+    () => activeFixedTags(fixedTagPresets, activeFixedTagPresetId),
+    [fixedTagPresets, activeFixedTagPresetId],
+  );
+  const selectFixedTagPreset = useCallback((presetId: string) => {
+    setActiveFixedTagPresetId(presetId);
+    writeTabFixedTagPresetId(presetId);
+  }, []);
+  // 編集中(フォーカス中)のノートid。固定タグはblurで付くため、編集中のノートはまだ条件を
+  // 満たさない——絞り込みの素通し対象にしないと、空ノートへ1文字目を打った瞬間に自分が
+  // 盤面から消える。seam の editingIdsRef は ref(非反応的)なので、描画に効くこちらを別に持つ。
+  const [editingNoteIds, setEditingNoteIds] = useState<ReadonlySet<string>>(new Set());
+  // モードOFFの間は誰も編集中集合を更新しない(NoteEditorPaneがOFF時は通知しない——
+  // 使っていない機能のために毎フォーカスでApp全体を再レンダしないため)。切り替えた瞬間に
+  // 集合ごと捨てて、次にONにした時へ古いidを持ち越さない。
+  useEffect(() => {
+    if (fixedTags.length === 0) setEditingNoteIds((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [fixedTags]);
+  const handleEditingChange = useCallback((noteId: string, editing: boolean) => {
+    setEditingNoteIds((prev) => {
+      if (prev.has(noteId) === editing) return prev;
+      const next = new Set(prev);
+      if (editing) next.add(noteId);
+      else next.delete(noteId);
+      return next;
+    });
+  }, []);
+  // 盤面に出すノート。固定タグモードOFF(fixedTags が空)なら orderedNotes をそのまま返す。
+  // 素通しするのは「末尾の空プレースホルダ(ここから書き始める)」と「編集中(blurで初めて
+  // タグが付くため、まだ条件を満たさない)」の2種だけ。**選択中(activeNoteId)は素通ししない**
+  // ——条件を満たさないノートが1件だけ盤面に残り続け、絞り込みの意味が壊れる。
+  const visibleNotes = useMemo(() => {
+    if (fixedTags.length === 0) return orderedNotes;
+    const exempt = new Set(editingNoteIds);
+    for (const note of orderedNotes) {
+      if (isGeneratedEmptyPlaceholder(note)) exempt.add(note.id);
+    }
+    return filterNotesByFixedTags(orderedNotes, fixedTags, exempt);
+  }, [orderedNotes, fixedTags, editingNoteIds]);
+  // 論理順序(data-linear-index)は**盤面に出ている列**での位置。実測masonryは列配置を高さで
+  // 決めるため列レイアウトから順序を復元できず、E2Eはこの属性で順序を読む(notes/CLAUDE.md)。
+  const noteLinearIndices = useMemo(
+    () => new Map(visibleNotes.map((note, index) => [note.id, index])),
+    [visibleNotes],
+  );
   // ノートボードの列数を画面幅から決める(概ね1列280px。最大3列)。実測masonryでは各列の
   // 高さを比べて振り分けるため、列数はJSで知っている必要がある。
   const [columnCount, setColumnCount] = useState(() => noteColumnCountFor(window.innerWidth));
@@ -683,7 +772,8 @@ export function App() {
     const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
     const heights = new Array(columnCount).fill(0);
     const placement = new Map<string, { column: number; top: number }>();
-    for (const note of orderedNotes) {
+    // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
+    for (const note of visibleNotes) {
       let min = 0;
       for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
       placement.set(note.id, { column: min, top: heights[min] });
@@ -692,7 +782,11 @@ export function App() {
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
     return { placement, boardHeight };
-  }, [orderedNotes, columnCount, noteHeights]);
+  }, [visibleNotes, columnCount, noteHeights]);
+  // 再配置で読んでいる位置が動かないようにスクロールを補正する(ユーザー報告・2026-07-27:
+  // 長いノートを読み下げると配置が変わって読みづらい)。高さの確定・件数の増減・列数の変化を
+  // 問わず、再配置の直後にアンカーノートの画面位置を保つ。
+  useNoteScrollAnchor(noteLayout);
 
   // 全データ(ブックマーク/ノート/設定/TODO/スペシャル)のJSONバックアップをdebounce付きで
   // 自動的にDriveへ同期する(ボタン操作不要。ノート本文の自動同期と同じ頻度・同じ設計思想)。
@@ -758,6 +852,21 @@ export function App() {
     ),
   });
 
+  // 「固まった」の証拠を残す常駐ウォッチドッグ(ユーザー要望・2026-07-26)。心拍の遅れ=主スレッドが
+  // 止まっていた時間を、復帰した瞬間に chrome.storage.local のリングバッファへ残す。sampleは
+  // アプリ固有の数値だけを渡す(本文・タイトル・タグは入れない——AGENTS.md §7 秘匿)。
+  // notes/sync はrefで読む: 依存に入れるとノート編集のたびにウォッチドッグを張り直してしまう。
+  const watchdogSampleRef = useRef<() => Record<string, number | string | boolean>>(() => ({}));
+  watchdogSampleRef.current = () => ({
+    notes: notes?.length ?? 0,
+    visibleNotes: visibleNotes.length,
+    todos: todos.length,
+    specialItems: specialItems.length,
+    wrapLines,
+    fixedTags: fixedTags.length,
+  });
+  useEffect(() => startWatchdog(() => watchdogSampleRef.current()), []);
+
   // 「既に開いている状態でCmd/Ctrl+Fを再度押す」場合の再フォーカス用(このeffectは
   // ref.currentが既に存在する時だけ意味を持つ)。初回オープン時(SearchPanelはlazy+
   // Suspenseのため非同期マウント)のフォーカスはこのeffectのタイミングに間に合わない
@@ -770,6 +879,8 @@ export function App() {
   // ノート本文の文字サイズ(px)をCSS変数--note-font-sizeへ流し込む(styles/components.cssの.cm-editorが参照)。
   // ノート以外のUI文字には影響しない(ユーザー指示)。未設定なら既定値。
   const noteFontSize = clampNoteFontSize(sync?.settings.noteFontSize ?? NOTE_FONT_DEFAULT);
+  // 本文の折り返し(ユーザー指示: ボタン一つで切り替える)。未設定はCM6既定=折り返さない。
+  const wrapLines = sync?.settings.noteWrapLines ?? false;
   useEffect(() => {
     document.documentElement.style.setProperty("--note-font-size", `${noteFontSize}px`);
   }, [noteFontSize]);
@@ -989,7 +1100,7 @@ export function App() {
     const relPath = await noteImages.attach(noteId, blob);
     if (relPath === null) {
       setDataPanelMessage(
-        "画像を保存できませんでした(NASフォルダが未設定か、NASブリッジへ接続できません)",
+        "画像を保存できませんでした(保管庫フォルダが未設定か、保管庫ブリッジへ接続できません)",
       );
       return null;
     }
@@ -1062,7 +1173,7 @@ export function App() {
     setTagging(false);
     setDataPanelMessage(
       `タグ付け完了: ${done}件に付与(未変更でスキップ${all.length - targetCount}件` +
-        `${junkCount > 0 ? `・ゴミ判定${junkCount}件はNAS保管対象外` : ""})`,
+        `${junkCount > 0 ? `・ゴミ判定${junkCount}件は保管庫の保管対象外` : ""})`,
     );
     // タグが付いたノートを次の5分ティックまで待たせず即座にNAS/Driveへ反映する(ユーザー指示:
     // タグ付けボタンを押したものは待たずに保存対象にしてほしい)。「今すぐNASへ書き出し」/
@@ -1113,7 +1224,7 @@ export function App() {
     // 更新するため、クロージャに閉じ込められたbackupJson(useMemo)はタグ付け前のスナップショット
     // のまま古くなる——refsから読み直して最新のタグを含んだJSONを組み直す。
     await tagAllNotes();
-    setDataPanelMessage("Google Driveへ退避中…");
+    setDataPanelMessage("Google Driveへバックアップ中…");
     const freshBackupJson = sync
       ? serializeExport(
           buildExportPayload(
@@ -1143,19 +1254,19 @@ export function App() {
       // 取得済みのはず)を使い回す。
       const token = await getAuthToken(false);
       if (token) await pushDriveActiveNow(token);
-      setDataPanelMessage("Google Driveへ退避しました(以後の変更は自動でも同期されます)");
+      setDataPanelMessage("Google Driveへバックアップしました(以後の変更は自動でも同期されます)");
     } else if (result.status === "unauthenticated") {
       setDataPanelMessage(
         "Googleアカウントにログインできませんでした(「GDrive設定」から接続してください)",
       );
     } else if (result.status === "skipped-empty-guard") {
       setDataPanelMessage(
-        "ブックマークが空のためDriveへの退避を安全のため中止しました" +
+        "ブックマークが空のためDriveへのバックアップを安全のため中止しました" +
           "(既存のDriveバックアップにはブックマークが残っています。" +
           "手元のブックマークが正しいか確認してからもう一度お試しください)",
       );
     } else {
-      setDataPanelMessage("Driveへの退避に失敗しました");
+      setDataPanelMessage("Driveへのバックアップに失敗しました");
     }
   }
 
@@ -1164,11 +1275,11 @@ export function App() {
   // NASからも復元できるように)。notesはNAS active の世代同期(pullActiveFromNas)が別途担う
   // ため、ここでは触らない——2つの復元経路を混ぜるとどちらが正かが曖昧になる。
   async function handleRestoreFromNas() {
-    setDataPanelMessage("NASから復元中…");
+    setDataPanelMessage("保管庫から復元中…");
     const payload = await pullSettingsBackupFromNas();
     if (!payload) {
       setDataPanelMessage(
-        "NASに設定バックアップがまだありません(NAS未設定か、まだ一度も保存されていません)",
+        "保管庫に設定バックアップがまだありません(保管庫未設定か、まだ一度も保存されていません)",
       );
       return;
     }
@@ -1187,7 +1298,7 @@ export function App() {
       specialItems: payload.specialItems,
       specialFolders: payload.specialFolders,
     });
-    setDataPanelMessage("NASから復元しました(ノートは対象外——NASの世代同期が別途復元します)");
+    setDataPanelMessage("保管庫から復元しました(ノートは対象外——保管庫の世代同期が別途復元します)");
   }
 
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
@@ -1381,7 +1492,7 @@ export function App() {
                       title={
                         showDataPanel
                           ? "データ操作パネルを閉じる"
-                          : "データ操作パネルを開く(ファイルを開く/Drive・NAS操作など)"
+                          : "データ操作パネルを開く(ファイルを開く/Drive・保管庫操作など)"
                       }
                       onClick={() => setShowDataPanel((v) => !v)}
                     >
@@ -1409,6 +1520,70 @@ export function App() {
                       >
                         <CloudOff size={14} aria-hidden="true" />
                         Drive未接続
+                      </Button>
+                    ) : null}
+                    {/* 保管庫/Gemini/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
+                        「各機能未接続状態が見えるようにしよう」)。Driveの警告(壊れた/orange)とは
+                        性質が違う——これらは任意機能で「使わない」選択もありうるため、常時警告色
+                        にはせず控えめなgray/softにする。押すとDataPanelが開き該当欄へ誘導する。
+                        未判定(null)の間は何も出さない(平常時に雑音を足さない、の方針を踏襲)。 */}
+                    {nasConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="nas-unconfigured-badge"
+                        title="保管庫フォルダが未設定です。履歴の長期保管・画像添付・保管庫検索が使えません。押すとデータ操作パネルが開くので「保管庫フォルダを設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <Archive size={14} aria-hidden="true" />
+                        保管庫未設定
+                      </Button>
+                    ) : null}
+                    {geminiConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="gemini-unconfigured-badge"
+                        title="Gemini APIキーが未設定です。タグ付け/要約/TODO抽出が使えません。押すとデータ操作パネルが開くので「Gemini APIキーを設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <KeyRound size={14} aria-hidden="true" />
+                        Gemini未設定
+                      </Button>
+                    ) : null}
+                    {batteryConfigured === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="battery-unconfigured-badge"
+                        title="GAS連携(バッテリー低下警告のGoogle Apps Script中継)が未設定です。スマホからの中継通知を受け取れません。押すとデータ操作パネルが開くので「バッテリー通知を設定」から設定してください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <BatteryWarning size={14} aria-hidden="true" />
+                        GAS連携未設定
+                      </Button>
+                    ) : null}
+                    {/* 「共有フォルダを選択」の未実行(=自動作成フォルダを使用中)も同じ場所に出す
+                        (ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため、他の3つと
+                        同じ情報表示(gray/soft)にする——Driveの警告(orange)とは性質が違う。 */}
+                    {driveSharedFolderChosen === false ? (
+                      <Button
+                        type="button"
+                        variant="soft"
+                        color="gray"
+                        size="2"
+                        data-testid="drive-shared-folder-unchosen-badge"
+                        title="共有フォルダが未選択です(自動作成フォルダを使用中)。複数アプリでフォルダを共有したい場合は、押すとデータ操作パネルが開くので「共有フォルダを選択」から選んでください"
+                        onClick={() => setShowDataPanel(true)}
+                      >
+                        <FolderSymlink size={14} aria-hidden="true" />
+                        共有フォルダ未選択
                       </Button>
                     ) : null}
                     {/* ヘルプ系は使用頻度が低いため、日常操作のボタンより右に置く(ユーザー指示)。 */}
@@ -1439,6 +1614,10 @@ export function App() {
                 onPushNasActiveNow={pushNasActiveNow}
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}
+                onNasConfiguredChange={setNasConfigured}
+                onGeminiConfiguredChange={setGeminiConfigured}
+                onBatteryConfiguredChange={setBatteryConfigured}
+                onDriveSharedFolderChosenChange={setDriveSharedFolderChosen}
               />
             ) : null}
 
@@ -1488,8 +1667,10 @@ export function App() {
                 {/* タブバーと全文検索は、下へスクロールしても上端に貼り付いて追従する
                     (position:sticky。ユーザー指示)。2つをまとめて1つのstickyヘッダにする。 */}
                 <div className="note-sticky-head" data-testid="note-sticky-head">
-                  {/* ノート本文の文字サイズを一括調整する(A-/A+。ノート以外の文字には効かない)。 */}
-                  <Flex align="center" gap="2" className="note-font-toolbar">
+                  {/* ノート本文の文字サイズを一括調整する(A-/A+。ノート以外の文字には効かない)。
+                      固定タグの切替も同じ行に置く(ユーザー指示: この行が余っている)。項目が増えて
+                      横に収まらない画面幅では折り返す(wrap)。 */}
+                  <Flex align="center" gap="2" wrap="wrap" className="note-font-toolbar">
                     <Text size="1" color="gray">
                       ノート文字サイズ
                     </Text>
@@ -1516,6 +1697,31 @@ export function App() {
                     >
                       A＋
                     </Button>
+                    {/* 本文の折り返し(幅固定)をボタン一つで切り替える(ユーザー指示)。
+                        設定に保存されるので次に開いたタブにも効く。 */}
+                    <Button
+                      type="button"
+                      variant={wrapLines ? "solid" : "soft"}
+                      size="1"
+                      data-testid="note-wrap-toggle"
+                      aria-pressed={wrapLines}
+                      title={
+                        wrapLines
+                          ? "折り返しを解除する(長い行は横スクロールになる)"
+                          : "ペイン幅で折り返す(長い行が右へ流れなくなる)"
+                      }
+                      onClick={() => updateSettings({ noteWrapLines: !wrapLines })}
+                    >
+                      <WrapText size={14} aria-hidden="true" />
+                      折り返し
+                    </Button>
+                    <FixedTagBar
+                      presets={fixedTagPresets}
+                      activePresetId={activeFixedTagPresetId}
+                      activeTags={fixedTags}
+                      onPresetsChange={(next) => updateSettings({ fixedTagPresets: next })}
+                      onActivePresetChange={selectFixedTagPreset}
+                    />
                     <Button
                       type="button"
                       variant="soft"
@@ -1552,12 +1758,14 @@ export function App() {
                       size="1"
                       data-testid="toggle-tag-search-panel"
                       title={
-                        showTagSearchPanel ? "NAS検索を閉じる" : "NAS検索を開く(タグ・本文・期間)"
+                        showTagSearchPanel
+                          ? "保管庫検索を閉じる"
+                          : "保管庫検索を開く(タグ・本文・期間)"
                       }
                       onClick={() => setShowTagSearchPanel((v) => !v)}
                     >
                       <Tag size={14} aria-hidden="true" />
-                      NAS検索
+                      保管庫検索
                       {showTagSearchPanel ? (
                         <ChevronUp size={14} aria-hidden="true" />
                       ) : (
@@ -1601,7 +1809,7 @@ export function App() {
                         } as CSSProperties
                       }
                     >
-                      {orderedNotes.map((note) => (
+                      {visibleNotes.map((note) => (
                         <ViewportNote
                           key={note.id}
                           noteId={note.id}
@@ -1620,8 +1828,8 @@ export function App() {
                             notes={notes}
                             tagCandidates={tagCandidates}
                             isActive={note.id === activeNoteId}
-                            isFirst={orderedNotes[0]?.id === note.id}
-                            isLast={orderedNotes[orderedNotes.length - 1]?.id === note.id}
+                            isFirst={visibleNotes[0]?.id === note.id}
+                            isLast={visibleNotes[visibleNotes.length - 1]?.id === note.id}
                             autoFocus={note.id === activeNoteId && userSelectedNoteRef.current}
                             manualSyncSignal={manualSyncSignal}
                             replaceContentVersion={
@@ -1640,6 +1848,9 @@ export function App() {
                             onMoveDown={moveNoteDownOne}
                             onDragStartNote={handleNoteDragStart}
                             onDropNote={handleNoteDrop}
+                            wrapLines={wrapLines}
+                            fixedTags={fixedTags}
+                            onEditingChange={handleEditingChange}
                             noteImageUrls={noteImages.urls}
                             onAttachImage={attachNoteImage}
                           />

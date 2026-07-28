@@ -166,6 +166,20 @@
   font-size: var(--note-font-size, 13px);
 }
 
+/* 固定タグのプリセット切替(ノート文字サイズと同じ行)。ネイティブ<select>なので、
+   テーマの色とRadixのsize=1相当の高さへ明示的に合わせる(既定のままだとダークテーマで
+   白背景のまま残る)。 */
+.fixed-tag-select {
+  height: 24px;
+  max-width: 12rem;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
 /* CM6の既定文字色をブラウザ任せにするとダークテーマでも黒のまま残り、本文DOMは存在するのに
    背景へ溶けて見えなくなる。エディタ本文をアプリのテーマ文字色へ明示的に追従させる。 */
 [data-testid="notepad-editor"] .cm-content {
