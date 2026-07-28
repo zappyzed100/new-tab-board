@@ -275,3 +275,73 @@ test("下スクロールで読み進めた後、上スクロールで戻って�
   const upJump = await sweep("up", 300);
   expect(upJump).toBeLessThan(MAX_ALLOWED_JUMP_PX);
 });
+
+test("上スクロール中にノート同士の列(data-column-index)が入れ替わらない(2026-07-29の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 200件のスクロールを2方向行うため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "light",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: heterogeneousNotes(200) },
+  );
+
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+
+  // 下方向に読み進めて既読状態を作る。
+  for (let i = 0; i < 300; i++) {
+    await page.mouse.wheel(0, 100);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+
+  /** 現在画面上に存在する全`.note-cell`のnoteId→列番号。 */
+  async function columnsOf(): Promise<Record<string, string | undefined>> {
+    return page.evaluate(() => {
+      const cells = document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]");
+      const out: Record<string, string | undefined> = {};
+      for (const cell of cells) out[cell.dataset.noteId ?? ""] = cell.dataset.columnIndex;
+      return out;
+    });
+  }
+
+  // 上方向へ戻りながら、毎ステップ各ノートの列番号が直前と変わっていないか監視する
+  // (既読ノートの再マウントで高さが多少ぶれても、列を跨いで飛ばないことを検査したい)。
+  const knownColumns = await columnsOf();
+  let columnSwaps = 0;
+  for (let i = 0; i < 300; i++) {
+    await page.mouse.wheel(0, -100);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+    const cols = await columnsOf();
+    for (const [id, col] of Object.entries(cols)) {
+      if (knownColumns[id] !== undefined && knownColumns[id] !== col) columnSwaps++;
+      knownColumns[id] = col;
+    }
+    const scrollY = await page.evaluate(() => window.scrollY);
+    if (scrollY <= 0) break;
+  }
+
+  expect(columnSwaps).toBe(0);
+});

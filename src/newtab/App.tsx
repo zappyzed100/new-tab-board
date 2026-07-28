@@ -805,17 +805,40 @@ export function App() {
   // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
   // CodeMirrorが破棄され「入力中にカーソルが飛び以降の打鍵が消える」実害が出ていた(2026-07-23)。
   // 親が変わらなければ配置が変わってもCM6は生き続ける——position/top/leftだけが変わる。
+  // ノートの列(column)割り当てはスティッキーにする(初回だけ決め、以降は固定)。素の貪欲法
+  // (毎回「その時点で一番低い列」を選び直す)は、あるノートの高さが後から変わると、それより
+  // 後ろ(リスト順で後)の全ノートの列選択が玉突きで変わりうる——窓化の再マウントで既読ノートの
+  // 高さが多少ぶれるだけでも、ノート同士が列を跨いで入れ替わって見える実害があった
+  // (ユーザー報告・2026-07-29「下から上に読む時にノートの並び順/列が入れ替わる」)。
+  // 一度割り当てた列は固定し、その列内での縦位置(top)だけを現在の高さで再計算する——これなら
+  // 高さの変化はその列の中で完結し、他のノートを別の列へ飛ばさない。
+  // ノート集合/順序(id列)か列数が変わった時だけ、割り当てを作り直す。
+  const columnAssignmentRef = useRef<Map<string, number>>(new Map());
+  const columnAssignmentKeyRef = useRef<string>("");
   const noteLayout = useMemo(() => {
     const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
     const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
+
+    const idsKey = `${columnCount}|${visibleNotes.map((n) => n.id).join(",")}`;
+    if (columnAssignmentKeyRef.current !== idsKey) {
+      columnAssignmentRef.current = new Map();
+      columnAssignmentKeyRef.current = idsKey;
+    }
+    const columnOf = columnAssignmentRef.current;
+
     const heights = new Array(columnCount).fill(0);
     const placement = new Map<string, { column: number; top: number }>();
     // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
     for (const note of visibleNotes) {
-      let min = 0;
-      for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
-      placement.set(note.id, { column: min, top: heights[min] });
-      heights[min] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
+      let column = columnOf.get(note.id);
+      if (column === undefined || column >= columnCount) {
+        let min = 0;
+        for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
+        column = min;
+        columnOf.set(note.id, column);
+      }
+      placement.set(note.id, { column, top: heights[column] });
+      heights[column] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
     }
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
