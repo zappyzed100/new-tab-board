@@ -1914,6 +1914,7 @@ export function App() {
                             onEditingChange={handleEditingChange}
                             noteImageUrls={noteImages.urls}
                             onAttachImage={attachNoteImage}
+                            estimatedHeight={noteHeights.get(note.id)}
                           />
                         </ViewportNote>
                       ))}

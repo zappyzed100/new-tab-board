@@ -131,6 +131,9 @@ type Props = {
   noteImageUrls?: ReadonlyMap<string, string>;
   /** 画像の貼り付け/ドロップをNASへ保存し、本文へ挿入する参照テキストを返す(失敗はnull)。 */
   onAttachImage?: (noteId: string, blob: Blob) => Promise<string | null>;
+  /** 実測済みのノート全体の高さ(App.tsxのnoteHeights)。Notepadの初期プレースホルダーへ
+   * そのまま引き継ぐ(Notepad.tsxのProps.estimatedHeightのコメント参照)。 */
+  estimatedHeight?: number;
 };
 
 export function NoteEditorPane({
@@ -161,6 +164,7 @@ export function NoteEditorPane({
   onEditingChange,
   noteImageUrls,
   onAttachImage,
+  estimatedHeight,
 }: Props) {
   const [showPreview, setShowPreview] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -714,6 +718,7 @@ export function NoteEditorPane({
               }
               autoFocus={autoFocus}
               wrapLines={wrapLines}
+              estimatedHeight={estimatedHeight}
               onFocus={() => {
                 seam?.beginEditing(note.id);
                 // 固定タグモードの時だけAppへ通知する(絞り込みの素通しにしか使わない)。

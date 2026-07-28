@@ -39,6 +39,13 @@ type Props = {
   onAttachImage?: (blob: Blob) => Promise<string | null>;
   /** trueならペイン幅で折り返す(EditorView.lineWrapping)。falseはCM6既定の横スクロール。 */
   wrapLines?: boolean;
+  /** 呼び出し側(App.tsx)が既に知っているノート全体の実測高さ。内部の窓化(640pxマージン)が
+   * 発火する前の初期プレースホルダーをこれで初期化する——既定のEDITOR_MIN_HEIGHT_PX(320px)
+   * のままだと、外側ViewportNote(900pxマージン)は実高さでセルを確保しているのに中身が
+   * 320pxしか無い空白区間ができ、長いノートほど「特定の位置まで進まないと表示されない・
+   * 真っ黒に見える」不具合になっていた(ユーザー報告・2026-07-29)。交差判定は別のセンチネル
+   * (viewportRef)で行うため、この値を反映してもマウント/アンマウントのタイミングは変わらない。 */
+  estimatedHeight?: number;
 };
 
 /** DataTransfer から画像を取り出す(貼り付け・ドロップ共通)。画像が無ければ空配列。 */
@@ -96,6 +103,7 @@ export function Notepad({
   onBlur,
   onAttachImage,
   wrapLines = false,
+  estimatedHeight,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,7 +150,12 @@ export function Notepad({
   );
   // 画面外へ出たEditorViewを破棄する前に実高さを保存し、プレースホルダへ引き継ぐ。
   // これが無いと破棄のたびにmasonryの高さが縮み、列の再配置とスクロールジャンプが起きる。
-  const [placeholderHeight, setPlaceholderHeight] = useState(EDITOR_MIN_HEIGHT_PX);
+  // 初期値はestimatedHeight(呼び出し側が既に知っている実測高さ)があればそれを使う——
+  // 無いと常にEDITOR_MIN_HEIGHT_PX(320px)から始まり、外側ViewportNoteの実高さセルとの
+  // 間に空白ができる(Props.estimatedHeightのコメント参照)。
+  const [placeholderHeight, setPlaceholderHeight] = useState(() =>
+    Math.max(EDITOR_MIN_HEIGHT_PX, estimatedHeight ?? EDITOR_MIN_HEIGHT_PX),
+  );
   const [cursor, setCursor] = useState<CursorInfo>({
     line: 1,
     col: 1,
@@ -258,10 +271,21 @@ export function Notepad({
 
   return (
     <div
-      ref={viewportRef}
       data-testid="notepad-viewport"
       data-editor-state={editorMounted ? "mounted" : "deferred"}
+      style={{ position: "relative" }}
     >
+      {/* 窓化の交差判定はこの小さな不可視センチネルだけで行い、プレースホルダー/エディタの
+          実サイズから意図的に切り離す。以前はこの箱(viewportRef)自体にプレースホルダーの
+          高さが乗っていたため、プレースホルダーを実測高さで正しく描画する変更(黒塗り対策)を
+          試すと、IntersectionObserverの交差タイミングまで変わってCodeMirrorのマウント/
+          アンマウント頻度が変化し、別の再配置ジャンプを誘発した(2026-07-29実測: 折り返し
+          一括切替が20秒経っても収束しなくなった)。 */}
+      <div
+        ref={viewportRef}
+        aria-hidden="true"
+        style={{ position: "absolute", top: 0, left: 0, width: 1, height: 1 }}
+      />
       {editorMounted ? (
         <div data-testid="notepad-editor" ref={containerRef} />
       ) : (
