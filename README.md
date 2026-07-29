@@ -114,21 +114,25 @@ Googleアカウントで許可するだけで、Drive同期とカレンダー次
 client_secret を設定すると authorization code フロー(+PKCE)へ切り替わり、一度接続すれば
 以後は**ブラウザを一切開かずに**トークンを再発行し続ける——放置しても切れなくなる。
 
-**先に公開ステータスを「本番環境」にすること(必須)**。「テスト」のままだと Google は
-**更新トークンを7日で失効させる**ため、設定しても1週間でまた切れる
-([公式ドキュメント](https://support.google.com/cloud/answer/15549945)に
+**どこまで延びるかは公開ステータスで決まる**。「テスト」のままだと Google は更新トークンを
+**7日**で失効させる([公式ドキュメント](https://support.google.com/cloud/answer/15549945):
 "If your OAuth client requests an `offline` access type and receives a refresh token,
-that token will also expire." と明記)。
+that token will also expire.")。それでも**現状の約1時間から7日へ延びる**ので、
+このプロジェクトは**テストのままを既定とする**。
 
-旧「OAuth 同意画面」は **「Google Auth Platform」**(ブランディング/対象/クライアント/
-データアクセス)へ再編されており、公開ステータスは「**対象**」ページにある。
-メニューを辿るより直リンクが確実:
+本番公開すれば失効しなくなるが、**このアプリでは事実上選べない**——`calendar.readonly` が
+[機密スコープ](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)
+に当たり、本番公開にはGoogleの検証(プライバシーポリシー・公開ホームページ・YouTubeのデモ動画・
+利用理由の説明)が要る。個人用ツールには釣り合わない。
+どうしても失効を無くしたい場合は `manifest.json` から `calendar.readonly` を外す
+(残る `drive.file` は[非機密](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)
+なので検証不要で公開できる)——ただし「次の予定」表示は使えなくなる。
 
-- 公開ステータス: <https://console.cloud.google.com/auth/audience> →「アプリを公開」
+参考: 旧「OAuth 同意画面」は **「Google Auth Platform」**(ブランディング/対象/クライアント/
+データアクセス)へ再編された。メニューを辿るより直リンクが確実:
+
 - OAuthクライアント一覧: <https://console.cloud.google.com/auth/clients>
-
-審査は不要。以後、接続時に「このアプリは確認されていません」の警告が出るが、
-「詳細」→「(アプリ名)に移動」で進める。
+- 公開ステータス(上記のとおり通常は変更不要): <https://console.cloud.google.com/auth/audience>
 
 1. 上の「クライアント」ページで、`manifest.json` の `oauth2.client_id` と同じ
    「ウェブ アプリケーション」型クライアントを開く
