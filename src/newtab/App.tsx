@@ -99,7 +99,12 @@ import {
   pullSettingsBackupFromNas,
   pushSettingsBackupToNas,
 } from "../lib/externalIO/settingsBackupSync";
-import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/fileio/settingsBackup";
+import {
+  buildSettingsBackupPayload,
+  parseSettingsBackupPayload,
+  serializeSettingsBackup,
+} from "../lib/fileio/settingsBackup";
+import { pickAndReadJsonFile, saveTextFile } from "../lib/fileio/fileSystem";
 import {
   geminiUsageDateKey,
   getBatteryWebhookConfig,
@@ -1376,6 +1381,62 @@ export function App() {
     setDataPanelMessage("保管庫から復元しました(ノートは対象外——保管庫の世代同期が別途復元します)");
   }
 
+  // 設定バックアップ(NAS/Driveと同じ形式)をローカルファイルへ書き出す/読み込む。
+  // 保管庫やDriveを使わない/使えない環境でも設定を持ち運べるようにするためのユーザー指示。
+  // ノートは対象外(NAS/Driveのactive・日付フォルダが別途担う)——NAS復元と同じ境界にする。
+  // Gemini APIキー等のIndexedDB側の端末ローカル設定も対象外(秘匿情報を平文ファイルへ
+  // 書き出さないため。src/lib/storage/db.tsの方針に従う)。
+  function handleExportSettingsFile() {
+    if (!sync) {
+      setDataPanelMessage("設定の読み込みがまだ終わっていません(少し待って再実行してください)");
+      return;
+    }
+    const json = serializeSettingsBackup(
+      buildSettingsBackupPayload(
+        sync,
+        {
+          todos,
+          // 「この端末のみ」の凍結項目は書き出さない(NASバックアップと同じ扱い)。
+          specialItems: specialItems.filter((i) => !i.noSync),
+          specialFolders,
+        },
+        clockNow(),
+      ),
+    );
+    const stamp = new Date(clockNow()).toISOString().slice(0, 10);
+    saveTextFile(`new-tab-board-settings-${stamp}.json`, json, "application/json");
+    setDataPanelMessage("設定をファイルへ書き出しました(ノートは対象外)");
+  }
+
+  async function handleImportSettingsFile() {
+    const picked = await pickAndReadJsonFile();
+    if (!picked) {
+      setDataPanelMessage("ファイル選択がキャンセルされました");
+      return;
+    }
+    const payload = parseSettingsBackupPayload(picked.content);
+    if (!payload) {
+      setDataPanelMessage(`設定ファイルとして読めませんでした(${picked.name})`);
+      return;
+    }
+    const nextSync: SyncState = {
+      bookmarks: payload.bookmarks,
+      appLaunches: payload.appLaunches,
+      settings: payload.settings,
+    };
+    setSync(nextSync);
+    setTodos(payload.todos);
+    setSpecialItems(payload.specialItems);
+    setSpecialFolders(payload.specialFolders);
+    void saveSyncData(nextSync);
+    void patchLocalData({
+      todos: payload.todos,
+      specialItems: payload.specialItems,
+      specialFolders: payload.specialFolders,
+    });
+    setDataPanelMessage(`設定をファイルから読み込みました(${picked.name}。ノートは対象外)`);
+  }
+
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
@@ -1686,6 +1747,8 @@ export function App() {
                 onMessage={setDataPanelMessage}
                 onBackupToDrive={() => void handleBackupToDrive()}
                 onRestoreFromNas={() => void handleRestoreFromNas()}
+                onExportSettingsFile={handleExportSettingsFile}
+                onImportSettingsFile={() => void handleImportSettingsFile()}
                 onPushNasActiveNow={pushNasActiveNow}
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}

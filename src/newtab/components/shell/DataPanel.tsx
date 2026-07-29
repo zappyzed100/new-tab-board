@@ -16,7 +16,9 @@ import {
   BellOff,
   CloudDownload,
   CloudUpload,
+  Download,
   FileText,
+  FileUp,
   FolderOpen,
   FolderSymlink,
   KeyRound,
@@ -70,6 +72,10 @@ type Props = {
   onBackupToDrive: () => void;
   /** NASのdata/settings-backup.json(notesを除く全体設定)を読み戻して適用する。 */
   onRestoreFromNas: () => void;
+  /** 設定(notesを除く)をローカルファイルへ書き出す/ローカルファイルから読み込む。
+   * 保管庫やDriveを使わない環境でも設定を持ち運べるようにするためのユーザー指示。 */
+  onExportSettingsFile: () => void;
+  onImportSettingsFile: () => void;
   /** 現在開いているノートを即座にNASのactive/と今日の日付フォルダへ反映する
    * (ユーザー指示: 「今すぐNASへ書き出し」でも通常のtickを待たずに反映してほしい)。 */
   onPushNasActiveNow: () => Promise<void>;
@@ -96,6 +102,8 @@ export function DataPanel({
   onMessage,
   onBackupToDrive,
   onRestoreFromNas,
+  onExportSettingsFile,
+  onImportSettingsFile,
   onPushNasActiveNow,
   driveConnected,
   onDriveConnectionChange,
@@ -376,6 +384,26 @@ export function DataPanel({
         >
           <CloudDownload size={14} aria-hidden="true" />
           保管庫から復元
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-export-settings-file"
+          title="設定(テーマ/TODO/ブックマーク/ノート文字サイズ/お気に入り/タグ候補。notesとAPIキーは対象外)をローカルのJSONファイルへ書き出す"
+          onClick={onExportSettingsFile}
+        >
+          <Download size={14} aria-hidden="true" />
+          設定をファイルへ書き出し
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          data-testid="data-import-settings-file"
+          title="書き出した設定JSONファイルを選んで読み込む(現在の設定・TODO・ブックマークを上書きする。notesは対象外)"
+          onClick={onImportSettingsFile}
+        >
+          <FileUp size={14} aria-hidden="true" />
+          設定をファイルから読み込み
         </Button>
         <Button
           type="button"

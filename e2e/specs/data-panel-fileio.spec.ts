@@ -59,6 +59,81 @@ test("ファイルを開くをキャンセルしても、無反応ではなく�
   );
 });
 
+test("設定をファイルへ書き出し、読み込み直すと設定が復元される(2026-07-29)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await page.getByTestId("toggle-data-panel").click();
+
+  // 既定と区別できる値へ変えてから書き出す(復元されたことを値で確かめるため)。
+  await page.getByTestId("note-font-increase").click();
+  const exportedFontSize = await page.evaluate(async () => {
+    const stored = await chrome.storage.local.get("syncData");
+    return (stored.syncData as { settings: { noteFontSize?: number } }).settings.noteFontSize;
+  });
+  expect(exportedFontSize).toBeDefined();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("data-export-settings-file").click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^new-tab-board-settings-\d{4}-\d{2}-\d{2}\.json$/);
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error("ダウンロードしたファイルのパスが取得できません");
+  await expect(page.getByTestId("data-panel-message")).toContainText("設定をファイルへ書き出し");
+
+  // 書き出した後に設定を変えておき、読み込みで書き出し時点へ戻ることを確かめる。
+  await page.getByTestId("note-font-decrease").click();
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const stored = await chrome.storage.local.get("syncData");
+        return (stored.syncData as { settings: { noteFontSize?: number } }).settings.noteFontSize;
+      }),
+    )
+    .not.toBe(exportedFontSize);
+
+  const importChooserPromise = page.waitForEvent("filechooser");
+  await page.getByTestId("data-import-settings-file").click();
+  const importChooser = await importChooserPromise;
+  await importChooser.setFiles(downloadedPath);
+
+  await expect(page.getByTestId("data-panel-message")).toContainText("設定をファイルから読み込み");
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const stored = await chrome.storage.local.get("syncData");
+        return (stored.syncData as { settings: { noteFontSize?: number } }).settings.noteFontSize;
+      }),
+    )
+    .toBe(exportedFontSize);
+});
+
+test("設定の読み込みで設定ファイルでないJSONを選ぶと、無反応ではなくエラーが出る(2026-07-29)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await page.getByTestId("toggle-data-panel").click();
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.getByTestId("data-import-settings-file").click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({
+    name: "無関係.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"まったく別の形":true}'),
+  });
+
+  await expect(page.getByTestId("data-panel-message")).toContainText(
+    "設定ファイルとして読めません",
+  );
+});
+
 test("データ管理パネルの結果メッセージが出ても、ショートカット一覧ボタンの位置は動かない", async ({
   context,
   newTabUrl,

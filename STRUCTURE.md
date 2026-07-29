@@ -918,6 +918,8 @@
 
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
+- function pickAndReadJsonFile
+- function saveTextFile
 
 ### `src/lib/fileio/settingsBackup.ts`
 - const SETTINGS_BACKUP_VERSION
