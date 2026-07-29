@@ -76,6 +76,9 @@ type Props = {
    * 保管庫やDriveを使わない環境でも設定を持ち運べるようにするためのユーザー指示。 */
   onExportSettingsFile: () => void;
   onImportSettingsFile: () => void;
+  /** 端末ローカル設定(IndexedDB)を外部から書き換えた時に増える。この値が変わると
+   * このパネルは設定済み表示・入力欄の初期値を読み直す(設定のファイル取り込み用)。 */
+  deviceSettingsReloadSignal: number;
   /** 現在開いているノートを即座にNASのactive/と今日の日付フォルダへ反映する
    * (ユーザー指示: 「今すぐNASへ書き出し」でも通常のtickを待たずに反映してほしい)。 */
   onPushNasActiveNow: () => Promise<void>;
@@ -104,6 +107,7 @@ export function DataPanel({
   onRestoreFromNas,
   onExportSettingsFile,
   onImportSettingsFile,
+  deviceSettingsReloadSignal,
   onPushNasActiveNow,
   driveConnected,
   onDriveConnectionChange,
@@ -149,7 +153,11 @@ export function DataPanel({
       }
     });
     void getAlarmEnabled().then(setAlarmOn);
-  }, []);
+    // deviceSettingsReloadSignalで読み直す: 「設定をファイルから読み込み」はIndexedDB側の
+    // 端末ローカル設定を丸ごと差し替えるが、この画面の「(設定済み)」表示や入力欄の初期値は
+    // マウント時に一度読むだけだった——パネルを開いたまま取り込むと、実際には設定されて
+    // いるのに「未設定」のままに見える(2026-07-29)。
+  }, [deviceSettingsReloadSignal]);
 
   /** 「固まった」の証拠(ウォッチドッグの診断ログ)を人が読める形にしてクリップボードへ。
    * ノートへ書き出すとNAS/Drive同期や自動タグ付けに乗ってしまうため、貼り付けで渡せる
@@ -389,7 +397,7 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-export-settings-file"
-          title="設定(テーマ/TODO/ブックマーク/ノート文字サイズ/お気に入り/タグ候補。notesとAPIキーは対象外)をローカルのJSONファイルへ書き出す"
+          title="設定(テーマ/TODO/ブックマーク/お気に入り/タグ候補に加え、Gemini APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も含む)をローカルのJSONファイルへ書き出す。APIキーは平文で入るため取り扱い注意。notesは対象外"
           onClick={onExportSettingsFile}
         >
           <Download size={14} aria-hidden="true" />
@@ -399,7 +407,7 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-import-settings-file"
-          title="書き出した設定JSONファイルを選んで読み込む(現在の設定・TODO・ブックマークを上書きする。notesは対象外)"
+          title="書き出した設定JSONファイルを選んで読み込む(設定・TODO・ブックマークに加え、Gemini APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も反映する。notesは対象外)"
           onClick={onImportSettingsFile}
         >
           <FileUp size={14} aria-hidden="true" />

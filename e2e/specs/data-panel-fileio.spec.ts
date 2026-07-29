@@ -6,6 +6,8 @@
 // イベントとして観測できる(src/lib/fileio/fileSystem.tsのヘッダー参照)。
 // 「フォルダへ書き出し」ボタンは同じ既知バグが実機で解消できず(選択後にエラー
 // メッセージすら出ない無反応のままだった)、ユーザー指示により撤去した。
+import { readFileSync } from "node:fs";
+import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures";
 
 test("ファイルを開くで.txtの中身が新規ノートとして取り込まれる", async ({ context, newTabUrl }) => {
@@ -110,6 +112,102 @@ test("設定をファイルへ書き出し、読み込み直すと設定が復�
     )
     .toBe(exportedFontSize);
 });
+
+test("端末ローカル設定(Gemini APIキー・保管庫パス等)もファイル経由で持ち運べる(2026-07-29)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await page.getByTestId("toggle-data-panel").click();
+
+  // 実UIから設定する(IndexedDBを直接書くとUIとの配線ごと壊れても気づけないため)。
+  await page.getByTestId("data-set-gemini-key").click();
+  await page.getByTestId("data-gemini-key-input").fill("AIza-テスト用キー");
+  await page.getByTestId("data-save-gemini-key").click();
+  await expect(page.getByTestId("data-panel-message")).toContainText("Gemini");
+
+  // 保管庫パスだけはUI経由で入れられない——保存前にnative host(nas_bridge.py)への到達確認が
+  // 必須で、E2E環境にはhostが無いため必ず弾かれる。ここでは書き出し/取り込みの対象になることを
+  // 見たいので、保存済みの状態だけをIndexedDBへ直接作る(UI配線はGeminiキー側が実UIで担保する)。
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open("new-tab-board");
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction("settings", "readwrite");
+        tx.objectStore("settings").put("Z:\\保管庫\\テスト", "nasFolderPath");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+  });
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("data-export-settings-file").click();
+  const download = await downloadPromise;
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error("ダウンロードしたファイルのパスが取得できません");
+
+  // 書き出したファイルに5項目が実際に入っていること(UIの成否ではなく中身で確かめる)。
+  const exported = JSON.parse(readFileSync(downloadedPath, "utf-8")) as {
+    deviceSettings?: Record<string, unknown>;
+  };
+  expect(exported.deviceSettings?.geminiApiKey).toBe("AIza-テスト用キー");
+  expect(exported.deviceSettings?.nasFolderPath).toBe("Z:\\保管庫\\テスト");
+
+  // 書き出した後に別の値へ変えておき、取り込みで書き出し時点へ戻ることを確かめる
+  // (IndexedDBを消して「新しい端末」を模すのは、DBを開いたままの削除がblockedになり
+  //  不安定だったため採らない——上書きで戻ることが確認できれば復元の検証としては足りる)。
+  // 保存すると入力欄は閉じるので開き直す。
+  await page.getByTestId("data-set-gemini-key").click();
+  await page.getByTestId("data-gemini-key-input").fill("AIza-上書きした別のキー");
+  await page.getByTestId("data-save-gemini-key").click();
+  await expect.poll(async () => readStoredGeminiKey(page)).toBe("AIza-上書きした別のキー");
+
+  const importChooserPromise = page.waitForEvent("filechooser");
+  await page.getByTestId("data-import-settings-file").click();
+  const importChooser = await importChooserPromise;
+  await importChooser.setFiles(downloadedPath);
+  await expect(page.getByTestId("data-panel-message")).toContainText("設定をファイルから読み込み");
+
+  // 秘匿情報(APIキー)と保管庫パスの両方が、書き出した時点の値へ戻っている。
+  await expect.poll(async () => readStoredGeminiKey(page)).toBe("AIza-テスト用キー");
+  expect(await readStoredNasPath(page)).toBe("Z:\\保管庫\\テスト");
+
+  // パネルを開いたまま取り込んでも「(設定済み)」表示が古いままにならない(2026-07-29)。
+  await expect(page.getByTestId("data-set-gemini-key")).toContainText("設定済み");
+});
+
+/** IndexedDBのsettingsストアから1件読む(取り込み結果をUIの表示ではなく実データで確かめる)。 */
+function readSetting(page: Page, key: string): Promise<unknown> {
+  return page.evaluate(
+    (k) =>
+      new Promise<unknown>((resolve, reject) => {
+        const open = indexedDB.open("new-tab-board");
+        open.onsuccess = () => {
+          const req = open.result
+            .transaction("settings", "readonly")
+            .objectStore("settings")
+            .get(k);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        };
+        open.onerror = () => reject(open.error);
+      }),
+    key,
+  );
+}
+
+function readStoredGeminiKey(page: Page): Promise<unknown> {
+  return readSetting(page, "geminiApiKey");
+}
+
+function readStoredNasPath(page: Page): Promise<unknown> {
+  return readSetting(page, "nasFolderPath");
+}
 
 test("設定の読み込みで設定ファイルでないJSONを選ぶと、無反応ではなくエラーが出る(2026-07-29)", async ({
   context,

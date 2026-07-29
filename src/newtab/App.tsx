@@ -103,8 +103,14 @@ import {
   buildSettingsBackupPayload,
   parseSettingsBackupPayload,
   serializeSettingsBackup,
+  type SettingsFilePayload,
 } from "../lib/fileio/settingsBackup";
 import { pickAndReadJsonFile, saveTextFile } from "../lib/fileio/fileSystem";
+import {
+  applyDeviceSettings,
+  parseDeviceSettings,
+  readDeviceSettings,
+} from "../lib/fileio/deviceSettings";
 import {
   geminiUsageDateKey,
   getBatteryWebhookConfig,
@@ -229,6 +235,9 @@ export function App() {
   // 同じ形でAppへ引き上げる(ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため
   // Driveの警告(orange)とは性質が違う——他の3つと同じgray/softの情報表示にする。
   const [driveSharedFolderChosen, setDriveSharedFolderChosen] = useState<boolean | null>(null);
+  // 設定のファイル取り込みでIndexedDB側の端末ローカル設定を差し替えたら増やす。
+  // DataPanelはこれを見て「(設定済み)」表示と入力欄の初期値を読み直す。
+  const [deviceSettingsReloadSignal, setDeviceSettingsReloadSignal] = useState(0);
   useEffect(() => {
     void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
     void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
@@ -1381,18 +1390,19 @@ export function App() {
     setDataPanelMessage("保管庫から復元しました(ノートは対象外——保管庫の世代同期が別途復元します)");
   }
 
-  // 設定バックアップ(NAS/Driveと同じ形式)をローカルファイルへ書き出す/読み込む。
-  // 保管庫やDriveを使わない/使えない環境でも設定を持ち運べるようにするためのユーザー指示。
-  // ノートは対象外(NAS/Driveのactive・日付フォルダが別途担う)——NAS復元と同じ境界にする。
-  // Gemini APIキー等のIndexedDB側の端末ローカル設定も対象外(秘匿情報を平文ファイルへ
-  // 書き出さないため。src/lib/storage/db.tsの方針に従う)。
-  function handleExportSettingsFile() {
+  // 設定をローカルファイルへ書き出す/読み込む。保管庫やDriveを使わない/使えない環境でも
+  // 設定を持ち運べるようにするためのユーザー指示。ノートは対象外(NAS/Driveのactive・日付
+  // フォルダが別途担う)——NAS復元と同じ境界にする。
+  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(Gemini APIキー・GAS連携・
+  // 保管庫パス・Driveフォルダ設定)も含める**(ユーザー指示・2026-07-29)。経路ごとの
+  // 扱いの違いとその理由はsrc/lib/fileio/deviceSettings.tsのヘッダーが正本。
+  async function handleExportSettingsFile() {
     if (!sync) {
       setDataPanelMessage("設定の読み込みがまだ終わっていません(少し待って再実行してください)");
       return;
     }
-    const json = serializeSettingsBackup(
-      buildSettingsBackupPayload(
+    const payload: SettingsFilePayload = {
+      ...buildSettingsBackupPayload(
         sync,
         {
           todos,
@@ -1402,10 +1412,17 @@ export function App() {
         },
         clockNow(),
       ),
-    );
+      deviceSettings: await readDeviceSettings(),
+    };
     const stamp = new Date(clockNow()).toISOString().slice(0, 10);
-    saveTextFile(`new-tab-board-settings-${stamp}.json`, json, "application/json");
-    setDataPanelMessage("設定をファイルへ書き出しました(ノートは対象外)");
+    saveTextFile(
+      `new-tab-board-settings-${stamp}.json`,
+      JSON.stringify(payload, null, 2),
+      "application/json",
+    );
+    setDataPanelMessage(
+      "設定をファイルへ書き出しました(APIキー等も含む平文です。取り扱いに注意してください。ノートは対象外)",
+    );
   }
 
   async function handleImportSettingsFile() {
@@ -1434,7 +1451,24 @@ export function App() {
       specialItems: payload.specialItems,
       specialFolders: payload.specialFolders,
     });
-    setDataPanelMessage(`設定をファイルから読み込みました(${picked.name}。ノートは対象外)`);
+    // 端末ローカル設定は別ストア(IndexedDB)なので、上のsyncDataとは別経路で適用する。
+    // 欠落項目は現状維持(applyDeviceSettings)——古い版のファイルで設定を潰さないため。
+    const device = parseDeviceSettings(
+      (JSON.parse(picked.content) as { deviceSettings?: unknown }).deviceSettings,
+    );
+    if (device) {
+      await applyDeviceSettings(device);
+      // 開いたままのDataPanelに「(設定済み)」表示と入力欄の初期値を読み直させる。
+      setDeviceSettingsReloadSignal((n) => n + 1);
+      // 未設定バッジ(ヘッダー常時表示)は各stateから描いているため、取り込んだ内容で更新する。
+      if (device.nasFolderPath !== undefined) setNasConfigured(device.nasFolderPath.trim() !== "");
+      if (device.geminiApiKey !== undefined) setGeminiConfigured(device.geminiApiKey.trim() !== "");
+      if (device.batteryWebhookConfig !== undefined) setBatteryConfigured(true);
+      if (device.driveSharedFolderChosen === true) setDriveSharedFolderChosen(true);
+    }
+    setDataPanelMessage(
+      `設定をファイルから読み込みました(${picked.name}。APIキー等の端末設定も反映。ノートは対象外)`,
+    );
   }
 
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
@@ -1747,8 +1781,9 @@ export function App() {
                 onMessage={setDataPanelMessage}
                 onBackupToDrive={() => void handleBackupToDrive()}
                 onRestoreFromNas={() => void handleRestoreFromNas()}
-                onExportSettingsFile={handleExportSettingsFile}
+                onExportSettingsFile={() => void handleExportSettingsFile()}
                 onImportSettingsFile={() => void handleImportSettingsFile()}
+                deviceSettingsReloadSignal={deviceSettingsReloadSignal}
                 onPushNasActiveNow={pushNasActiveNow}
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}

@@ -223,6 +223,8 @@
 - `src/lib/externalIO/settingsBackupSync.ts` — settingsBackupSync.ts — 全体設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/
 - `src/lib/externalIO/specialSync.test.ts` — specialSync.test.ts — NASの special/ 書き出し・突き合わせ削除の単体テスト
 - `src/lib/externalIO/specialSync.ts` — specialSync.ts — スペシャル(⭐)をNASの special/<folder>/<id>.md へ書き出し、消えたものを削除する
+- `src/lib/fileio/deviceSettings.test.ts` — deviceSettings.test.ts — 端末ローカル設定のローカルファイル持ち出し/取り込みの単体テスト。
+- `src/lib/fileio/deviceSettings.ts` — deviceSettings.ts — 「端末ローカル設定」(IndexedDB側)をローカルファイルへ持ち出す/戻すための集約
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート・TODO・スペシャル)のJSON書き出し/
 - `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
@@ -909,6 +911,12 @@
 - type SpecialNasDeps
 - function pushSpecialToNas
 
+### `src/lib/fileio/deviceSettings.ts`
+- type DeviceSettings
+- function readDeviceSettings
+- function applyDeviceSettings
+- function parseDeviceSettings
+
 ### `src/lib/fileio/exportImport.ts`
 - const EXPORT_VERSION
 - type ExportPayload
@@ -924,6 +932,7 @@
 ### `src/lib/fileio/settingsBackup.ts`
 - const SETTINGS_BACKUP_VERSION
 - type SettingsBackupPayload
+- type SettingsFilePayload
 - function buildSettingsBackupPayload
 - function serializeSettingsBackup
 - function parseSettingsBackupPayload
