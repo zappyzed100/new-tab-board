@@ -100,14 +100,15 @@ describe("getAuthToken", () => {
     expect(typeof failure?.elapsedMs).toBe("number");
   });
 
-  it("非対話のタイムアウトはGoogleのリダイレクト連鎖が完走できる長さにする(8秒では毎回踏み抜いて未接続のままになっていた実機不具合の回帰・2026-07-29)", async () => {
+  it("非対話のタイムアウトは短く保つ(伸ばしても完走しないと実機で確定したため・2026-07-29)", async () => {
     const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
     const { getAuthToken } = await load(launch);
     await getAuthToken(false);
     const arg = launch.mock.calls[0][0] as Record<string, unknown>;
-    // 実機ログでは7回とも「起動の8〜9秒後」に`User interaction required`が出ており、
-    // 旧値8_000msちょうどで打ち切られていた。8秒を超える余裕を必須条件として固定する。
-    expect(arg.timeoutMsForNonInteractive).toBeGreaterThan(8_000);
+    // 一度30_000msへ広げたが、実機ログで今度は毎回きっかり30秒で落ちた(同じログで手動接続は
+    // 2.7秒で成功)。サイレント認可は待っても通らないので、この値は諦めるまでの無駄時間にすぎない。
+    // 伸ばす変更が再び入らないよう上限を固定する。
+    expect(arg.timeoutMsForNonInteractive).toBeLessThanOrEqual(10_000);
   });
 
   it("対話時はabortOnLoadForNonInteractive等を渡さない(ユーザー操作を待つため)", async () => {
