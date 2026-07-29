@@ -106,6 +106,7 @@ import {
   type SettingsFilePayload,
 } from "../lib/fileio/settingsBackup";
 import { pickAndReadJsonFile, saveTextFile } from "../lib/fileio/fileSystem";
+import { estimateNoteHeight } from "./noteHeightEstimate";
 import {
   applyDeviceSettings,
   parseDeviceSettings,
@@ -794,26 +795,36 @@ export function App() {
       timers.clear();
     };
   }, []);
-  const reportNoteHeight = useCallback((id: string, h: number, isFirstSinceMount: boolean) => {
-    const timers = noteHeightTimersRef.current;
-    const existing = timers.get(id);
-    if (existing !== undefined) clearTimeout(existing);
-    const commit = () => {
-      timers.delete(id);
-      setNoteHeights((prev) => {
-        // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
-        if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
-        const next = new Map(prev);
-        next.set(id, h);
-        return next;
-      });
-    };
-    if (isFirstSinceMount) {
-      timers.set(id, setTimeout(commit, NOTE_HEIGHT_SETTLE_MS));
-    } else {
-      commit();
-    }
-  }, []);
+  const reportNoteHeight = useCallback(
+    (id: string, h: number, isFirstSinceMount: boolean, assumedHeight: number) => {
+      const timers = noteHeightTimersRef.current;
+      const existing = timers.get(id);
+      if (existing !== undefined) clearTimeout(existing);
+      const commit = () => {
+        timers.delete(id);
+        setNoteHeights((prev) => {
+          // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
+          if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
+          const next = new Map(prev);
+          next.set(id, h);
+          return next;
+        });
+      };
+      // 再マウント直後の一時的なブレは「レイアウト前でまだ低い」形で出る(CM6が最小高さのまま
+      // 報告する)。一方、**実測が想定より高い**のは本物の差で、待つ理由が無い——待つと、topは
+      // 想定高さで積まれているのにセルは実測高さで描かれるため、その差ぶんの穴が列の中に開いた
+      // まま猶予時間ぶん保持される。長文ノートでは5%のズレでも数千pxの真っ黒な穴になり、
+      // 上スクロール中に列がまるごと空に見える実害が出た(2026-07-29・実測で穴を確認)。
+      // 低く報告された時だけ猶予を置き、高い/同程度なら即座に確定する。
+      const settleNeeded = isFirstSinceMount && h < assumedHeight;
+      if (settleNeeded) {
+        timers.set(id, setTimeout(commit, NOTE_HEIGHT_SETTLE_MS));
+      } else {
+        commit();
+      }
+    },
+    [],
+  );
   // 窓化(ViewportNote)が再マウント直後の高さ確定猶予タイマー発火前にノートを画面外へアンマウント
   // した場合に呼ぶ。ResizeObserverはアンマウントで止まり以後訂正する機会が無いため、未確定のまま
   // 猶予タイマーだけが後で発火すると「移動中に一瞬だけ測れた不正確な高さ」がnoteHeightsへ確定して
@@ -840,33 +851,76 @@ export function App() {
   // (ユーザー報告・2026-07-29「下から上に読む時にノートの並び順/列が入れ替わる」)。
   // 一度割り当てた列は固定し、その列内での縦位置(top)だけを現在の高さで再計算する——これなら
   // 高さの変化はその列の中で完結し、他のノートを別の列へ飛ばさない。
-  // ノート集合/順序(id列)か列数が変わった時だけ、割り当てを作り直す。
+  // **作り直すのは列数が変わった時だけ**。ノートの増減では作り直さない(2026-07-29)——
+  // 下のLPT割当は他ノートの高さに依存するため、末尾に空ノートが1つ補充されただけでも
+  // 作り直すと既存ノートまで列を移り、入力中のペインが別の列へ飛んでCM6が再マウントされる
+  // (2026-07-23に潰した「操作中のノートが移って打鍵が消える」の再来。回帰テストが検知した)。
   const columnAssignmentRef = useRef<Map<string, number>>(new Map());
   const columnAssignmentKeyRef = useRef<string>("");
   const noteLayout = useMemo(() => {
     const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
-    const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
 
-    const idsKey = `${columnCount}|${visibleNotes.map((n) => n.id).join(",")}`;
-    if (columnAssignmentKeyRef.current !== idsKey) {
+    const columnsKey = String(columnCount);
+    if (columnAssignmentKeyRef.current !== columnsKey) {
       columnAssignmentRef.current = new Map();
-      columnAssignmentKeyRef.current = idsKey;
+      columnAssignmentKeyRef.current = columnsKey;
     }
     const columnOf = columnAssignmentRef.current;
+    // 盤面から消えたノートの割当は捨てる(残すと際限なく溜まる)。
+    const liveIds = new Set(visibleNotes.map((n) => n.id));
+    for (const id of [...columnOf.keys()]) if (!liveIds.has(id)) columnOf.delete(id);
+    // 未測定ノートは**本文から見積もる**。一律520pxだと数千行のノートが100倍以上小さく
+    // 見積もられ、スティッキーな列割当がその誤りごと固定されて、他の列が数万px先に尽きる
+    // (=何も無い真っ黒な領域が出る)実害があった(2026-07-29)。
+    // 見積もりは実測と体系的にズレる(フォントサイズ・折り返し・列幅で変わる。実測では
+    // 実測/見積もり=1.04〜1.07)。ズレたままだと、マウントされたノートだけが実寸へ伸びて
+    // 列ごとに食い違い、下端が1万px単位でずれて「片側だけ何も無い」区間ができる。
+    // **実測済みノートから倍率を学習して未測定ノートへ適用する**ことでズレを畳む。
+    let ratioSum = 0;
+    let ratioCount = 0;
+    for (const note of visibleNotes) {
+      const measured = noteHeights.get(note.id);
+      if (measured === undefined || measured < 100) continue;
+      const est = estimateNoteHeight(note);
+      if (est <= 0) continue;
+      ratioSum += measured / est;
+      ratioCount += 1;
+    }
+    // 標本が少ないうちは校正しない(1〜2件の外れ値で全体を歪めないため)。
+    const calibration = ratioCount >= 3 ? ratioSum / ratioCount : 1;
+    const heightOf = (note: Note) =>
+      noteHeights.get(note.id) ?? estimateNoteHeight(note) * calibration;
+
+    // **割り当ては高い順(LPT法)**。order順の貪欲法だと、後ろに来た長文ノートが載った列だけが
+    // 突出し、他の列は数万px先に尽きる(実測: 3列で33,773pxの偏りが残っていた)。高い順に
+    // 最短列へ入れると偏りは「最大ノート高さ」ではなくその1/3程度まで縮む。
+    // 割り当て済みのノートは動かさない(上スクロール中に列が入れ替わる不具合の対策を維持する)。
+    const unassigned = visibleNotes.filter((note) => {
+      const c = columnOf.get(note.id);
+      return c === undefined || c >= columnCount;
+    });
+    if (unassigned.length > 0) {
+      const running = new Array<number>(columnCount).fill(0);
+      for (const note of visibleNotes) {
+        const c = columnOf.get(note.id);
+        if (c !== undefined && c < columnCount) running[c] += heightOf(note) + GAP;
+      }
+      for (const note of [...unassigned].sort((a, b) => heightOf(b) - heightOf(a))) {
+        let min = 0;
+        for (let c = 1; c < columnCount; c++) if (running[c] < running[min]) min = c;
+        columnOf.set(note.id, min);
+        running[min] += heightOf(note) + GAP;
+      }
+    }
 
     const heights = new Array(columnCount).fill(0);
     const placement = new Map<string, { column: number; top: number }>();
+    // 配置(top)は**order順**に積む——列の中での並びは優先度順のままにする。
     // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
     for (const note of visibleNotes) {
-      let column = columnOf.get(note.id);
-      if (column === undefined || column >= columnCount) {
-        let min = 0;
-        for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
-        column = min;
-        columnOf.set(note.id, column);
-      }
+      const column = columnOf.get(note.id) ?? 0;
       placement.set(note.id, { column, top: heights[column] });
-      heights[column] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
+      heights[column] += heightOf(note) + GAP;
     }
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
@@ -1991,7 +2045,7 @@ export function App() {
                           columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
                           top={noteLayout.placement.get(note.id)?.top ?? 0}
                           active={note.id === activeNoteId}
-                          estimatedHeight={noteHeights.get(note.id)}
+                          estimatedHeight={noteHeights.get(note.id) ?? estimateNoteHeight(note)}
                           contentVersion={note.updatedAt}
                           onHeight={reportNoteHeight}
                           onUnmountBeforeSettle={cancelNoteHeightSettle}

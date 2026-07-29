@@ -49,7 +49,11 @@ type Props = {
    * 内部レイアウトが数フレームで落ち着くまで実際と異なる高さを報告することがある——呼び出し側
    * (App.tsx)はこのフラグを使って、その一時的な報告だけ確定を遅らせ、既にマウント済みのノートの
    * 折り返し切替等による本物の高さ変化(2回目以降の報告)は即座に反映する。 */
-  onHeight: (id: string, height: number, isFirstSinceMount: boolean) => void;
+  /** assumedHeight: 呼び出し側(App)がこのノートの高さとして**現在レイアウトに使っている値**
+   * (実測値が無ければ本文からの見積もり)。実測がこれより高いか同程度なら猶予を置かず
+   * 即座に確定してよい——想定より高い実測を待つと、topは想定で積まれているのにセルは実測で
+   * 描かれるため、その差ぶんの穴が列の中に開いたままになる(2026-07-29)。 */
+  onHeight: (id: string, height: number, isFirstSinceMount: boolean, assumedHeight: number) => void;
   /** 再マウント直後の高さ確定猶予(App.tsx側のsetTimeout)が発火する前にこのノートが画面外へ
    * アンマウントされた時に呼ぶ。呼び出し側は保留中の猶予タイマーを未確定のまま破棄する
    * (=移動中の一瞬だけの不正確な測定値をnoteHeightsへ確定させない)。 */
@@ -78,6 +82,8 @@ export function ViewportNote({
   const contentVersionRef = useRef(contentVersion);
   const mountedVersionRef = useRef(contentVersion);
   const onSuspendRef = useRef(onSuspend);
+  const estimatedHeightRef = useRef(estimatedHeight);
+  estimatedHeightRef.current = estimatedHeight;
   const mounted = active || nearViewport;
   contentVersionRef.current = contentVersion;
   onSuspendRef.current = onSuspend;
@@ -110,7 +116,9 @@ export function ViewportNote({
     if (!mounted || !cell || typeof ResizeObserver === "undefined") return;
     let isFirst = true;
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) onHeight(noteId, entry.contentRect.height, isFirst);
+      for (const entry of entries) {
+        onHeight(noteId, entry.contentRect.height, isFirst, estimatedHeightRef.current);
+      }
       isFirst = false;
     });
     observer.observe(cell);
@@ -118,6 +126,8 @@ export function ViewportNote({
       observer.disconnect();
       onUnmountBeforeSettle?.(noteId);
     };
+    // estimatedHeightは依存に入れずrefで読む——値が変わるたびObserverを張り直すと
+    // isFirstSinceMountが毎回trueへ戻り、猶予判定が壊れるため。
   }, [mounted, noteId, onHeight, onUnmountBeforeSettle]);
 
   return (

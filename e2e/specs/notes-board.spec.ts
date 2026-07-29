@@ -90,6 +90,100 @@ test("実測masonry: 列は重ならず・列内はgap詰め・列高さがほ�
   await expect.poll(violations).toEqual([]);
 });
 
+/** 決定的な疑似乱数(シード固定。AGENTS.md §8 test-nondeterminism)。 */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("長さが極端に違うノートでも列の高さが揃う(片側だけ数万px余る=真っ黒の回帰・2026-07-29)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 28件を一度マウントし切るまでスクロールするため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+
+  // 実機の盤面に寄せる: 3割が数千行の長文、残りは短文。
+  const rand = mulberry32(20260729);
+  const notes = Array.from({ length: 28 }, (_, i) => {
+    const lineCount =
+      rand() < 0.3 ? 1500 + Math.floor(rand() * 2500) : 20 + Math.floor(rand() * 200);
+    return {
+      id: `balance-note-${i}`,
+      title: `ノート${i}`,
+      content: Array.from(
+        { length: lineCount },
+        (_, l) => `${l}: これは日本語の本文の一行です。`,
+      ).join("\n"),
+      pinned: false,
+      order: i,
+      createdAt: i,
+      updatedAt: i,
+    };
+  });
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(1000);
+
+  // 全ノートを一度マウントさせて実測高さを行き渡らせる(窓化のため下まで読む必要がある)。
+  for (let i = 0; i < 120; i++) {
+    await page.mouse.wheel(0, 1200);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(2000);
+
+  const balance = await page.evaluate(() => {
+    const byColumn = new Map<string, number>();
+    for (const cell of document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")) {
+      const col = cell.dataset.columnIndex ?? "0";
+      const bottom = parseFloat(cell.style.top || "0") + cell.getBoundingClientRect().height;
+      byColumn.set(col, Math.max(byColumn.get(col) ?? 0, bottom));
+    }
+    const bottoms = [...byColumn.values()];
+    const board = Math.max(...bottoms);
+    return {
+      imbalance: Math.max(...bottoms) - Math.min(...bottoms),
+      board,
+      columns: bottoms.length,
+    };
+  });
+
+  expect(balance.columns).toBe(3);
+  // 旧「一律520pxの見積もり + order順の貪欲法」では偏りが盤面の4割超(実測62,825/147,102)に達し、
+  // その区間は他の列に何も無い=真っ黒に見えていた。既存の「偏り<最大ノート高さ」ではこれを
+  // 通してしまう(最大ノートが69,852pxもあるため)ので、盤面高さに対する割合で締める。
+  expect(balance.imbalance).toBeLessThan(balance.board * 0.15);
+});
+
 test("空ノートの2番目に入力しても、そのノートは動かず打鍵が失われない(2026-07-23の回帰)", async ({
   context,
   newTabUrl,
