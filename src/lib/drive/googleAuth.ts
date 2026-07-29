@@ -44,8 +44,18 @@ import { logOp } from "../runtime/log";
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/auth";
 // 通信途中の失効を避けるため、期限判定に少し余裕(スキュー)を持たせる。
 const EXPIRY_SKEW_MS = 60_000;
-// 非対話フローでリダイレクト連鎖を待つ上限。長すぎると画面表示を待たせるため短めにする。
-const NON_INTERACTIVE_TIMEOUT_MS = 8_000;
+// 非対話フローでリダイレクト連鎖を待つ上限。
+// 【8秒では足りなかった — 2026-07-29】実機の診断ログで、サイレント認可の失敗が7回とも
+// **タブ起動のきっかり8〜9秒後**に出ていた(旧値=8_000msと一致)。Googleが本当に操作を
+// 要求しているなら1秒未満で即答するはずで、毎回同じ秒数で落ちるのはこのタイムアウトを
+// 踏んでいる証拠だった——リダイレクト連鎖が8秒で完走できていない。失効のたびに更新が
+// 失敗し、ユーザーが手で「GDriveへ接続」を押すまで未接続のままになる実害が出ていた
+// (ユーザー報告「放っておくと未接続になる」)。
+// 呼び出し元はbackgroundの5分周期アラームとAppの起動時tickのいずれも非同期で、待っても
+// 画面描画は止まらない(旧コメントの「画面表示を待たせる」懸念は当たらない)ため、
+// 連鎖を完走できる余裕を持たせる。失敗時の所要時間はgetAuthTokenがelapsedMsで残すので、
+// 次に同じ症状が出たら「タイムアウトか即答か」をログだけで判別できる。
+const NON_INTERACTIVE_TIMEOUT_MS = 30_000;
 // トークンの永続先(chrome.storage.local)。sync側はクォータ制約が厳しく、そもそも端末間で
 // 共有すべき値でもないためlocalに置く(AGENTS.md §11)。
 const TOKEN_STORAGE_KEY = "driveAccessToken";
@@ -182,12 +192,20 @@ async function acquireToken(interactive: boolean): Promise<string | null> {
  * interactive=falseで失敗した場合はnullを返す(未サインイン・未許可時に静かに諦めるため)。
  * 「静かに諦める」ため失敗が無症状になりやすい——DataPanelの未接続表示が最後の砦になっている。 */
 export async function getAuthToken(interactive = true): Promise<string | null> {
+  // 所要時間を必ず残す。失敗がタイムアウト(=NON_INTERACTIVE_TIMEOUT_MSぴったり)なのか
+  // Googleの即答なのかは、この数値が無いとログから区別できなかった(2026-07-29)。
+  const startedAt = Date.now();
   try {
     const token = await acquireToken(interactive);
-    logOp("googleAuth", "getAuthToken", `interactive=${interactive} ok=${token !== null}`);
+    logOp("googleAuth", "getAuthToken", `interactive=${interactive} ok=${token !== null}`, {
+      elapsedMs: Date.now() - startedAt,
+    });
     return token;
   } catch (err) {
-    logOp("googleAuth", "getAuthToken-error", `interactive=${interactive}`, { error: err });
+    logOp("googleAuth", "getAuthToken-error", `interactive=${interactive}`, {
+      error: err,
+      elapsedMs: Date.now() - startedAt,
+    });
     return null;
   }
 }
@@ -198,12 +216,18 @@ export async function getAuthToken(interactive = true): Promise<string | null> {
 export async function getAuthTokenWithError(
   interactive = true,
 ): Promise<{ token: string | null; error: string | null }> {
+  const startedAt = Date.now();
   try {
     const token = await acquireToken(interactive);
-    logOp("googleAuth", "getAuthToken", `interactive=${interactive} ok=${token !== null}`);
+    logOp("googleAuth", "getAuthToken", `interactive=${interactive} ok=${token !== null}`, {
+      elapsedMs: Date.now() - startedAt,
+    });
     return { token, error: token === null ? "トークンが空でした" : null };
   } catch (err) {
-    logOp("googleAuth", "getAuthToken-error", `interactive=${interactive}`, { error: err });
+    logOp("googleAuth", "getAuthToken-error", `interactive=${interactive}`, {
+      error: err,
+      elapsedMs: Date.now() - startedAt,
+    });
     return { token: null, error: err instanceof Error ? err.message : String(err) };
   }
 }

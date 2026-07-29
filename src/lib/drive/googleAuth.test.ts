@@ -83,6 +83,33 @@ describe("getAuthToken", () => {
     expect(arg.timeoutMsForNonInteractive).toBeGreaterThan(0);
   });
 
+  it("失敗を診断ログへ流すとき所要時間を添える(タイムアウトかGoogleの即答かをログだけで判別するため・2026-07-29)", async () => {
+    const launch = vi.fn().mockRejectedValue(new Error("User interaction required."));
+    const auth = await load(launch);
+    const { setLogSink } = await import("../runtime/log");
+    const entries: { op: string; elapsedMs?: number }[] = [];
+    setLogSink((entry) => entries.push({ op: entry.op, elapsedMs: entry.elapsedMs }));
+    try {
+      await auth.getAuthToken(false);
+    } finally {
+      setLogSink(null);
+    }
+    const failure = entries.find((e) => e.op === "getAuthToken-error");
+    expect(failure).toBeDefined();
+    // 値そのものは環境依存なので「記録されていること」だけを固定する(非決定性を持ち込まない)。
+    expect(typeof failure?.elapsedMs).toBe("number");
+  });
+
+  it("非対話のタイムアウトはGoogleのリダイレクト連鎖が完走できる長さにする(8秒では毎回踏み抜いて未接続のままになっていた実機不具合の回帰・2026-07-29)", async () => {
+    const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
+    const { getAuthToken } = await load(launch);
+    await getAuthToken(false);
+    const arg = launch.mock.calls[0][0] as Record<string, unknown>;
+    // 実機ログでは7回とも「起動の8〜9秒後」に`User interaction required`が出ており、
+    // 旧値8_000msちょうどで打ち切られていた。8秒を超える余裕を必須条件として固定する。
+    expect(arg.timeoutMsForNonInteractive).toBeGreaterThan(8_000);
+  });
+
   it("対話時はabortOnLoadForNonInteractive等を渡さない(ユーザー操作を待つため)", async () => {
     const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
     const { getAuthToken } = await load(launch);
