@@ -114,6 +114,38 @@ describe("startWatchdog", () => {
     expect(stall?.metrics?.hidden).toBe(false);
   });
 
+  // 非表示タブのlongtaskは「主スレッドを焼いた時間」とは限らない——Chromeはレンダラを
+  // タスク実行中にデスケジュールでき、その間もdurationは進む。stall側は throttled ガードで
+  // 同じ誤検知を潰してあるのに longtask だけ素通しで hidden も残していなかったため、実機の
+  // 14699ms/19788msが本物か見かけかを後から判別できなかった(2026-07-29)。
+  it("longtask には hidden を残す(非表示中の水増しと本物の負荷を後から判別するため)", async () => {
+    type LongtaskList = { getEntries: () => { duration: number; name: string }[] };
+    // 代入をクラス内で行うため、局所変数だとTSがnullのまま絞ってしまう。保持先をオブジェクトにする。
+    const captured: { fire?: (list: LongtaskList) => void } = {};
+    class FakeObserver {
+      constructor(cb: (list: LongtaskList) => void) {
+        captured.fire = cb;
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("PerformanceObserver", FakeObserver);
+    const hiddenSpy = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+
+    const stop = startWatchdog();
+    captured.fire?.({ getEntries: () => [{ duration: 19788, name: "self" }] });
+    await advance(0, 10);
+    stop();
+    await vi.advanceTimersByTimeAsync(10);
+
+    const longtask = (await readDiagnostics()).find((e) => e.kind === "longtask");
+    expect(longtask?.metrics?.durationMs).toBe(19788);
+    expect(longtask?.metrics?.hidden).toBe(true);
+
+    hiddenSpy.mockReturnValue(false);
+    vi.unstubAllGlobals();
+  });
+
   it("軽い遅れ(閾値未満)では stall を残さない(ノイズを増やさない)", async () => {
     const stop = startWatchdog();
     await advance(1000);
