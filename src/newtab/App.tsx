@@ -800,6 +800,20 @@ export function App() {
       commit();
     }
   }, []);
+  // 窓化(ViewportNote)が再マウント直後の高さ確定猶予タイマー発火前にノートを画面外へアンマウント
+  // した場合に呼ぶ。ResizeObserverはアンマウントで止まり以後訂正する機会が無いため、未確定のまま
+  // 猶予タイマーだけが後で発火すると「移動中に一瞬だけ測れた不正確な高さ」がnoteHeightsへ確定して
+  // しまい、その列に実体のない余白(=バーストスクロール中に真っ黒に見える隙間)が残る実害があった
+  // (2026-07-29・実機録画+elementFromPointで「そこにセルが無い」ことを直接確認)。確定させず
+  // 単に破棄すれば、noteHeightsは直前の確定値(既知の実測 or 初期ESTIMATE)のまま残る。
+  const cancelNoteHeightSettle = useCallback((id: string) => {
+    const timers = noteHeightTimersRef.current;
+    const existing = timers.get(id);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      timers.delete(id);
+    }
+  }, []);
   // 各ノートの置き場所(列index・列内のtop座標)と、ボード全体の高さ。**DOMの並びは常に
   // order順のまま**にして、列は絶対配置(CSSのleft)＋topのpxで表現する。列ごとの<div>へ振り分けて
   // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
@@ -1882,6 +1896,7 @@ export function App() {
                           estimatedHeight={noteHeights.get(note.id)}
                           contentVersion={note.updatedAt}
                           onHeight={reportNoteHeight}
+                          onUnmountBeforeSettle={cancelNoteHeightSettle}
                           onSuspend={() => void forceSnapshot(note.id, note.content)}
                         >
                           <NoteEditorPane

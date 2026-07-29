@@ -345,3 +345,77 @@ test("上スクロール中にノート同士の列(data-column-index)が入れ�
 
   expect(columnSwaps).toBe(0);
 });
+
+test("高速バーストスクロール後、列に実体のない隙間(=真っ黒に見える穴)が残らない(2026-07-29の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 60件を一気に下端まで飛ばしてから連続バーストで戻すため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: heterogeneousNotes(60) },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+
+  // 一気に下端付近まで読み進めてから、間を置かず連続で上へ戻す
+  // (=窓化の再マウント直後に高さ確定猶予タイマーが発火する前に再びアンマウントされうる状況を作る)。
+  for (let i = 0; i < 40; i++) {
+    await page.mouse.wheel(0, 400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+  for (let burst = 0; burst < 3; burst++) {
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -400);
+  }
+
+  // 高さ確定猶予(App.tsxのNOTE_HEIGHT_SETTLE_MS=500ms)を跨いでも隙間が残らないことを見たいので、
+  // 実測masonryが十分落ち着く時間だけ待ってから検査する。
+  await page.waitForTimeout(3000);
+
+  const GAP_PX = 16; // layout.cssの列内gap(App.tsxのGAP定数と同じ想定値)。
+  const TOLERANCE_PX = 30; // 実測の丸め・アニメーション残差の許容幅。
+  const maxGap = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")];
+    const byColumn = new Map<string, { top: number; bottom: number }[]>();
+    for (const cell of cells) {
+      const col = cell.dataset.columnIndex ?? "0";
+      const rect = cell.getBoundingClientRect();
+      const list = byColumn.get(col) ?? [];
+      list.push({ top: rect.top, bottom: rect.bottom });
+      byColumn.set(col, list);
+    }
+    let worst = 0;
+    for (const list of byColumn.values()) {
+      list.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < list.length; i++) {
+        worst = Math.max(worst, list[i].top - list[i - 1].bottom);
+      }
+    }
+    return worst;
+  });
+
+  expect(maxGap).toBeLessThan(GAP_PX + TOLERANCE_PX);
+});

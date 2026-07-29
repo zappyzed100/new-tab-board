@@ -136,10 +136,15 @@ body {
   min-width: 0;
 }
 
+/* contain:paint(strictに含まれる)を外す(2026-07-29)。実測masonryは.note-cellのtop/leftを
+   高頻度に書き換えて動くため、真下でプレースホルダ⇔本体の切り替えが連続すると、paint封じ込め
+   された要素が新しいラスタを取らず「computed styleは正しいのに実際の描画は古いまま(=真っ黒に
+   見える)」状態のまま固まる実害があった(実機録画+screenshotで確認。さらにスクロールすると
+   直ることも確認——コンポジタが取り残されていただけで、layout自体は正しかった)。 */
 .note-pane-placeholder {
   height: 100%;
   min-height: 520px;
-  contain: strict;
+  contain: layout style;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
