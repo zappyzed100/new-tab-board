@@ -293,3 +293,92 @@ describe("invalidateOnAuthError", () => {
     expect(launch).toHaveBeenCalledTimes(1);
   });
 });
+
+// 【更新トークン方式 — 2026-07-29】
+// implicitフローには更新トークンが無く、失効後の再取得はブラウザの認可フローを無人で走らせる
+// しかないが、それがこの環境では通らない(実機ログ: 8秒でも30秒でもタイムアウトし、同じログで
+// 手動接続は2.7秒で成功)。authorization codeフローで更新トークンを受け取り、以後はHTTPS POST
+// だけで再発行する——ブラウザを一切開かないので無人更新が成立する。
+describe("更新トークン方式(client_secretが設定されている場合)", () => {
+  /** import.meta.env経由のsecretを差し替えてモジュールを読み直す。 */
+  async function loadWithSecret(
+    launchWebAuthFlow: LaunchFn,
+    fetchImpl: ReturnType<typeof vi.fn>,
+    store: Record<string, unknown> = {},
+  ) {
+    vi.stubEnv("VITE_GOOGLE_CLIENT_SECRET", "test-secret");
+    vi.stubGlobal("fetch", fetchImpl);
+    return { mod: await load(launchWebAuthFlow, store), store };
+  }
+
+  function tokenResponse(body: Record<string, unknown>, ok = true, status = 200) {
+    return { ok, status, json: async () => body };
+  }
+
+  it("保存済みの更新トークンがあれば、ブラウザを開かずにアクセストークンを再発行する", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(tokenResponse({ access_token: "renewed", expires_in: 3600 }));
+    const { mod } = await loadWithSecret(launch, fetchMock, { driveRefreshToken: "stored-refresh" });
+
+    // 非対話(背景同期と同じ条件)でも通ることが要点。
+    expect(await mod.getAuthToken(false)).toBe("renewed");
+    // ブラウザの認可フローは一度も呼ばれない——ここが「放置しても切れない」の核心。
+    expect(launch).not.toHaveBeenCalled();
+    const body = fetchMock.mock.calls[0][1].body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("refresh_token");
+    expect(body.get("refresh_token")).toBe("stored-refresh");
+  });
+
+  it("更新トークンが失効(HTTP 400)していたら捨てる(毎回同じ失敗を繰り返さない)", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(tokenResponse({ error: "invalid_grant" }, false, 400));
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "revoked",
+    });
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    expect(store.driveRefreshToken).toBeUndefined();
+  });
+
+  it("ネットワーク断では更新トークンを捨てない(次につながれば通るため)", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    const { mod, store } = await loadWithSecret(launch, fetchMock, { driveRefreshToken: "keep-me" });
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    expect(store.driveRefreshToken).toBe("keep-me");
+  });
+
+  it("更新トークンが無い非対話呼び出しでは、通らないと分かっている無人認可を試さない", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi.fn();
+    const { mod } = await loadWithSecret(launch, fetchMock, {});
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    // 8秒(旧30秒)待って必ず失敗する経路へ入らないこと。
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("対話接続では認可コードを交換し、更新トークンを保存する", async () => {
+    const launch = vi.fn().mockResolvedValue("https://ext-id.chromiumapp.org/?code=auth-code-1");
+    const fetchMock = vi.fn().mockResolvedValue(
+      tokenResponse({ access_token: "fresh", expires_in: 3600, refresh_token: "new-refresh" }),
+    );
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {});
+
+    expect(await mod.getAuthToken(true)).toBe("fresh");
+    expect(store.driveRefreshToken).toBe("new-refresh");
+    const authUrl = new URL((launch.mock.calls[0][0] as { url: string }).url);
+    expect(authUrl.searchParams.get("response_type")).toBe("code");
+    // この2つが無いとGoogleは更新トークンを返さず、無人更新ができないまま元に戻る。
+    expect(authUrl.searchParams.get("access_type")).toBe("offline");
+    expect(authUrl.searchParams.get("prompt")).toBe("consent");
+    expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+    const body = fetchMock.mock.calls[0][1].body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("auth-code-1");
+    expect(body.get("code_verifier")).toBeTruthy();
+  });
+});

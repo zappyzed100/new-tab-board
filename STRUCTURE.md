@@ -739,6 +739,7 @@
 - function resetDriveSyncState
 
 ### `src/lib/drive/googleAuth.ts`
+- function isRefreshTokenFlowConfigured
 - function getOAuthClientId
 - function getAuthToken
 - function getAuthTokenWithError
