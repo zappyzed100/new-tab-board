@@ -114,14 +114,26 @@ Googleアカウントで許可するだけで、Drive同期とカレンダー次
 client_secret を設定すると authorization code フロー(+PKCE)へ切り替わり、一度接続すれば
 以後は**ブラウザを一切開かずに**トークンを再発行し続ける——放置しても切れなくなる。
 
-**先に「OAuth 同意画面」の公開ステータスを「本番環境」にすること(必須)**。
-「テスト」のままだと Google は**更新トークンを7日で失効させる**ため、設定しても1週間で
-また切れる。「アプリを公開」を押すだけでよい(審査は不要。以後、接続時に「このアプリは
-確認されていません」の警告が出るが、「詳細」→「(アプリ名)に移動」で進める)。
+**先に公開ステータスを「本番環境」にすること(必須)**。「テスト」のままだと Google は
+**更新トークンを7日で失効させる**ため、設定しても1週間でまた切れる
+([公式ドキュメント](https://support.google.com/cloud/answer/15549945)に
+"If your OAuth client requests an `offline` access type and receives a refresh token,
+that token will also expire." と明記)。
 
-1. Google Cloud Console →「APIとサービス」→「認証情報」で、`manifest.json` の
-   `oauth2.client_id` と同じ「ウェブ アプリケーション」型クライアントを開く
-   (画面右上の「JSON をダウンロード」でも中の `client_secret` を取得できる)
+旧「OAuth 同意画面」は **「Google Auth Platform」**(ブランディング/対象/クライアント/
+データアクセス)へ再編されており、公開ステータスは「**対象**」ページにある。
+メニューを辿るより直リンクが確実:
+
+- 公開ステータス: <https://console.cloud.google.com/auth/audience> →「アプリを公開」
+- OAuthクライアント一覧: <https://console.cloud.google.com/auth/clients>
+
+審査は不要。以後、接続時に「このアプリは確認されていません」の警告が出るが、
+「詳細」→「(アプリ名)に移動」で進める。
+
+1. 上の「クライアント」ページで、`manifest.json` の `oauth2.client_id` と同じ
+   「ウェブ アプリケーション」型クライアントを開く
+   (旧「APIとサービス」→「認証情報」からでも同じものが開ける。
+   画面の「JSON をダウンロード」でも中の `client_secret` を取得できる)
 2. 「クライアント シークレット」をコピーする
 3. リポジトリ直下に `.env.local` を作り、次の1行を書く:
 
