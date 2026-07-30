@@ -50,10 +50,7 @@ describe("nasImageRelPath / markdownImageReference", () => {
       nasImageRelPath("n", new Date(2026, 9, 1).getTime(), "z", "png"),
       nasImageRelPath("n", new Date(2026, 0, 5).getTime(), "a", "png"),
     ];
-    expect([...paths].sort()).toEqual([
-      "images/n/2026-01-05-a.png",
-      "images/n/2026-10-01-z.png",
-    ]);
+    expect([...paths].sort()).toEqual(["images/n/2026-01-05-a.png", "images/n/2026-10-01-z.png"]);
   });
 
   it("本文へ書く参照はMarkdown標準の画像記法(独自スキーム nas:)", () => {

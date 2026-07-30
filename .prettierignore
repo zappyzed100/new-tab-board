@@ -2,6 +2,10 @@ node_modules
 dist
 playwright-report
 test-results
+# submodule(キット本体・ui-skills)はそれぞれのリポジトリの整形規約に従う。ここで
+# `prettier --write .` を回すと submodule の中身まで書き換わり、親リポジトリからは
+# 「submodule modified」としてしか見えない差分が残る(2026-07-30に実害)。
+upstream/
 # キットの正本文書・設定はプロジェクト側のフォーマッタで書き換えない(GUARDRAILS.md §5 の分離)
 *.md
 *.yml

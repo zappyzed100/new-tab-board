@@ -320,7 +320,9 @@ describe("更新トークン方式(client_secretが設定されている場合)"
     const fetchMock = vi
       .fn()
       .mockResolvedValue(tokenResponse({ access_token: "renewed", expires_in: 3600 }));
-    const { mod } = await loadWithSecret(launch, fetchMock, { driveRefreshToken: "stored-refresh" });
+    const { mod } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "stored-refresh",
+    });
 
     // 非対話(背景同期と同じ条件)でも通ることが要点。
     expect(await mod.getAuthToken(false)).toBe("renewed");
@@ -333,7 +335,9 @@ describe("更新トークン方式(client_secretが設定されている場合)"
 
   it("更新トークンが失効(HTTP 400)していたら捨てる(毎回同じ失敗を繰り返さない)", async () => {
     const launch = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue(tokenResponse({ error: "invalid_grant" }, false, 400));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(tokenResponse({ error: "invalid_grant" }, false, 400));
     const { mod, store } = await loadWithSecret(launch, fetchMock, {
       driveRefreshToken: "revoked",
     });
@@ -345,7 +349,9 @@ describe("更新トークン方式(client_secretが設定されている場合)"
   it("ネットワーク断では更新トークンを捨てない(次につながれば通るため)", async () => {
     const launch = vi.fn();
     const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
-    const { mod, store } = await loadWithSecret(launch, fetchMock, { driveRefreshToken: "keep-me" });
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "keep-me",
+    });
 
     expect(await mod.getAuthToken(false)).toBeNull();
     expect(store.driveRefreshToken).toBe("keep-me");
@@ -363,9 +369,11 @@ describe("更新トークン方式(client_secretが設定されている場合)"
 
   it("対話接続では認可コードを交換し、更新トークンを保存する", async () => {
     const launch = vi.fn().mockResolvedValue("https://ext-id.chromiumapp.org/?code=auth-code-1");
-    const fetchMock = vi.fn().mockResolvedValue(
-      tokenResponse({ access_token: "fresh", expires_in: 3600, refresh_token: "new-refresh" }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        tokenResponse({ access_token: "fresh", expires_in: 3600, refresh_token: "new-refresh" }),
+      );
     const { mod, store } = await loadWithSecret(launch, fetchMock, {});
 
     expect(await mod.getAuthToken(true)).toBe("fresh");

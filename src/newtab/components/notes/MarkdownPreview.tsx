@@ -58,7 +58,8 @@ function installNasImageRenderer(instance: MarkdownIt): void {
     // `nas:` 以外(http/data等)は従来どおりレンダラへ委ね、sanitizeの判断に任せる。
     if (!src.startsWith(NAS_IMAGE_SCHEME)) return renderImage(tokens, idx, options, env, self);
     const rel = nasRelPathFromSrc(src);
-    const resolved = rel === null ? undefined : (env as PreviewEnv | undefined)?.imageUrls?.get(rel);
+    const resolved =
+      rel === null ? undefined : (env as PreviewEnv | undefined)?.imageUrls?.get(rel);
     if (resolved === undefined) {
       const alt = instance.utils.escapeHtml(token.content);
       return alt === "" ? "" : `<span class="nas-image-missing">${alt}</span>`;

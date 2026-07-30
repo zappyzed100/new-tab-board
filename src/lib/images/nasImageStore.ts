@@ -80,12 +80,7 @@ export async function saveNoteImageToNas(
     logOp("note-image", "skip-no-nas-folder", `note=${noteId}`);
     return null;
   }
-  const relPath = nasImageRelPath(
-    noteId,
-    d.now(),
-    d.newImageId(),
-    imageExtensionFor(blob.type),
-  );
+  const relPath = nasImageRelPath(noteId, d.now(), d.newImageId(), imageExtensionFor(blob.type));
   const ok = await d.writeBinary(base, relPath, await blobToBase64(blob));
   logOp("note-image", ok ? "save" : "save-failed", `note=${noteId} path=${relPath}`);
   return ok ? relPath : null;
