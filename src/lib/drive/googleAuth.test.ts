@@ -24,9 +24,16 @@ function storageStub(store: Record<string, unknown>) {
 }
 
 /** chromeスタブを組んでgoogleAuthを新規に読み込む(=新しいタブでの初回読み込み相当)。
- * storeを使い回せば「別タブだが同じchrome.storage.local」を再現できる。 */
-async function load(launchWebAuthFlow: LaunchFn, store: Record<string, unknown> = {}) {
+ * storeを使い回せば「別タブだが同じchrome.storage.local」を再現できる。
+ *
+ * secretは既定で空文字にする——実装(readClientSecret)はVITE_GOOGLE_CLIENT_SECRETの
+ * 有無でimplicitフロー/authorization codeフローを切り替えるため、テスト実行機の
+ * .env.local(本物のsecretが入っていることがある。gitignore対象)を暗黙に読んでしまうと
+ * どちらの経路を通るかが機械ごとに変わってしまう(test-nondeterminismと同型の事故)。
+ * このヘルパーで毎回明示的に上書きし、環境から隔離する。 */
+async function load(launchWebAuthFlow: LaunchFn, store: Record<string, unknown> = {}, secret = "") {
   vi.resetModules();
+  vi.stubEnv("VITE_GOOGLE_CLIENT_SECRET", secret);
   vi.stubGlobal("chrome", {
     runtime: {
       getManifest: () => ({
@@ -52,6 +59,7 @@ function redirectWith(token: string, expiresIn = 3600): string {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("getAuthToken", () => {
@@ -306,9 +314,8 @@ describe("更新トークン方式(client_secretが設定されている場合)"
     fetchImpl: ReturnType<typeof vi.fn>,
     store: Record<string, unknown> = {},
   ) {
-    vi.stubEnv("VITE_GOOGLE_CLIENT_SECRET", "test-secret");
     vi.stubGlobal("fetch", fetchImpl);
-    return { mod: await load(launchWebAuthFlow, store), store };
+    return { mod: await load(launchWebAuthFlow, store, "test-secret"), store };
   }
 
   function tokenResponse(body: Record<string, unknown>, ok = true, status = 200) {
