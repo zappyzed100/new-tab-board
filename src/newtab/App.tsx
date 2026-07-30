@@ -844,34 +844,29 @@ export function App() {
   // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
   // CodeMirrorが破棄され「入力中にカーソルが飛び以降の打鍵が消える」実害が出ていた(2026-07-23)。
   // 親が変わらなければ配置が変わってもCM6は生き続ける——position/top/leftだけが変わる。
-  // ノートの列(column)割り当てはスティッキーにする(初回だけ決め、以降は固定)。素の貪欲法
-  // (毎回「その時点で一番低い列」を選び直す)は、あるノートの高さが後から変わると、それより
-  // 後ろ(リスト順で後)の全ノートの列選択が玉突きで変わりうる——窓化の再マウントで既読ノートの
-  // 高さが多少ぶれるだけでも、ノート同士が列を跨いで入れ替わって見える実害があった
-  // (ユーザー報告・2026-07-29「下から上に読む時にノートの並び順/列が入れ替わる」)。
-  // 一度割り当てた列は固定し、その列内での縦位置(top)だけを現在の高さで再計算する——これなら
-  // 高さの変化はその列の中で完結し、他のノートを別の列へ飛ばさない。
-  // **作り直すのは列数が変わった時だけ**。ノートの増減では作り直さない(2026-07-29)——
-  // 下のLPT割当は他ノートの高さに依存するため、末尾に空ノートが1つ補充されただけでも
-  // 作り直すと既存ノートまで列を移り、入力中のペインが別の列へ飛んでCM6が再マウントされる
-  // (2026-07-23に潰した「操作中のノートが移って打鍵が消える」の再来。回帰テストが検知した)。
-  const columnAssignmentRef = useRef<Map<string, number>>(new Map());
-  const columnAssignmentKeyRef = useRef<string>("");
+  //
+  // 列割当は **order順(=sortedNotes順)に「その時点で一番低い列。同高なら左」へ入れる貪欲法**
+  // (2026-07-30)。先頭ノートは必ず列0の先頭に来る——全列が高さ0の状態で同高tieを左が取るため。
+  // これは「左上が一番上」というユーザーの並べ替えモデル(⬆️/⬇️/ドラッグ/ピンはすべて linear
+  // order 上の操作)と見た目を一致させるための必須条件。高い順(LPT法)で詰めていた頃は最長の
+  // ノートが左上を占め、⬆️で先頭へ動かしたノートが盤面のどこへ行ったか分からなかった
+  // (ユーザー報告・2026-07-30「ノートを上下するシステムと実際の配置がずれてる」)。
+  //
+  // **割当に使う高さは実測値ではなく本文からの見積もり(estimateNoteHeight)だけ**にする。
+  // これが旧スティッキー割当の代わりに「上スクロール中に列が入れ替わる」(2026-07-29の回帰・
+  // 実測1512回/300ステップ)を防ぐ仕掛け: 割当が実測に一切依存しないので、窓化の再マウントで
+  // 高さがぶれても、未測定→測定済みへ変わっても、割当は1pxも動かない(内容と列数が同じなら
+  // 常に同じ結果=決定的)。スティッキー割当は「一度決めた列を動かさない」ため、並べ替えの
+  // 結果を配置へ反映できず今回の症状の直接の原因でもあった。
+  // 校正倍率(calibration)は全ノートへ一律に掛かり貪欲法の大小比較を変えないため、割当では
+  // 掛けない(topの積み上げにだけ使う)。
+  // 打鍵で見積もりが変わるのは編集中のノート自身なので、貪欲法が先頭から積む性質(prefix安定)
+  // により**それより前のノートの割当は不変**。末尾への空ノート補充でも既存の割当は動かない。
   const noteLayout = useMemo(() => {
     const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
 
-    const columnsKey = String(columnCount);
-    if (columnAssignmentKeyRef.current !== columnsKey) {
-      columnAssignmentRef.current = new Map();
-      columnAssignmentKeyRef.current = columnsKey;
-    }
-    const columnOf = columnAssignmentRef.current;
-    // 盤面から消えたノートの割当は捨てる(残すと際限なく溜まる)。
-    const liveIds = new Set(visibleNotes.map((n) => n.id));
-    for (const id of [...columnOf.keys()]) if (!liveIds.has(id)) columnOf.delete(id);
-    // 未測定ノートは**本文から見積もる**。一律520pxだと数千行のノートが100倍以上小さく
-    // 見積もられ、スティッキーな列割当がその誤りごと固定されて、他の列が数万px先に尽きる
-    // (=何も無い真っ黒な領域が出る)実害があった(2026-07-29)。
+    // 未測定ノートのtopは**本文から見積もる**。一律520pxだと数千行のノートが100倍以上小さく
+    // 見積もられ、他の列が数万px先に尽きる(=何も無い真っ黒な領域が出る)実害があった(2026-07-29)。
     // 見積もりは実測と体系的にズレる(フォントサイズ・折り返し・列幅で変わる。実測では
     // 実測/見積もり=1.04〜1.07)。ズレたままだと、マウントされたノートだけが実寸へ伸びて
     // 列ごとに食い違い、下端が1万px単位でずれて「片側だけ何も無い」区間ができる。
@@ -891,40 +886,36 @@ export function App() {
     const heightOf = (note: Note) =>
       noteHeights.get(note.id) ?? estimateNoteHeight(note) * calibration;
 
-    // **割り当ては高い順(LPT法)**。order順の貪欲法だと、後ろに来た長文ノートが載った列だけが
-    // 突出し、他の列は数万px先に尽きる(実測: 3列で33,773pxの偏りが残っていた)。高い順に
-    // 最短列へ入れると偏りは「最大ノート高さ」ではなくその1/3程度まで縮む。
-    // 割り当て済みのノートは動かさない(上スクロール中に列が入れ替わる不具合の対策を維持する)。
-    const unassigned = visibleNotes.filter((note) => {
-      const c = columnOf.get(note.id);
-      return c === undefined || c >= columnCount;
-    });
-    if (unassigned.length > 0) {
-      const running = new Array<number>(columnCount).fill(0);
-      for (const note of visibleNotes) {
-        const c = columnOf.get(note.id);
-        if (c !== undefined && c < columnCount) running[c] += heightOf(note) + GAP;
-      }
-      for (const note of [...unassigned].sort((a, b) => heightOf(b) - heightOf(a))) {
-        let min = 0;
-        for (let c = 1; c < columnCount; c++) if (running[c] < running[min]) min = c;
-        columnOf.set(note.id, min);
-        running[min] += heightOf(note) + GAP;
-      }
+    // 列割当(order順の貪欲法・見積もり高さのみ)。同高なら左が勝つ(厳密不等号で更新するため
+    // 添字の小さい列が残る)——先頭ノートが左上に来る保証はこのtie-breakに依る。
+    const assignRunning = new Array<number>(columnCount).fill(0);
+    const columnOf = new Map<string, number>();
+    for (const note of visibleNotes) {
+      let min = 0;
+      for (let c = 1; c < columnCount; c++) if (assignRunning[c] < assignRunning[min]) min = c;
+      columnOf.set(note.id, min);
+      assignRunning[min] += estimateNoteHeight(note) + GAP;
     }
 
     const heights = new Array(columnCount).fill(0);
     const placement = new Map<string, { column: number; top: number }>();
+    // 未マウントのセル(プレースホルダ)へ渡す想定高さ。**topの積み上げに使った値と同じ**もので
+    // なければならない——校正前の素の見積もりを渡していた頃は、topは校正済み(実測/見積もり=
+    // 1.04〜1.07倍)で積まれているのにセルは素の見積もりの高さで描かれ、その差(長文ノートでは
+    // 1000px級)が列の中の「実体のない隙間=真っ黒な穴」として残った(2026-07-30に実測で確認)。
+    const assumedHeight = new Map<string, number>();
     // 配置(top)は**order順**に積む——列の中での並びは優先度順のままにする。
     // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
     for (const note of visibleNotes) {
       const column = columnOf.get(note.id) ?? 0;
+      const height = heightOf(note);
       placement.set(note.id, { column, top: heights[column] });
-      heights[column] += heightOf(note) + GAP;
+      assumedHeight.set(note.id, height);
+      heights[column] += height + GAP;
     }
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
-    return { placement, boardHeight };
+    return { placement, boardHeight, assumedHeight };
   }, [visibleNotes, columnCount, noteHeights]);
   // 再配置で読んでいる位置が動かないようにスクロールを補正する(ユーザー報告・2026-07-27:
   // 長いノートを読み下げると配置が変わって読みづらい)。高さの確定・件数の増減・列数の変化を
@@ -2045,7 +2036,9 @@ export function App() {
                           columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
                           top={noteLayout.placement.get(note.id)?.top ?? 0}
                           active={note.id === activeNoteId}
-                          estimatedHeight={noteHeights.get(note.id) ?? estimateNoteHeight(note)}
+                          estimatedHeight={
+                            noteLayout.assumedHeight.get(note.id) ?? estimateNoteHeight(note)
+                          }
                           contentVersion={note.updatedAt}
                           onHeight={reportNoteHeight}
                           onUnmountBeforeSettle={cancelNoteHeightSettle}

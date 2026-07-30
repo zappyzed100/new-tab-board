@@ -198,6 +198,94 @@ function heterogeneousNotes(count: number) {
   });
 }
 
+/** 数千行級の長文を等間隔に混ぜた盤面。長文ほど「盤面が確保した高さ」と「CM6が未生成で潰れた
+ * ペインの高さ」の差が大きくなり、下の隙間テストの症状が安定して出る(heterogeneousNotesの
+ * 外れ値は最大350行で差が小さく、出方が実行ごとに揺れた)。 */
+function longNoteEvery7th(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `hole-note-${i}`,
+    title: `ノート${i}`,
+    content: Array.from({ length: i % 7 === 0 ? 400 + i * 20 : 15 + (i % 11) * 5 }, (_, l) =>
+      l === 0 ? `ノート${i}の本文` : `${l}: 本文の一行です。`,
+    ).join("\n"),
+    pinned: false,
+    order: i,
+    createdAt: i,
+    updatedAt: i,
+  }));
+}
+
+test("中のCM6が未生成のペインがあっても、セルは盤面が確保した高さを占める(=下に真っ黒な隙間が残らない・2026-07-30の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: longNoteEvery7th(60) },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  for (let i = 0; i < 40; i++) {
+    await page.mouse.wheel(0, 400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+  for (let burst = 0; burst < 3; burst++) {
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -400);
+  }
+  await page.waitForTimeout(3000);
+
+  // 実測(CLAUDE.md): 列ごとに隣り合うセルの隙間を出し、内訳ごと突き合わせる。修正前は
+  // 「mounted なのに高さ450pxのセル」の下に9,526pxの空白が残っていた(2026-07-30の実測)。
+  const holes = await page.evaluate(() => {
+    const byColumn = new Map<string, { label: string; top: number; bottom: number }[]>();
+    for (const cell of document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")) {
+      const rect = cell.getBoundingClientRect();
+      const list = byColumn.get(cell.dataset.columnIndex ?? "0") ?? [];
+      const editor = cell.querySelector<HTMLElement>("[data-editor-state]")?.dataset.editorState;
+      list.push({
+        label: `${cell.dataset.noteId}(${cell.dataset.viewportState}/editor=${editor ?? "none"},h=${rect.height.toFixed(0)})`,
+        top: rect.top,
+        bottom: rect.bottom,
+      });
+      byColumn.set(cell.dataset.columnIndex ?? "0", list);
+    }
+    const found: string[] = [];
+    for (const [col, list] of byColumn) {
+      list.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < list.length; i++) {
+        const gap = list[i].top - list[i - 1].bottom;
+        // 16px(列内gap)+30pxの丸め許容。それを超える空きは「実体のない隙間」。
+        if (gap > 46) found.push(`col=${col} gap=${gap.toFixed(1)} after ${list[i - 1].label}`);
+      }
+    }
+    return found;
+  });
+  expect(holes).toEqual([]);
+});
+
 test("下スクロールで読み進めた後、上スクロールで戻ってもジャンプしない(2026-07-28の回帰)", async ({
   context,
   newTabUrl,

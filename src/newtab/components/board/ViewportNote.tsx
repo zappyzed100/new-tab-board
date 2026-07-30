@@ -1,7 +1,10 @@
 // ViewportNote.tsx — 500件ボードでも詳細ノートペインを表示領域周辺だけに制限する窓化ラッパ。
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-const VIEWPORT_MARGIN_PX = 900;
+// 内側の窓化(Notepad.EDITOR_VIEWPORT_MARGIN_PX=900)より**狭く**する(2026-07-30)。
+// 逆転すると「セルはマウント済みなのに中のCM6はdeferred」という帯ができ、そのペインが
+// 最小高さまで潰れて、盤面が空けている場所との差が真っ黒な隙間として残る(Notepad.tsx参照)。
+const VIEWPORT_MARGIN_PX = 640;
 const DEFAULT_PLACEHOLDER_HEIGHT_PX = 520;
 
 type VisibilityListener = (visible: boolean) => void;
@@ -77,6 +80,10 @@ export function ViewportNote({
   children,
 }: Props) {
   const cellRef = useRef<HTMLDivElement>(null);
+  // 高さの実測は**内側のラッパ**で行う(セルではない)。セルには「盤面が確保した高さ」を
+  // min-heightで持たせるため、セルを測ると min-height 自身を測り返して見積もりが永久に
+  // 是正されない(自己成就する固定点になる)。ラッパは中身なりの高さなので測定は常に正直。
+  const measureRef = useRef<HTMLDivElement>(null);
   const [nearViewport, setNearViewport] = useState(active);
   const [placeholderHeight, setPlaceholderHeight] = useState(estimatedHeight);
   const contentVersionRef = useRef(contentVersion);
@@ -112,16 +119,22 @@ export function ViewportNote({
   // ResizeObserverは詳細ペインが存在する時だけ生成する。500個のプレースホルダには共有の
   // IntersectionObserver 1個だけが付き、ResizeObserverや子コンポーネントのtimerは付かない。
   useEffect(() => {
-    const cell = cellRef.current;
-    if (!mounted || !cell || typeof ResizeObserver === "undefined") return;
+    const measured = measureRef.current;
+    if (!mounted || !measured || typeof ResizeObserver === "undefined") return;
     let isFirst = true;
     const observer = new ResizeObserver((entries) => {
+      // 中のCM6がまだ生成されていない(Notepadの内側の窓化がdeferred)ペインは最小高さまで
+      // 潰れており、その値は「このノートの高さ」ではない。確定させると、盤面がそのノートの
+      // ぶんだけ縮んで読んでいた位置が数百〜千px跳ね、CM6が生成された瞬間にまた戻る
+      // (2026-07-30に実測: 1,031pxのジャンプ)。生成されるまで測らない——確保した場所は
+      // セルのmin-heightが埋めているので、測らなくても穴は開かない。
+      if (measured.querySelector('[data-editor-state="deferred"]')) return;
       for (const entry of entries) {
         onHeight(noteId, entry.contentRect.height, isFirst, estimatedHeightRef.current);
       }
       isFirst = false;
     });
-    observer.observe(cell);
+    observer.observe(measured);
     return () => {
       observer.disconnect();
       onUnmountBeforeSettle?.(noteId);
@@ -140,25 +153,34 @@ export function ViewportNote({
       data-viewport-state={mounted ? "mounted" : "deferred"}
       // 絶対配置(layout.css)。列はCSS変数→left、縦はtopのpx。DOMの並びは常にorder順で不変なので、
       // 配置が変わってもReactは再マウントせず、編集中のCodeMirrorとフォーカスが生き残る。
+      // minHeight は「盤面(App.tsxのnoteLayout)がこのノートのために空けた高さ」。中身が
+      // それより低い状態(=CM6がまだ描かれず最小高さに潰れているペイン)でも、セルは確保ぶんを
+      // 占め続ける——占めないと、次のセルまでの差が**実体のない隙間=真っ黒な領域**として残る
+      // (2026-07-30に実測で特定: 高さ450pxのセルの下に9,526pxの空白。2026-07-29から残っていた
+      // 「上スクロール中の真っ黒」の残り)。実測(ResizeObserver)は内側のラッパで取るので、
+      // この確保が見積もりを固定してしまうことはない。
       style={
         {
           top: `${top}px`,
+          minHeight: `${estimatedHeight}px`,
           "--note-column-index": columnIndex,
           ...(mounted ? null : { height: `${placeholderHeight}px` }),
         } as CSSProperties
       }
     >
-      {mounted ? (
-        children
-      ) : (
-        <div
-          className="note-pane-placeholder"
-          data-testid={`note-placeholder-${noteId}`}
-          aria-hidden="true"
-        >
-          {title}
-        </div>
-      )}
+      <div ref={measureRef} className="note-cell-measure">
+        {mounted ? (
+          children
+        ) : (
+          <div
+            className="note-pane-placeholder"
+            data-testid={`note-placeholder-${noteId}`}
+            aria-hidden="true"
+          >
+            {title}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

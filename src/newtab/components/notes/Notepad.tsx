@@ -22,7 +22,13 @@ import { evaluateLineIfCalculator } from "../../../lib/linking/calculator";
 const EDITOR_MIN_HEIGHT_PX = 320;
 // 画面へ入る少し前にCM6を準備する。全ノート分を常駐させると、各EditorViewの描画層が
 // GPUプロセスへ累積し、BraveのHangWatcherがGPU入力スレッドの停止を検出した実害がある。
-const EDITOR_VIEWPORT_MARGIN_PX = 640;
+// **外側の窓化(ViewportNote.VIEWPORT_MARGIN_PX)より広くしておくこと**(2026-07-30)。
+// 狭いと「セルはマウント済みなのに中のCM6だけdeferred」という帯ができ、そのペインは
+// EDITOR_MIN_HEIGHT_PXまで潰れる——盤面はそのノートの見積もり高さぶんの場所を空けているので、
+// 差(長文ノートでは1万px級)がそのまま「実体のない隙間=真っ黒な領域」として残る
+// (2026-07-29から残っていた「上スクロール中の真っ黒」の残り。2026-07-30に実測で特定:
+// mounted状態のセルが高さ450pxのまま、次のセルまで9,526px空いていた)。
+const EDITOR_VIEWPORT_MARGIN_PX = 900;
 
 type Props = {
   content: string;

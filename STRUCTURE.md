@@ -321,7 +321,7 @@
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
-- `src/newtab/noteHeightEstimate.ts` — noteHeightEstimate.ts — 未測定ノートの高さを本文から見積もる(実測masonryの列割当用)
+- `src/newtab/noteHeightEstimate.ts` — noteHeightEstimate.ts — 未測定ノートの高さを本文から見積もる(masonryの列割当用)
 - `src/newtab/styles/components.css`
 - `src/newtab/styles/layout.css`
 - `src/newtab/styles/tokens.css`
