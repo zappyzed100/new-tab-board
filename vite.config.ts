@@ -34,6 +34,13 @@ function keepKatexSurrogatesEscaped() {
 export default defineConfig({
   plugins: [react(), keepKatexSurrogatesEscaped()],
   build: {
+    // modulepreload を出さない(2026-08-04)。拡張機能のページはローカルの拡張リソースを読むため
+    // preload の先読み効果がほぼ無い一方、Chrome は chrome-extension:// のページで preload エントリを
+    // 実際のモジュール取得へマッチできず(「cross-world extension resource mismatch」)、
+    // 「preloaded but not used」の警告をロードのたびにコンソールへ出していた(ユーザー報告)。
+    // 無効化すると <link rel="modulepreload"> と polyfill チャンクの生成そのものが消える——
+    // モジュールは main.js の静的 import としてこれまでどおり読み込まれる(取得回数も変わらない)。
+    modulePreload: false,
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL("index.html", import.meta.url)),
