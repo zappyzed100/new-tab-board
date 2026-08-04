@@ -14,11 +14,13 @@ type Props = {
   specialItems: SpecialItem[];
   /** live項目(ボードに生きているノート)を開く。 */
   onSelectNote: (id: string) => void;
+  /** frozen項目(保管庫に凍結したメモ)をボードへ回収して表示し直す(ダブルクリック・ユーザー指示)。 */
+  onRestore: (id: string) => void;
   /** スペシャルから外す(live=スター解除 / frozen=凍結項目を削除)。 */
   onRemove: (id: string, source: "live" | "frozen") => void;
 };
 
-export function SpecialPanel({ notes, specialItems, onSelectNote, onRemove }: Props) {
+export function SpecialPanel({ notes, specialItems, onSelectNote, onRestore, onRemove }: Props) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const entries = specialEntries(notes, specialItems);
@@ -124,13 +126,24 @@ export function SpecialPanel({ notes, specialItems, onSelectNote, onRemove }: Pr
                         {e.title || "(無題)"}
                       </Button>
                     ) : (
-                      <Text
-                        size="1"
-                        data-testid={`special-frozen-${e.id}`}
-                        title="凍結済み(元ノートは削除)"
-                      >
-                        {e.title || "(無題)"} <Badge color="gray">凍結</Badge>
-                      </Text>
+                      // 凍結項目はボタンにする(ユーザー指示: ダブルクリックで保管庫から回収)。
+                      // 単クリックでは何もしない——回収は盤面を書き換える操作なので、
+                      // 一覧を眺めるだけのクリックで暴発させない。
+                      // 「凍結」バッジはボタンの**外**に置く: 中に入れるとバッジの高さで行が
+                      // live行より4px高くなり、お気に入り一覧の行の高さが項目ごとに食い違う(実測)。
+                      <>
+                        <Button
+                          size="1"
+                          variant="ghost"
+                          color="gray"
+                          data-testid={`special-frozen-${e.id}`}
+                          title="凍結済み(元ノートは削除)。ダブルクリックで保管庫から回収してボードへ戻す"
+                          onDoubleClick={() => onRestore(e.id)}
+                        >
+                          {e.title || "(無題)"}
+                        </Button>
+                        <Badge color="gray">凍結</Badge>
+                      </>
                     )}
                     <Button
                       size="1"

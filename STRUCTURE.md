@@ -814,6 +814,7 @@
 - function normalizeFolder
 - function toggleNoteSpecial
 - function freezeNoteToSpecial
+- function restoreSpecialItemToNote
 - function upsertSpecialItem
 - function removeSpecialItem
 - function setSpecialItemFolder

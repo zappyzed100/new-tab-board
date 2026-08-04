@@ -42,6 +42,33 @@ export function freezeNoteToSpecial(note: Note, now: number): SpecialItem | null
   };
 }
 
+/** 凍結項目(frozen)をボードのノートへ戻す(お気に入り一覧のダブルクリックで「保管庫から回収」
+ * ——ユーザー指示・2026-08-04)。freezeNoteToSpecial の逆向きの写像。
+ * - id は凍結時のものを引き継ぐ: 履歴スナップショット(IndexedDBのnoteId)・NAS/Driveのファイル名が
+ *   同じidで紐づいているため、新idで戻すと回収したメモがそれらの過去と切り離される。
+ * - **updatedAt は回収時刻で必ず上書きする**: 削除時に打たれた tombstone(削除時刻)より新しく
+ *   ないと、repository の upsert が「削除済みの古いノート」と見なして復活そのものを捨てる
+ *   (storage/local-data-repository.ts の commitNoteMutation・note-sync.ts の
+ *   updateTombstonesForMutation。逆に新しければ tombstone 側が外れて復活が全タブへ収束する)。
+ * - special は true のまま: 回収はお気に入りからの取り出しではなく「盤面への再表示」なので、
+ *   一覧には live として同じ場所に残り続ける。 */
+export function restoreSpecialItemToNote(item: SpecialItem, order: number, now: number): Note {
+  return {
+    id: item.id,
+    title: item.title,
+    content: item.content,
+    pinned: false,
+    order,
+    special: true,
+    ...(item.folder !== undefined ? { specialFolder: item.folder } : {}),
+    ...(item.tags !== undefined ? { tags: item.tags } : {}),
+    ...(item.createdAt !== undefined ? { createdAt: item.createdAt } : {}),
+    updatedAt: now,
+    // 「この端末のみ」で凍結した項目は、盤面へ戻しても端末外へ出さない(凍結時と同じ扱い)。
+    ...(item.noSync ? { noSync: true } : {}),
+  };
+}
+
 /** 凍結項目リストへ追加/更新(同idは置換)。 */
 export function upsertSpecialItem(items: SpecialItem[], item: SpecialItem): SpecialItem[] {
   return [...items.filter((i) => i.id !== item.id), item];

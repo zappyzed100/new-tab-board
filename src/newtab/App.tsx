@@ -89,6 +89,7 @@ import {
 import {
   freezeNoteToSpecial,
   removeSpecialItem,
+  restoreSpecialItemToNote,
   specialEntries,
   specialSyncSignature,
   toggleNoteSpecial,
@@ -1202,6 +1203,25 @@ export function App() {
     if (frozen) updateSpecialItems(upsertSpecialItem(specialItems, frozen));
     updateNotes((prev) => removeNote(prev, noteId));
   }
+  // お気に入り一覧のダブルクリックで、保管庫に凍結したメモをボードへ回収して表示し直す
+  // (ユーザー指示・2026-08-04)。本文は凍結時のスナップショット(=NAS/Driveのspecialミラーと
+  // 同じ中身)から戻すため、保管庫が未設定/未接続の端末でも回収できる。
+  // 凍結項目は回収と同時に外す——同じidのノートがliveとして同じ行に出る(specialEntriesはlive優先)
+  // ため、残すと同じメモの古いコピーだけが不可視のまま残り、次の削除まで誰も更新しない。
+  function restoreSpecial(id: string) {
+    const item = specialItemsRef.current.find((i) => i.id === id);
+    if (!item) return;
+    const now = clockNow();
+    logOp("special", "restore", `note=${id.slice(0, 8)} chars=${item.content.length}`);
+    updateNotes((prev) =>
+      // 既に同idのノートが盤面にある(liveへ戻った直後の二重ダブルクリック等)なら何もしない。
+      prev.some((n) => n.id === id)
+        ? prev
+        : addNote(prev, restoreSpecialItemToNote(item, nextNoteOrder(prev), now)),
+    );
+    updateSpecialItems(removeSpecialItem(specialItemsRef.current, id));
+    selectNote(id);
+  }
   // スペシャルから外す(live=スター解除 / frozen=凍結項目を削除)。
   function removeSpecial(id: string, source: "live" | "frozen") {
     if (source === "live") updateNotes((prev) => updateNote(prev, id, { special: false }));
@@ -1874,6 +1894,7 @@ export function App() {
                   notes={notes}
                   specialItems={specialItems}
                   onSelectNote={selectNote}
+                  onRestore={restoreSpecial}
                   onRemove={removeSpecial}
                 />
                 <TagCandidatesPanel
