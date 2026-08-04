@@ -103,6 +103,59 @@ Googleアカウントで許可するだけで、Drive同期とカレンダー次
    リダイレクトを使う環境非依存の方式)へ移行済みで、これには「ウェブ アプリケーション」型の
    クライアントが要る。
 
+#### 放置しても接続が切れないようにする(client_secret の設定・任意)
+
+既定の認可方式(implicitフロー)は**更新トークンを発行しない**ため、アクセストークンが
+約1時間で失効するたび「GDrive設定」を手で押し直す必要がある。無人での再取得も試みるが、
+実機ログで**8秒でも30秒でも必ずタイムアウトし、原理的に通らない**ことが確定している
+(同じログで手動接続だけが2.7秒で成功。詳細は
+[src/lib/drive/googleAuth.ts](src/lib/drive/googleAuth.ts)冒頭コメント)。
+
+client_secret を設定すると authorization code フロー(+PKCE)へ切り替わり、一度接続すれば
+以後は**ブラウザを一切開かずに**トークンを再発行し続ける——放置しても切れなくなる。
+
+**どこまで延びるかは公開ステータスで決まる**。「テスト」のままだと Google は更新トークンを
+**7日**で失効させる([公式ドキュメント](https://support.google.com/cloud/answer/15549945):
+"If your OAuth client requests an `offline` access type and receives a refresh token,
+that token will also expire.")。それでも**現状の約1時間から7日へ延びる**ので、
+このプロジェクトは**テストのままを既定とする**。
+
+本番公開すれば失効しなくなるが、**このアプリでは事実上選べない**——`calendar.readonly` が
+[機密スコープ](https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification)
+に当たり、本番公開にはGoogleの検証(プライバシーポリシー・公開ホームページ・YouTubeのデモ動画・
+利用理由の説明)が要る。個人用ツールには釣り合わない。
+どうしても失効を無くしたい場合は `manifest.json` から `calendar.readonly` を外す
+(残る `drive.file` は[非機密](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)
+なので検証不要で公開できる)——ただし「次の予定」表示は使えなくなる。
+
+参考: 旧「OAuth 同意画面」は **「Google Auth Platform」**(ブランディング/対象/クライアント/
+データアクセス)へ再編された。メニューを辿るより直リンクが確実:
+
+- OAuthクライアント一覧: <https://console.cloud.google.com/auth/clients>
+- 公開ステータス(上記のとおり通常は変更不要): <https://console.cloud.google.com/auth/audience>
+
+1. 上の「クライアント」ページで、`manifest.json` の `oauth2.client_id` と同じ
+   「ウェブ アプリケーション」型クライアントを開く
+   (旧「APIとサービス」→「認証情報」からでも同じものが開ける。
+   画面の「JSON をダウンロード」でも中の `client_secret` を取得できる)
+2. 「クライアント シークレット」をコピーする
+3. リポジトリ直下に `.env.local` を作り、次の1行を書く:
+
+   ```
+   VITE_GOOGLE_CLIENT_SECRET=ここに貼る
+   ```
+
+4. `npm run build` し直して拡張機能を再読み込みし、「GDrive設定」から**一度だけ接続し直す**
+   (更新トークンはこの接続時に受け取るため、既存の接続では入っていない)
+
+`.env.local` は `.gitignore` 済みで、`dist/` も元から追跡対象外なので、シークレットが git へ
+入ることはない。**未設定のままでも従来どおり動く**(その場合は1時間ごとの手動再接続が要る)。
+
+なお、この方式では client_secret がビルド成果物に埋め込まれるため、拡張機能を配布すると
+取り出せる。シークレット単体では他人があなたのデータへアクセスすることはできない(利用者の
+同意が別途必要)が、**Chrome ウェブストアで公開する場合は別途検討が要る**——個人利用の
+未公開拡張であることを前提とした割り切り。
+
 - 同期先は Drive の `app/New Tab Board/` フォルダ配下(自動作成)。詳細は
   [src/lib/drive/CLAUDE.md](src/lib/drive/CLAUDE.md)。
 - カレンダーは自分の「メイン(primary)」カレンダーのみを読む(カレンダーIDの指定UIは無い)。

@@ -76,6 +76,74 @@ test("スターでスペシャルに入り、削除すると凍結して一覧�
   await expect(page.getByTestId(`special-frozen-${id}`)).toBeVisible(); // 凍結表示
 });
 
+test("凍結項目をダブルクリックすると保管庫から回収してボードへ戻る(ユーザー指示・2026-08-04)", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+
+  const first = panes(page).first();
+  const id = await idOf(first);
+  await first.locator(".note-pane-title-input").fill("回収テスト");
+  await first.locator(".cm-content").click();
+  await page.keyboard.type("回収したい大事なメモ");
+
+  // ⭐で保管 → 削除して凍結させる(ここまでは上のテストと同じ道筋)。
+  await first.getByTestId(`star-note-${id}`).click();
+  await expect(page.getByTestId(`special-entry-${id}`)).toBeVisible();
+  // 凍結前(live)の行の実測値を基準として控える。
+  const liveRow = await page.getByTestId(`special-entry-${id}`).boundingBox();
+  const liveTitle = await page.getByTestId(`special-open-${id}`).boundingBox();
+  await first.getByTestId(`delete-note-${id}`).click();
+  await expect(page.getByTestId(`note-editor-area-${id}`)).toHaveCount(0);
+  const frozen = page.getByTestId(`special-frozen-${id}`);
+  await expect(frozen).toBeVisible();
+
+  // 凍結行がlive行と同じ体裁で並ぶ(実測。ボタン化前は凍結タイトルだけ左端が8pxずれ、行ごとに
+  // 頭が揃っていなかった。「凍結」バッジをボタンの中に入れると今度は行が4px高くなる——
+  // どちらもスクリーンショットの目視では気づけないため数値で固定する。2026-08-04)。
+  const frozenRow = await page.getByTestId(`special-entry-${id}`).boundingBox();
+  const frozenTitle = await frozen.boundingBox();
+  const removeBox = await page.getByTestId(`special-remove-${id}`).boundingBox();
+  if (!liveRow || !liveTitle || !frozenRow || !frozenTitle || !removeBox) {
+    throw new Error("special entry not laid out");
+  }
+  expect(frozenTitle.x).toBe(liveTitle.x); // タイトルの左端がlive行と揃っている
+  expect(frozenTitle.height).toBe(liveTitle.height); // タイトルの高さもlive行と同じ
+  expect(frozenRow.width).toBe(liveRow.width); // 行幅は同じ(はみ出していない)
+  // 行の高さは「凍結」バッジの分だけlive行より高いが、折り返して2段になってはいない。
+  expect(frozenRow.height).toBeGreaterThanOrEqual(liveRow.height);
+  expect(frozenRow.height).toBeLessThan(liveRow.height * 2);
+  // 削除ボタンはタイトルより右・行の中に収まる(タイトルの上に被らない)。
+  expect(removeBox.x).toBeGreaterThan(frozenTitle.x + frozenTitle.width / 2);
+  expect(removeBox.x + removeBox.width).toBeLessThanOrEqual(frozenRow.x + frozenRow.width + 1);
+
+  // 単クリックでは回収しない(盤面を書き換える操作を眺めるだけのクリックで暴発させない)。
+  await frozen.click();
+  await expect(page.getByTestId(`note-editor-area-${id}`)).toHaveCount(0);
+
+  // ダブルクリック → 同じidのノートがボードへ戻り、本文も凍結時の内容のまま復元される。
+  await frozen.dblclick();
+  const restored = page.getByTestId(`note-editor-area-${id}`);
+  await expect(restored).toBeVisible();
+  await expect(restored.locator(".cm-content")).toContainText("回収したい大事なメモ");
+  await expect(restored.locator(".note-pane-title-input")).toHaveValue("回収テスト");
+
+  // お気に入り一覧では「凍結」ではなく live(開けるノート)に変わる——回収してもお気に入りからは外れない。
+  await expect(page.getByTestId(`special-open-${id}`)).toHaveText("回収テスト");
+  await expect(page.getByTestId(`special-frozen-${id}`)).toHaveCount(0);
+
+  // 回収は永続化される(再読込しても盤面に残り、凍結項目としては重複しない)。
+  // 削除tombstoneより新しいupdatedAtを打っていないと、ここでノートが再び消える(復活が捨てられる)。
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.getByTestId(`note-editor-area-${id}`)).toBeVisible();
+  await expect(page.getByTestId(`special-open-${id}`)).toHaveText("回収テスト");
+});
+
 test("タグの出現回数降順チップ・自由入力の両方でスペシャルを絞り込める", async ({
   context,
   newTabUrl,

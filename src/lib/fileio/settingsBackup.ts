@@ -3,6 +3,7 @@
 // フォルダで別途同期されているため、ここには含めない(ユーザー指示: これらもNASに保存し、
 // NASからも復元できるように。特にTODOリストはactiveの同期サイクルに乗せてほしい)。
 import type { AppLaunch, Bookmark, Settings, SpecialItem, Todo } from "../../types";
+import type { DeviceSettings } from "./deviceSettings";
 
 export const SETTINGS_BACKUP_VERSION = 1;
 
@@ -16,6 +17,11 @@ export type SettingsBackupPayload = {
   specialItems: SpecialItem[];
   specialFolders: string[];
 };
+
+/** ローカルファイルへ書き出す版。保管庫/Driveの自動バックアップ(SettingsBackupPayload)に
+ * **端末ローカル設定を足しただけ**の上位互換で、どちらのファイルも同じparserで読める。
+ * deviceSettingsを自動バックアップ側へ載せてはいけない理由はdeviceSettings.tsのヘッダー参照。 */
+export type SettingsFilePayload = SettingsBackupPayload & { deviceSettings?: DeviceSettings };
 
 export function buildSettingsBackupPayload(
   sync: { bookmarks: Bookmark[]; appLaunches: AppLaunch[]; settings: Settings },

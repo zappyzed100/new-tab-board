@@ -154,3 +154,356 @@ test("最上部にいるときは補正しない(勝手に下がらない)", asy
   await expect(page.getByTestId("note-wrap-toggle")).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(0);
 });
+
+/** 決定的な疑似乱数(シード固定)。テストの非決定性を避けるためMath.randomは使わない
+ * (AGENTS.md §8 test-nondeterminism)。 */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 高さが極端にバラついたノート群(0〜120行+稀に150〜350行の外れ値)。
+ * ユーザー指摘: 均一/緩やかな長さ分布だと列バランスが予測可能になり、下で見つかった
+ * 「上スクロール時だけ列詰め直しが暴れる」バグが再現しない——バラつきが大きいほど、
+ * 既読ノートの再マウント時の一時的な高さブレがmasonry全体を揺らしやすくなる。 */
+function heterogeneousNotes(count: number) {
+  const rand = mulberry32(12345);
+  const line = "折り返しで高さが変わる一行の本文です。";
+  return Array.from({ length: count }, (_, i) => {
+    const isOutlier = rand() < 0.15;
+    const lineCount = isOutlier
+      ? 150 + Math.floor(rand() * 200)
+      : Math.floor(rand() * rand() * 120);
+    const content =
+      lineCount === 0
+        ? `ノート${i} 短い本文`
+        : Array.from(
+            { length: lineCount },
+            (__, l) => `${l}: ${line}${"あ".repeat(Math.floor(rand() * 60))}`,
+          ).join("\n");
+    return {
+      id: `hetero-note-${i}`,
+      title: `アンカーノート${i}`,
+      content,
+      pinned: false,
+      order: i,
+      createdAt: i,
+      updatedAt: i,
+    };
+  });
+}
+
+/** 数千行級の長文を等間隔に混ぜた盤面。長文ほど「盤面が確保した高さ」と「CM6が未生成で潰れた
+ * ペインの高さ」の差が大きくなり、下の隙間テストの症状が安定して出る(heterogeneousNotesの
+ * 外れ値は最大350行で差が小さく、出方が実行ごとに揺れた)。 */
+function longNoteEvery7th(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `hole-note-${i}`,
+    title: `ノート${i}`,
+    content: Array.from({ length: i % 7 === 0 ? 400 + i * 20 : 15 + (i % 11) * 5 }, (_, l) =>
+      l === 0 ? `ノート${i}の本文` : `${l}: 本文の一行です。`,
+    ).join("\n"),
+    pinned: false,
+    order: i,
+    createdAt: i,
+    updatedAt: i,
+  }));
+}
+
+test("中のCM6が未生成のペインがあっても、セルは盤面が確保した高さを占める(=下に真っ黒な隙間が残らない・2026-07-30の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: longNoteEvery7th(60) },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  for (let i = 0; i < 40; i++) {
+    await page.mouse.wheel(0, 400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+  for (let burst = 0; burst < 3; burst++) {
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -400);
+  }
+  await page.waitForTimeout(3000);
+
+  // 実測(CLAUDE.md): 列ごとに隣り合うセルの隙間を出し、内訳ごと突き合わせる。修正前は
+  // 「mounted なのに高さ450pxのセル」の下に9,526pxの空白が残っていた(2026-07-30の実測)。
+  const holes = await page.evaluate(() => {
+    const byColumn = new Map<string, { label: string; top: number; bottom: number }[]>();
+    for (const cell of document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")) {
+      const rect = cell.getBoundingClientRect();
+      const list = byColumn.get(cell.dataset.columnIndex ?? "0") ?? [];
+      const editor = cell.querySelector<HTMLElement>("[data-editor-state]")?.dataset.editorState;
+      list.push({
+        label: `${cell.dataset.noteId}(${cell.dataset.viewportState}/editor=${editor ?? "none"},h=${rect.height.toFixed(0)})`,
+        top: rect.top,
+        bottom: rect.bottom,
+      });
+      byColumn.set(cell.dataset.columnIndex ?? "0", list);
+    }
+    const found: string[] = [];
+    for (const [col, list] of byColumn) {
+      list.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < list.length; i++) {
+        const gap = list[i].top - list[i - 1].bottom;
+        // 16px(列内gap)+30pxの丸め許容。それを超える空きは「実体のない隙間」。
+        if (gap > 46) found.push(`col=${col} gap=${gap.toFixed(1)} after ${list[i - 1].label}`);
+      }
+    }
+    return found;
+  });
+  expect(holes).toEqual([]);
+});
+
+test("下スクロールで読み進めた後、上スクロールで戻ってもジャンプしない(2026-07-28の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 200件×300ステップの実スクロールを2方向行うため既定の30秒では足りない
+  // (test.slow()で既定の3倍=90秒にする。setTimeout直書きはtest-sleep誤検知の対象になるため避ける)。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "light",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: heterogeneousNotes(200) },
+  );
+
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+
+  /** 「一番よく見えているノート」を1ステップ動かすごとに追跡し、ホイール量からの
+   * 乖離(=補正しきれなかった異常なジャンプ)の最大値を返す。 */
+  async function sweep(direction: "down" | "up", steps: number): Promise<number> {
+    let maxJumpiness = 0;
+    let prev: { scrollY: number; anchor: { noteId: string; top: number } } | null = null;
+    for (let i = 0; i < steps; i++) {
+      await page.mouse.wheel(0, direction === "down" ? 100 : -100);
+      await page.waitForTimeout(30);
+      const curr = await page.evaluate(() => {
+        const cells = document.querySelectorAll<HTMLElement>(
+          '.note-cell[data-viewport-state="mounted"][data-note-id]',
+        );
+        let best = { noteId: "", top: 0 };
+        let bestOverlap = -1;
+        for (const cell of cells) {
+          const rect = cell.getBoundingClientRect();
+          const overlap = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap;
+            best = { noteId: cell.dataset.noteId ?? "", top: rect.top };
+          }
+        }
+        return { scrollY: window.scrollY, anchor: best };
+      });
+      if (prev && prev.anchor.noteId && prev.anchor.noteId === curr.anchor.noteId) {
+        const scrollDelta = curr.scrollY - prev.scrollY;
+        const topDelta = curr.anchor.top - prev.anchor.top;
+        maxJumpiness = Math.max(maxJumpiness, Math.abs(topDelta - -scrollDelta));
+      }
+      prev = curr;
+      if (direction === "up" && curr.scrollY <= 0) break;
+    }
+    return maxJumpiness;
+  }
+
+  const MAX_ALLOWED_JUMP_PX = 100; // 通常の補正誤差は数px程度。これを大きく超えたら異常。
+  const downJump = await sweep("down", 300);
+  expect(downJump).toBeLessThan(MAX_ALLOWED_JUMP_PX);
+
+  const upJump = await sweep("up", 300);
+  expect(upJump).toBeLessThan(MAX_ALLOWED_JUMP_PX);
+});
+
+test("上スクロール中にノート同士の列(data-column-index)が入れ替わらない(2026-07-29の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 200件のスクロールを2方向行うため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "light",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: heterogeneousNotes(200) },
+  );
+
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+
+  // 下方向に読み進めて既読状態を作る。
+  for (let i = 0; i < 300; i++) {
+    await page.mouse.wheel(0, 100);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+
+  /** 現在画面上に存在する全`.note-cell`のnoteId→列番号。 */
+  async function columnsOf(): Promise<Record<string, string | undefined>> {
+    return page.evaluate(() => {
+      const cells = document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]");
+      const out: Record<string, string | undefined> = {};
+      for (const cell of cells) out[cell.dataset.noteId ?? ""] = cell.dataset.columnIndex;
+      return out;
+    });
+  }
+
+  // 上方向へ戻りながら、毎ステップ各ノートの列番号が直前と変わっていないか監視する
+  // (既読ノートの再マウントで高さが多少ぶれても、列を跨いで飛ばないことを検査したい)。
+  const knownColumns = await columnsOf();
+  let columnSwaps = 0;
+  for (let i = 0; i < 300; i++) {
+    await page.mouse.wheel(0, -100);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+    const cols = await columnsOf();
+    for (const [id, col] of Object.entries(cols)) {
+      if (knownColumns[id] !== undefined && knownColumns[id] !== col) columnSwaps++;
+      knownColumns[id] = col;
+    }
+    const scrollY = await page.evaluate(() => window.scrollY);
+    if (scrollY <= 0) break;
+  }
+
+  expect(columnSwaps).toBe(0);
+});
+
+test("高速バーストスクロール後、列に実体のない隙間(=真っ黒に見える穴)が残らない(2026-07-29の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 60件を一気に下端まで飛ばしてから連続バーストで戻すため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes: heterogeneousNotes(60) },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+
+  // 一気に下端付近まで読み進めてから、間を置かず連続で上へ戻す
+  // (=窓化の再マウント直後に高さ確定猶予タイマーが発火する前に再びアンマウントされうる状況を作る)。
+  for (let i = 0; i < 40; i++) {
+    await page.mouse.wheel(0, 400);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(500);
+  for (let burst = 0; burst < 3; burst++) {
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -400);
+  }
+
+  // 高さ確定猶予(App.tsxのNOTE_HEIGHT_SETTLE_MS=500ms)を跨いでも隙間が残らないことを見たいので、
+  // 実測masonryが十分落ち着く時間だけ待ってから検査する。
+  await page.waitForTimeout(3000);
+
+  const GAP_PX = 16; // layout.cssの列内gap(App.tsxのGAP定数と同じ想定値)。
+  const TOLERANCE_PX = 30; // 実測の丸め・アニメーション残差の許容幅。
+  const maxGap = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")];
+    const byColumn = new Map<string, { top: number; bottom: number }[]>();
+    for (const cell of cells) {
+      const col = cell.dataset.columnIndex ?? "0";
+      const rect = cell.getBoundingClientRect();
+      const list = byColumn.get(col) ?? [];
+      list.push({ top: rect.top, bottom: rect.bottom });
+      byColumn.set(col, list);
+    }
+    let worst = 0;
+    for (const list of byColumn.values()) {
+      list.sort((a, b) => a.top - b.top);
+      for (let i = 1; i < list.length; i++) {
+        worst = Math.max(worst, list[i].top - list[i - 1].bottom);
+      }
+    }
+    return worst;
+  });
+
+  expect(maxGap).toBeLessThan(GAP_PX + TOLERANCE_PX);
+});

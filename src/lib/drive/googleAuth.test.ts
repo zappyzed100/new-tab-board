@@ -24,9 +24,16 @@ function storageStub(store: Record<string, unknown>) {
 }
 
 /** chromeスタブを組んでgoogleAuthを新規に読み込む(=新しいタブでの初回読み込み相当)。
- * storeを使い回せば「別タブだが同じchrome.storage.local」を再現できる。 */
-async function load(launchWebAuthFlow: LaunchFn, store: Record<string, unknown> = {}) {
+ * storeを使い回せば「別タブだが同じchrome.storage.local」を再現できる。
+ *
+ * secretは既定で空文字にする——実装(readClientSecret)はVITE_GOOGLE_CLIENT_SECRETの
+ * 有無でimplicitフロー/authorization codeフローを切り替えるため、テスト実行機の
+ * .env.local(本物のsecretが入っていることがある。gitignore対象)を暗黙に読んでしまうと
+ * どちらの経路を通るかが機械ごとに変わってしまう(test-nondeterminismと同型の事故)。
+ * このヘルパーで毎回明示的に上書きし、環境から隔離する。 */
+async function load(launchWebAuthFlow: LaunchFn, store: Record<string, unknown> = {}, secret = "") {
   vi.resetModules();
+  vi.stubEnv("VITE_GOOGLE_CLIENT_SECRET", secret);
   vi.stubGlobal("chrome", {
     runtime: {
       getManifest: () => ({
@@ -52,6 +59,7 @@ function redirectWith(token: string, expiresIn = 3600): string {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("getAuthToken", () => {
@@ -81,6 +89,34 @@ describe("getAuthToken", () => {
     const arg = launch.mock.calls[0][0] as Record<string, unknown>;
     expect(arg.abortOnLoadForNonInteractive).toBe(false);
     expect(arg.timeoutMsForNonInteractive).toBeGreaterThan(0);
+  });
+
+  it("失敗を診断ログへ流すとき所要時間を添える(タイムアウトかGoogleの即答かをログだけで判別するため・2026-07-29)", async () => {
+    const launch = vi.fn().mockRejectedValue(new Error("User interaction required."));
+    const auth = await load(launch);
+    const { setLogSink } = await import("../runtime/log");
+    const entries: { op: string; elapsedMs?: number }[] = [];
+    setLogSink((entry) => entries.push({ op: entry.op, elapsedMs: entry.elapsedMs }));
+    try {
+      await auth.getAuthToken(false);
+    } finally {
+      setLogSink(null);
+    }
+    const failure = entries.find((e) => e.op === "getAuthToken-error");
+    expect(failure).toBeDefined();
+    // 値そのものは環境依存なので「記録されていること」だけを固定する(非決定性を持ち込まない)。
+    expect(typeof failure?.elapsedMs).toBe("number");
+  });
+
+  it("非対話のタイムアウトは短く保つ(伸ばしても完走しないと実機で確定したため・2026-07-29)", async () => {
+    const launch = vi.fn().mockResolvedValue(redirectWith("abc123"));
+    const { getAuthToken } = await load(launch);
+    await getAuthToken(false);
+    const arg = launch.mock.calls[0][0] as Record<string, unknown>;
+    // 一度30_000msへ広げたが、実機ログで今度は毎回きっかり30秒で落ちた(同じログで手動接続は
+    // 2.7秒で成功)。サイレント認可は待っても通らないので、この値は諦めるまでの無駄時間にすぎない。
+    // 伸ばす変更が再び入らないよう上限を固定する。
+    expect(arg.timeoutMsForNonInteractive).toBeLessThanOrEqual(10_000);
   });
 
   it("対話時はabortOnLoadForNonInteractive等を渡さない(ユーザー操作を待つため)", async () => {
@@ -263,5 +299,101 @@ describe("invalidateOnAuthError", () => {
     expect(store.driveAccessToken).toBeDefined();
     expect(await getAuthToken(true)).toBe("first");
     expect(launch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// 【更新トークン方式 — 2026-07-29】
+// implicitフローには更新トークンが無く、失効後の再取得はブラウザの認可フローを無人で走らせる
+// しかないが、それがこの環境では通らない(実機ログ: 8秒でも30秒でもタイムアウトし、同じログで
+// 手動接続は2.7秒で成功)。authorization codeフローで更新トークンを受け取り、以後はHTTPS POST
+// だけで再発行する——ブラウザを一切開かないので無人更新が成立する。
+describe("更新トークン方式(client_secretが設定されている場合)", () => {
+  /** import.meta.env経由のsecretを差し替えてモジュールを読み直す。 */
+  async function loadWithSecret(
+    launchWebAuthFlow: LaunchFn,
+    fetchImpl: ReturnType<typeof vi.fn>,
+    store: Record<string, unknown> = {},
+  ) {
+    vi.stubGlobal("fetch", fetchImpl);
+    return { mod: await load(launchWebAuthFlow, store, "test-secret"), store };
+  }
+
+  function tokenResponse(body: Record<string, unknown>, ok = true, status = 200) {
+    return { ok, status, json: async () => body };
+  }
+
+  it("保存済みの更新トークンがあれば、ブラウザを開かずにアクセストークンを再発行する", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(tokenResponse({ access_token: "renewed", expires_in: 3600 }));
+    const { mod } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "stored-refresh",
+    });
+
+    // 非対話(背景同期と同じ条件)でも通ることが要点。
+    expect(await mod.getAuthToken(false)).toBe("renewed");
+    // ブラウザの認可フローは一度も呼ばれない——ここが「放置しても切れない」の核心。
+    expect(launch).not.toHaveBeenCalled();
+    const body = fetchMock.mock.calls[0][1].body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("refresh_token");
+    expect(body.get("refresh_token")).toBe("stored-refresh");
+  });
+
+  it("更新トークンが失効(HTTP 400)していたら捨てる(毎回同じ失敗を繰り返さない)", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(tokenResponse({ error: "invalid_grant" }, false, 400));
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "revoked",
+    });
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    expect(store.driveRefreshToken).toBeUndefined();
+  });
+
+  it("ネットワーク断では更新トークンを捨てない(次につながれば通るため)", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {
+      driveRefreshToken: "keep-me",
+    });
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    expect(store.driveRefreshToken).toBe("keep-me");
+  });
+
+  it("更新トークンが無い非対話呼び出しでは、通らないと分かっている無人認可を試さない", async () => {
+    const launch = vi.fn();
+    const fetchMock = vi.fn();
+    const { mod } = await loadWithSecret(launch, fetchMock, {});
+
+    expect(await mod.getAuthToken(false)).toBeNull();
+    // 8秒(旧30秒)待って必ず失敗する経路へ入らないこと。
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it("対話接続では認可コードを交換し、更新トークンを保存する", async () => {
+    const launch = vi.fn().mockResolvedValue("https://ext-id.chromiumapp.org/?code=auth-code-1");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        tokenResponse({ access_token: "fresh", expires_in: 3600, refresh_token: "new-refresh" }),
+      );
+    const { mod, store } = await loadWithSecret(launch, fetchMock, {});
+
+    expect(await mod.getAuthToken(true)).toBe("fresh");
+    expect(store.driveRefreshToken).toBe("new-refresh");
+    const authUrl = new URL((launch.mock.calls[0][0] as { url: string }).url);
+    expect(authUrl.searchParams.get("response_type")).toBe("code");
+    // この2つが無いとGoogleは更新トークンを返さず、無人更新ができないまま元に戻る。
+    expect(authUrl.searchParams.get("access_type")).toBe("offline");
+    expect(authUrl.searchParams.get("prompt")).toBe("consent");
+    expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+    const body = fetchMock.mock.calls[0][1].body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("auth-code-1");
+    expect(body.get("code_verifier")).toBeTruthy();
   });
 });

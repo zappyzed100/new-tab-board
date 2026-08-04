@@ -4,9 +4,12 @@
 
 旧「最大3件を横並び+チェックボックスで表示選択」モデルは撤去した(`resolveVisibleNoteIds`/
 `MAX_VISIBLE_NOTES`/`note-tab-visible-*` は削除済み)。現在はノート**全件のカード**をボードに出し、
-App.tsx が **各ペインの実高さ(ResizeObserver)を測り、`sortedNotes`(ピン→order)順に「その時点で
-一番低い列へ入れる」greedy最密詰め**で置き場所(列index・top座標)を決める(列数は画面幅から
-`noteColumnCountFor`。最大3列)。**列固定(旧 `i % 列数`)から2026-07-13にユーザー選択「最密」で変更**。
+App.tsx が `sortedNotes`(ピン→order)順に「その時点で一番低い列へ入れる」greedy最密詰めで
+置き場所(列index・top座標)を決める(列数は画面幅から`noteColumnCountFor`。最大3列)。
+**列固定(旧 `i % 列数`)から2026-07-13にユーザー選択「最密」で変更**。
+**列の割当自体は本文からの見積もり高さ(`estimateNoteHeight`)だけで決まり、ResizeObserverの
+実測値は使わない**(2026-07-30。詳細は次項・`App.tsx`の`noteLayout`useMemo・
+`noteHeightEstimate.ts`参照)。
 
 **列は`<div>`で作らない**——DOMの並びは常にorder順のままにして、列は`.note-cell`の絶対配置
 (`data-column-index`→CSS変数`--note-column-index`→`left`、`top`はpx)で表現する(2026-07-23)。
@@ -26,8 +29,17 @@ GPU入力スレッド停止のダンプを採取する実害が出た。`compone
   高さを親state(`noteHeights`)へ返す。列幅は一定なので**列を移っても高さは変わらず**、内容変更の
   ときだけ高さが変わる=再配置は入力時のみ(タイプ中のチラつきはこの範囲。ユーザー了承済みの割り切り)。
   ループ防止: `reportNoteHeight` は 0.5px 未満の差なら参照を変えない。
-- **列高さがほぼ揃う**(greedyの最短列詰め=バランス保証: 列高さの差は最大ノート高さ未満)。長い
-  ノートがあってもその列だけ突出しない。CSSの等高stretch(`align-items:stretch`)へ戻すと不具合。
+- **列の割当順序=linear order(`sortedNotes`)そのもの**(2026-07-30)。先頭ノートは必ず左上
+  (列0の先頭)に来る——⬆️/⬇️/ドラッグ/ピンの結果が見た目にそのまま反映されるようにするため
+  (以前は高い順に詰めるLPT法で、最長ノートが左上を占めて並べ替えの結果が読み取れなかった。
+  ユーザー報告「ノートを上下するシステムと実際の配置がずれてる」)。トレードオフ: 列高さの
+  バランスはLPT法より緩く、**列高さの差は最大で最も高いノート1件ぶんまで開きうる**(盤面下端が
+  ガタつく)。CSSの等高stretch(`align-items:stretch`)へ戻すと別の不具合が出る。
+- **割当の入力は見積もり高さ(`estimateNoteHeight`)のみ、実測値(ResizeObserver)は使わない**。
+  実測値を混ぜると窓化の再マウントで未測定→測定済みへ変わるたびに貪欲法の比較結果が変わり、
+  「上スクロール中に列が入れ替わる」不具合が再発する(2026-07-29の回帰・実測1512回/300ステップ)。
+  実測値はtopの積み上げ(実座標)とキャリブレーションにのみ使う。見積もりの仕組みは
+  `noteHeightEstimate.ts`参照。
 - **並べ替え・削除・ピンはすべて linear order(`sortedNotes`)上の操作**。masonryの見た目は
   App側の振り分けが追従するだけ。`reorderNotesById`/`moveNoteUp`/`updateNote({pinned})` は
   `src/lib/entities/notes.ts`。

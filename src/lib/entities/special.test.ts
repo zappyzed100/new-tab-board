@@ -5,6 +5,7 @@ import {
   freezeNoteToSpecial,
   normalizeFolder,
   removeSpecialItem,
+  restoreSpecialItemToNote,
   setSpecialItemFolder,
   specialEntries,
   specialSyncSignature,
@@ -59,6 +60,62 @@ describe("freezeNoteToSpecial", () => {
   it("noSyncでないノートの凍結項目はnoSyncを持たない(undefined)", () => {
     const frozen = freezeNoteToSpecial(note({ id: "s", special: true }), 1);
     expect(frozen?.noSync).toBeUndefined();
+  });
+});
+
+describe("restoreSpecialItemToNote", () => {
+  const frozen: SpecialItem = {
+    id: "a",
+    title: "計画",
+    content: "大事なメモ",
+    tags: ["旅行"],
+    folder: "仕事",
+    createdAt: 100,
+    updatedAt: 200,
+    frozenAt: 300,
+  };
+
+  it("凍結項目を同じidのノートへ戻す(内容/タイトル/タグ/フォルダ/createdAtを引き継ぐ)", () => {
+    expect(restoreSpecialItemToNote(frozen, 7, 9000)).toEqual({
+      id: "a",
+      title: "計画",
+      content: "大事なメモ",
+      pinned: false,
+      order: 7,
+      special: true,
+      specialFolder: "仕事",
+      tags: ["旅行"],
+      createdAt: 100,
+      updatedAt: 9000,
+    });
+  });
+
+  it(
+    "updatedAtは回収時刻で上書きする(凍結時のupdatedAtのままだと、削除時のtombstoneより古く" +
+      "なり repository の upsert が復活を捨てる — commitNoteMutation の tombstone 判定)",
+    () => {
+      const note = restoreSpecialItemToNote(frozen, 0, 9000);
+      // 回収時刻 > 凍結(=削除)時刻。この不等号が崩れると復活が永続化されない。
+      expect(note.updatedAt).toBe(9000);
+      expect(note.updatedAt!).toBeGreaterThan(frozen.frozenAt);
+    },
+  );
+
+  it("回収してもお気に入りからは外れない(special=trueのままliveとして一覧に残る)", () => {
+    expect(restoreSpecialItemToNote(frozen, 0, 1).special).toBe(true);
+  });
+
+  it("「この端末のみ(noSync)」の凍結項目は回収後もnoSyncを保つ(戻した途端にNAS/Driveへ出さない)", () => {
+    expect(restoreSpecialItemToNote({ ...frozen, noSync: true }, 0, 1).noSync).toBe(true);
+    expect(restoreSpecialItemToNote(frozen, 0, 1).noSync).toBeUndefined();
+  });
+
+  it("フォルダ/タグ/createdAtを持たない凍結項目でもキーを生やさない(undefined混入で同期差分が出ない)", () => {
+    const bare: SpecialItem = { id: "z", title: "z", content: "c", frozenAt: 1 };
+    const note = restoreSpecialItemToNote(bare, 0, 2);
+    expect(Object.keys(note).sort()).toEqual(
+      ["content", "id", "order", "pinned", "special", "title", "updatedAt"].sort(),
+    );
   });
 });
 

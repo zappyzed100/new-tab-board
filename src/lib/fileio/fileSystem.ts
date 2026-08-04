@@ -20,10 +20,19 @@ import { logOp } from "../runtime/log";
 /** ファイル選択ダイアログ(OSのExplorer/Finder相当)で.txtを選び、中身を読み込む。
  * キャンセル時はnullを返す。 */
 export async function pickAndReadTextFile(): Promise<{ name: string; content: string } | null> {
+  return pickAndReadFile(".txt,text/plain");
+}
+
+/** 同じくファイル選択ダイアログで.jsonを選び、中身を読み込む(設定バックアップの取り込み用)。 */
+export async function pickAndReadJsonFile(): Promise<{ name: string; content: string } | null> {
+  return pickAndReadFile(".json,application/json");
+}
+
+function pickAndReadFile(accept: string): Promise<{ name: string; content: string } | null> {
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".txt,text/plain";
+    input.accept = accept;
     // 画面には出さないが、DOMに接続されていない要素へのclick()はネイティブの
     // ファイル選択ダイアログを開かないブラウザ/コンテキストがあるため、
     // 一時的にbodyへ挿入してから呼ぶ(処理後は必ず取り除く)。
@@ -56,4 +65,20 @@ export async function pickAndReadTextFile(): Promise<{ name: string; content: st
     });
     input.click();
   });
+}
+
+/** テキストをローカルファイルとしてダウンロード保存する(設定バックアップの書き出し用)。
+ * showSaveFilePicker は上のヘッダーコメントの既知バグ(拡張ページで無反応)があるため使わず、
+ * Blob + <a download> で保存する。クリック用の<a>も同じ理由でbodyへ一時挿入する。 */
+export function saveTextFile(fileName: string, content: string, mimeType: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  logOp("fileSystem", "save", `name=${fileName}`);
 }

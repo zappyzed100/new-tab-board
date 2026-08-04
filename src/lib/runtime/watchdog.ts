@@ -198,6 +198,15 @@ export function startWatchdog(
               makeEvent(tab, "longtask", `${Math.round(entry.duration)}msの長時間タスク`, {
                 durationMs: Math.round(entry.duration),
                 name: entry.name,
+                // 非表示かを必ず残す(2026-07-29)。Chromeは非表示タブのレンダラをタスク
+                // 実行中にデスケジュールすることがあり、その間もlongtaskのdurationは進む
+                // ——つまり「主スレッドを焼いた時間」ではなく「止められていた時間」を
+                // 含んで膨らむ。stall側は同じ誤検知をthrottledガードで潰してあるのに
+                // (上の心拍参照)、longtaskだけ素通しでhiddenも記録していなかったため、
+                // 実機ログの14699ms/19788msが本物の負荷か外側で止められた見かけかを
+                // 区別できなかった。ここでは記録するだけで抑止はしない——本物の可能性が
+                // ある以上、握りつぶさず後から判別できる形にするのが目的。
+                hidden: document.hidden,
               }),
             );
           } else {

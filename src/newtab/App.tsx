@@ -89,6 +89,7 @@ import {
 import {
   freezeNoteToSpecial,
   removeSpecialItem,
+  restoreSpecialItemToNote,
   specialEntries,
   specialSyncSignature,
   toggleNoteSpecial,
@@ -99,7 +100,19 @@ import {
   pullSettingsBackupFromNas,
   pushSettingsBackupToNas,
 } from "../lib/externalIO/settingsBackupSync";
-import { buildSettingsBackupPayload, serializeSettingsBackup } from "../lib/fileio/settingsBackup";
+import {
+  buildSettingsBackupPayload,
+  parseSettingsBackupPayload,
+  serializeSettingsBackup,
+  type SettingsFilePayload,
+} from "../lib/fileio/settingsBackup";
+import { pickAndReadJsonFile, saveTextFile } from "../lib/fileio/fileSystem";
+import { estimateNoteHeight } from "./noteHeightEstimate";
+import {
+  applyDeviceSettings,
+  parseDeviceSettings,
+  readDeviceSettings,
+} from "../lib/fileio/deviceSettings";
 import {
   geminiUsageDateKey,
   getBatteryWebhookConfig,
@@ -168,6 +181,13 @@ const NAS_SYNC_INTERVAL_MS = 300_000;
 // するだけでDrive APIを連打しかねないため、この間隔でまとめて1回に落とす。
 const FOREGROUND_SYNC_MIN_INTERVAL_MS = 30_000;
 
+// 窓化(ViewportNote/Notepad)がノートを再マウントした直後、CodeMirrorのレイアウトが落ち着く
+// までの間ResizeObserverが報告する一時的な高さのブレを吸収するための猶予(2026-07-28実測:
+// 窓化を無効化すると上スクロール中の配置ジャンプが0pxまで消えたことで裏付け——詳細はreportNoteHeight)。
+// 実測(2026-07-28)では150msでは不十分・400msで安定・600msでも安定だったため、余裕を見て500msに
+// する(短いノートの通常の初回確定には影響しない——初回測定は分岐で即時確定するため)。
+const NOTE_HEIGHT_SETTLE_MS = 500;
+
 // ノートボードの列数(1列あたり概ね280px、最大3列)。実測masonryの振り分けに使う。
 function noteColumnCountFor(width: number): number {
   return Math.max(1, Math.min(3, Math.floor(width / 280)));
@@ -217,6 +237,9 @@ export function App() {
   // 同じ形でAppへ引き上げる(ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため
   // Driveの警告(orange)とは性質が違う——他の3つと同じgray/softの情報表示にする。
   const [driveSharedFolderChosen, setDriveSharedFolderChosen] = useState<boolean | null>(null);
+  // 設定のファイル取り込みでIndexedDB側の端末ローカル設定を差し替えたら増やす。
+  // DataPanelはこれを見て「(設定済み)」表示と入力欄の初期値を読み直す。
+  const [deviceSettingsReloadSignal, setDeviceSettingsReloadSignal] = useState(0);
   useEffect(() => {
     void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
     void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
@@ -753,35 +776,147 @@ export function App() {
   // order(優先度)順に「その時点で一番低い列」へ入れていく(最密詰め)。列幅は一定なので列を
   // 移っても高さは変わらず、内容変更でのみ高さが変わる=再配置は入力時のみ起きる(ユーザー了承済み)。
   const [noteHeights, setNoteHeights] = useState<Map<string, number>>(new Map());
-  const reportNoteHeight = useCallback((id: string, h: number) => {
-    setNoteHeights((prev) => {
-      // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
-      if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
-      const next = new Map(prev);
-      next.set(id, h);
-      return next;
-    });
+  // 窓化(ViewportNote/Notepad)がノートを再マウントした直後は、CodeMirrorの内部レイアウトが
+  // 1〜数フレームかけて落ち着くまでの間、ResizeObserverが一時的に実際と異なる高さを報告する
+  // ことがある。これをそのままmasonryへ流すと再マウントのたびに列詰め直しが走り、リスト順で
+  // 後ろにいる(=現在の読書位置を含みうる)ノートまで巻き込んで動かす——上スクロールで
+  // 既読のノートを何度も再マウントするたびに大きな配置ジャンプが起きる原因だった(ユーザー報告・
+  // 2026-07-28実測: 窓化を無効化すると上スクロールのズレが0pxまで消えることで裏付け)。
+  // ResizeObserverインスタンスが(再)生成されてから**最初の**報告(isFirstSinceMount=true。
+  // ViewportNote.tsx参照)だけ少し待って値が落ち着いてから確定させる——これが窓化の再マウント
+  // 直後に起こりうる一時的なブレの発生源そのものだから。2回目以降の報告(=既にマウント済みの
+  // ノートが折り返し切替・文字サイズ変更・入力等で本当に高さを変えた場合)は従来どおり即座に
+  // 確定する。ここを「idを知っているか」で分岐すると、折り返し一括切替のような正当な全件変化
+  // まで一律に遅延してしまい、既存の統合テストが規定時間に収まらなくなった(実測で確認済み)。
+  const noteHeightTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => {
+    const timers = noteHeightTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+  const reportNoteHeight = useCallback(
+    (id: string, h: number, isFirstSinceMount: boolean, assumedHeight: number) => {
+      const timers = noteHeightTimersRef.current;
+      const existing = timers.get(id);
+      if (existing !== undefined) clearTimeout(existing);
+      const commit = () => {
+        timers.delete(id);
+        setNoteHeights((prev) => {
+          // 同一値なら参照を変えない(ResizeObserverの再発火→再レンダのループを断つ)。
+          if (Math.abs((prev.get(id) ?? -1) - h) < 0.5) return prev;
+          const next = new Map(prev);
+          next.set(id, h);
+          return next;
+        });
+      };
+      // 再マウント直後の一時的なブレは「レイアウト前でまだ低い」形で出る(CM6が最小高さのまま
+      // 報告する)。一方、**実測が想定より高い**のは本物の差で、待つ理由が無い——待つと、topは
+      // 想定高さで積まれているのにセルは実測高さで描かれるため、その差ぶんの穴が列の中に開いた
+      // まま猶予時間ぶん保持される。長文ノートでは5%のズレでも数千pxの真っ黒な穴になり、
+      // 上スクロール中に列がまるごと空に見える実害が出た(2026-07-29・実測で穴を確認)。
+      // 低く報告された時だけ猶予を置き、高い/同程度なら即座に確定する。
+      const settleNeeded = isFirstSinceMount && h < assumedHeight;
+      if (settleNeeded) {
+        timers.set(id, setTimeout(commit, NOTE_HEIGHT_SETTLE_MS));
+      } else {
+        commit();
+      }
+    },
+    [],
+  );
+  // 窓化(ViewportNote)が再マウント直後の高さ確定猶予タイマー発火前にノートを画面外へアンマウント
+  // した場合に呼ぶ。ResizeObserverはアンマウントで止まり以後訂正する機会が無いため、未確定のまま
+  // 猶予タイマーだけが後で発火すると「移動中に一瞬だけ測れた不正確な高さ」がnoteHeightsへ確定して
+  // しまい、その列に実体のない余白(=バーストスクロール中に真っ黒に見える隙間)が残る実害があった
+  // (2026-07-29・実機録画+elementFromPointで「そこにセルが無い」ことを直接確認)。確定させず
+  // 単に破棄すれば、noteHeightsは直前の確定値(既知の実測 or 初期ESTIMATE)のまま残る。
+  const cancelNoteHeightSettle = useCallback((id: string) => {
+    const timers = noteHeightTimersRef.current;
+    const existing = timers.get(id);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      timers.delete(id);
+    }
   }, []);
   // 各ノートの置き場所(列index・列内のtop座標)と、ボード全体の高さ。**DOMの並びは常に
   // order順のまま**にして、列は絶対配置(CSSのleft)＋topのpxで表現する。列ごとの<div>へ振り分けて
   // いた頃は、ノートが1件増減するだけでセルが別の列(＝別の親DOM)へ移り、Reactが再マウントして
   // CodeMirrorが破棄され「入力中にカーソルが飛び以降の打鍵が消える」実害が出ていた(2026-07-23)。
   // 親が変わらなければ配置が変わってもCM6は生き続ける——position/top/leftだけが変わる。
+  //
+  // 列割当は **order順(=sortedNotes順)に「その時点で一番低い列。同高なら左」へ入れる貪欲法**
+  // (2026-07-30)。先頭ノートは必ず列0の先頭に来る——全列が高さ0の状態で同高tieを左が取るため。
+  // これは「左上が一番上」というユーザーの並べ替えモデル(⬆️/⬇️/ドラッグ/ピンはすべて linear
+  // order 上の操作)と見た目を一致させるための必須条件。高い順(LPT法)で詰めていた頃は最長の
+  // ノートが左上を占め、⬆️で先頭へ動かしたノートが盤面のどこへ行ったか分からなかった
+  // (ユーザー報告・2026-07-30「ノートを上下するシステムと実際の配置がずれてる」)。
+  //
+  // **割当に使う高さは実測値ではなく本文からの見積もり(estimateNoteHeight)だけ**にする。
+  // これが旧スティッキー割当の代わりに「上スクロール中に列が入れ替わる」(2026-07-29の回帰・
+  // 実測1512回/300ステップ)を防ぐ仕掛け: 割当が実測に一切依存しないので、窓化の再マウントで
+  // 高さがぶれても、未測定→測定済みへ変わっても、割当は1pxも動かない(内容と列数が同じなら
+  // 常に同じ結果=決定的)。スティッキー割当は「一度決めた列を動かさない」ため、並べ替えの
+  // 結果を配置へ反映できず今回の症状の直接の原因でもあった。
+  // 校正倍率(calibration)は全ノートへ一律に掛かり貪欲法の大小比較を変えないため、割当では
+  // 掛けない(topの積み上げにだけ使う)。
+  // 打鍵で見積もりが変わるのは編集中のノート自身なので、貪欲法が先頭から積む性質(prefix安定)
+  // により**それより前のノートの割当は不変**。末尾への空ノート補充でも既存の割当は動かない。
   const noteLayout = useMemo(() => {
     const GAP = 16; // --space-3(tokens.css)と一致させる。topを実座標で置くのでズレは見た目に出る。
-    const ESTIMATE = 520; // 未測定ノートの暫定高さ(ViewportNoteのプレースホルダ高と揃える)。
-    const heights = new Array(columnCount).fill(0);
-    const placement = new Map<string, { column: number; top: number }>();
-    // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
+
+    // 未測定ノートのtopは**本文から見積もる**。一律520pxだと数千行のノートが100倍以上小さく
+    // 見積もられ、他の列が数万px先に尽きる(=何も無い真っ黒な領域が出る)実害があった(2026-07-29)。
+    // 見積もりは実測と体系的にズレる(フォントサイズ・折り返し・列幅で変わる。実測では
+    // 実測/見積もり=1.04〜1.07)。ズレたままだと、マウントされたノートだけが実寸へ伸びて
+    // 列ごとに食い違い、下端が1万px単位でずれて「片側だけ何も無い」区間ができる。
+    // **実測済みノートから倍率を学習して未測定ノートへ適用する**ことでズレを畳む。
+    let ratioSum = 0;
+    let ratioCount = 0;
+    for (const note of visibleNotes) {
+      const measured = noteHeights.get(note.id);
+      if (measured === undefined || measured < 100) continue;
+      const est = estimateNoteHeight(note);
+      if (est <= 0) continue;
+      ratioSum += measured / est;
+      ratioCount += 1;
+    }
+    // 標本が少ないうちは校正しない(1〜2件の外れ値で全体を歪めないため)。
+    const calibration = ratioCount >= 3 ? ratioSum / ratioCount : 1;
+    const heightOf = (note: Note) =>
+      noteHeights.get(note.id) ?? estimateNoteHeight(note) * calibration;
+
+    // 列割当(order順の貪欲法・見積もり高さのみ)。同高なら左が勝つ(厳密不等号で更新するため
+    // 添字の小さい列が残る)——先頭ノートが左上に来る保証はこのtie-breakに依る。
+    const assignRunning = new Array<number>(columnCount).fill(0);
+    const columnOf = new Map<string, number>();
     for (const note of visibleNotes) {
       let min = 0;
-      for (let c = 1; c < columnCount; c++) if (heights[c] < heights[min]) min = c;
-      placement.set(note.id, { column: min, top: heights[min] });
-      heights[min] += (noteHeights.get(note.id) ?? ESTIMATE) + GAP;
+      for (let c = 1; c < columnCount; c++) if (assignRunning[c] < assignRunning[min]) min = c;
+      columnOf.set(note.id, min);
+      assignRunning[min] += estimateNoteHeight(note) + GAP;
+    }
+
+    const heights = new Array(columnCount).fill(0);
+    const placement = new Map<string, { column: number; top: number }>();
+    // 未マウントのセル(プレースホルダ)へ渡す想定高さ。**topの積み上げに使った値と同じ**もので
+    // なければならない——校正前の素の見積もりを渡していた頃は、topは校正済み(実測/見積もり=
+    // 1.04〜1.07倍)で積まれているのにセルは素の見積もりの高さで描かれ、その差(長文ノートでは
+    // 1000px級)が列の中の「実体のない隙間=真っ黒な穴」として残った(2026-07-30に実測で確認)。
+    const assumedHeight = new Map<string, number>();
+    // 配置(top)は**order順**に積む——列の中での並びは優先度順のままにする。
+    // 固定タグモードで隠したノートは詰める(orderedNotes で置くと隠した分の空白が残る)。
+    for (const note of visibleNotes) {
+      const column = columnOf.get(note.id) ?? 0;
+      const height = heightOf(note);
+      placement.set(note.id, { column, top: heights[column] });
+      assumedHeight.set(note.id, height);
+      heights[column] += height + GAP;
     }
     // 絶対配置のセルは親の高さに寄与しないため、最も高い列ぶんの高さを明示する(最後のGAPは引く)。
     const boardHeight = Math.max(0, Math.max(0, ...heights) - GAP);
-    return { placement, boardHeight };
+    return { placement, boardHeight, assumedHeight };
   }, [visibleNotes, columnCount, noteHeights]);
   // 再配置で読んでいる位置が動かないようにスクロールを補正する(ユーザー報告・2026-07-27:
   // 長いノートを読み下げると配置が変わって読みづらい)。高さの確定・件数の増減・列数の変化を
@@ -1068,6 +1203,25 @@ export function App() {
     if (frozen) updateSpecialItems(upsertSpecialItem(specialItems, frozen));
     updateNotes((prev) => removeNote(prev, noteId));
   }
+  // お気に入り一覧のダブルクリックで、保管庫に凍結したメモをボードへ回収して表示し直す
+  // (ユーザー指示・2026-08-04)。本文は凍結時のスナップショット(=NAS/Driveのspecialミラーと
+  // 同じ中身)から戻すため、保管庫が未設定/未接続の端末でも回収できる。
+  // 凍結項目は回収と同時に外す——同じidのノートがliveとして同じ行に出る(specialEntriesはlive優先)
+  // ため、残すと同じメモの古いコピーだけが不可視のまま残り、次の削除まで誰も更新しない。
+  function restoreSpecial(id: string) {
+    const item = specialItemsRef.current.find((i) => i.id === id);
+    if (!item) return;
+    const now = clockNow();
+    logOp("special", "restore", `note=${id.slice(0, 8)} chars=${item.content.length}`);
+    updateNotes((prev) =>
+      // 既に同idのノートが盤面にある(liveへ戻った直後の二重ダブルクリック等)なら何もしない。
+      prev.some((n) => n.id === id)
+        ? prev
+        : addNote(prev, restoreSpecialItemToNote(item, nextNoteOrder(prev), now)),
+    );
+    updateSpecialItems(removeSpecialItem(specialItemsRef.current, id));
+    selectNote(id);
+  }
   // スペシャルから外す(live=スター解除 / frozen=凍結項目を削除)。
   function removeSpecial(id: string, source: "live" | "frozen") {
     if (source === "live") updateNotes((prev) => updateNote(prev, id, { special: false }));
@@ -1299,6 +1453,87 @@ export function App() {
       specialFolders: payload.specialFolders,
     });
     setDataPanelMessage("保管庫から復元しました(ノートは対象外——保管庫の世代同期が別途復元します)");
+  }
+
+  // 設定をローカルファイルへ書き出す/読み込む。保管庫やDriveを使わない/使えない環境でも
+  // 設定を持ち運べるようにするためのユーザー指示。ノートは対象外(NAS/Driveのactive・日付
+  // フォルダが別途担う)——NAS復元と同じ境界にする。
+  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(Gemini APIキー・GAS連携・
+  // 保管庫パス・Driveフォルダ設定)も含める**(ユーザー指示・2026-07-29)。経路ごとの
+  // 扱いの違いとその理由はsrc/lib/fileio/deviceSettings.tsのヘッダーが正本。
+  async function handleExportSettingsFile() {
+    if (!sync) {
+      setDataPanelMessage("設定の読み込みがまだ終わっていません(少し待って再実行してください)");
+      return;
+    }
+    const payload: SettingsFilePayload = {
+      ...buildSettingsBackupPayload(
+        sync,
+        {
+          todos,
+          // 「この端末のみ」の凍結項目は書き出さない(NASバックアップと同じ扱い)。
+          specialItems: specialItems.filter((i) => !i.noSync),
+          specialFolders,
+        },
+        clockNow(),
+      ),
+      deviceSettings: await readDeviceSettings(),
+    };
+    const stamp = new Date(clockNow()).toISOString().slice(0, 10);
+    saveTextFile(
+      `new-tab-board-settings-${stamp}.json`,
+      JSON.stringify(payload, null, 2),
+      "application/json",
+    );
+    setDataPanelMessage(
+      "設定をファイルへ書き出しました(APIキー等も含む平文です。取り扱いに注意してください。ノートは対象外)",
+    );
+  }
+
+  async function handleImportSettingsFile() {
+    const picked = await pickAndReadJsonFile();
+    if (!picked) {
+      setDataPanelMessage("ファイル選択がキャンセルされました");
+      return;
+    }
+    const payload = parseSettingsBackupPayload(picked.content);
+    if (!payload) {
+      setDataPanelMessage(`設定ファイルとして読めませんでした(${picked.name})`);
+      return;
+    }
+    const nextSync: SyncState = {
+      bookmarks: payload.bookmarks,
+      appLaunches: payload.appLaunches,
+      settings: payload.settings,
+    };
+    setSync(nextSync);
+    setTodos(payload.todos);
+    setSpecialItems(payload.specialItems);
+    setSpecialFolders(payload.specialFolders);
+    void saveSyncData(nextSync);
+    void patchLocalData({
+      todos: payload.todos,
+      specialItems: payload.specialItems,
+      specialFolders: payload.specialFolders,
+    });
+    // 端末ローカル設定は別ストア(IndexedDB)なので、上のsyncDataとは別経路で適用する。
+    // 欠落項目は現状維持(applyDeviceSettings)——古い版のファイルで設定を潰さないため。
+    const device = parseDeviceSettings(
+      (JSON.parse(picked.content) as { deviceSettings?: unknown }).deviceSettings,
+    );
+    if (device) {
+      await applyDeviceSettings(device);
+      // 開いたままのDataPanelに「(設定済み)」表示と入力欄の初期値を読み直させる。
+      setDeviceSettingsReloadSignal((n) => n + 1);
+      // 未設定バッジ(ヘッダー常時表示)は各stateから描いているため、取り込んだ内容で更新する。
+      if (device.nasFolderPath !== undefined) setNasConfigured(device.nasFolderPath.trim() !== "");
+      if (device.geminiApiKey !== undefined) setGeminiConfigured(device.geminiApiKey.trim() !== "");
+      if (device.batteryWebhookConfig !== undefined) setBatteryConfigured(true);
+      if (device.driveSharedFolderChosen === true) setDriveSharedFolderChosen(true);
+    }
+    setDataPanelMessage(
+      `設定をファイルから読み込みました(${picked.name}。APIキー等の端末設定も反映。ノートは対象外)`,
+    );
   }
 
   // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
@@ -1611,6 +1846,9 @@ export function App() {
                 onMessage={setDataPanelMessage}
                 onBackupToDrive={() => void handleBackupToDrive()}
                 onRestoreFromNas={() => void handleRestoreFromNas()}
+                onExportSettingsFile={() => void handleExportSettingsFile()}
+                onImportSettingsFile={() => void handleImportSettingsFile()}
+                deviceSettingsReloadSignal={deviceSettingsReloadSignal}
                 onPushNasActiveNow={pushNasActiveNow}
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}
@@ -1656,6 +1894,7 @@ export function App() {
                   notes={notes}
                   specialItems={specialItems}
                   onSelectNote={selectNote}
+                  onRestore={restoreSpecial}
                   onRemove={removeSpecial}
                 />
                 <TagCandidatesPanel
@@ -1818,9 +2057,12 @@ export function App() {
                           columnIndex={noteLayout.placement.get(note.id)?.column ?? 0}
                           top={noteLayout.placement.get(note.id)?.top ?? 0}
                           active={note.id === activeNoteId}
-                          estimatedHeight={noteHeights.get(note.id)}
+                          estimatedHeight={
+                            noteLayout.assumedHeight.get(note.id) ?? estimateNoteHeight(note)
+                          }
                           contentVersion={note.updatedAt}
                           onHeight={reportNoteHeight}
+                          onUnmountBeforeSettle={cancelNoteHeightSettle}
                           onSuspend={() => void forceSnapshot(note.id, note.content)}
                         >
                           <NoteEditorPane

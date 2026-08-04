@@ -113,9 +113,12 @@ body {
   margin: var(--space-2) 0;
 }
 
-/* ノートボード = 実測masonry(ユーザー選択「最密」)。App.tsxが各ノートペインの実高さを
-   ResizeObserver で測り、order(優先度)順に「その時点で一番低い列」へ入れて縦積みする。
-   実測で最短列へ詰めるため列高さがほぼ揃い、長いノートがあっても凸凹が最小化される。
+/* ノートボード = masonry(ユーザー選択「最密」)。App.tsxがorder(優先度=`sortedNotes`)順に
+   「その時点で一番低い列。同高なら左」へ入れる貪欲法で列を割り当てる(2026-07-30)。割当は
+   本文からの見積もり高さ(estimateNoteHeight)だけで決まり、ResizeObserverの実測値は使わない
+   ——先頭ノートが常に左上(列0の先頭)に来ることで、⬆️/⬇️/ドラッグ/ピンの結果と見た目の配置を
+   一致させるため。トレードオフとして列高さのバランスは旧LPT法より緩く、列高さの差は最大で
+   最も高いノート1件ぶんまで開きうる(詳細はApp.tsxのnoteLayout useMemoのコメント参照)。
 
    **列は<div>で作らず絶対配置で表現する**(2026-07-23)。列ごとの入れ物へ振り分けると、ノートが
    1件増減しただけでセルが別の列(=別の親DOM)へ移り、Reactが再マウントしてCodeMirrorが破棄され、
@@ -129,6 +132,17 @@ body {
 
 /* 実測masonryの測定単位(1ノートペインの実高さを測るラッパ)。列幅はボード幅の等分、
    left は i*(幅+gap) = i*(100%+gap)/列数(gap=--space-3)。高さは中身なり。 */
+/* セル内の実測ラッパ(ViewportNote)。中身なりの高さで、ResizeObserverはこれを測る——セルは
+   盤面が確保した高さをmin-heightで持つので、セルを測ると確保値を測り返してしまう。
+   プレースホルダ表示中(deferred)だけは確保ぶんを埋めて、灰色の枠が確保領域全体を覆うようにする。 */
+.note-cell-measure {
+  width: 100%;
+}
+
+.note-cell[data-viewport-state="deferred"] .note-cell-measure {
+  height: 100%;
+}
+
 .note-cell {
   position: absolute;
   left: calc((100% + var(--space-3)) / var(--note-columns) * var(--note-column-index));
@@ -136,10 +150,15 @@ body {
   min-width: 0;
 }
 
+/* contain:paint(strictに含まれる)を外す(2026-07-29)。実測masonryは.note-cellのtop/leftを
+   高頻度に書き換えて動くため、真下でプレースホルダ⇔本体の切り替えが連続すると、paint封じ込め
+   された要素が新しいラスタを取らず「computed styleは正しいのに実際の描画は古いまま(=真っ黒に
+   見える)」状態のまま固まる実害があった(実機録画+screenshotで確認。さらにスクロールすると
+   直ることも確認——コンポジタが取り残されていただけで、layout自体は正しかった)。 */
 .note-pane-placeholder {
   height: 100%;
   min-height: 520px;
-  contain: strict;
+  contain: layout style;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

@@ -223,6 +223,8 @@
 - `src/lib/externalIO/settingsBackupSync.ts` — settingsBackupSync.ts — 全体設定バックアップ(テーマ/TODO/ブックマーク/ノート文字サイズ/
 - `src/lib/externalIO/specialSync.test.ts` — specialSync.test.ts — NASの special/ 書き出し・突き合わせ削除の単体テスト
 - `src/lib/externalIO/specialSync.ts` — specialSync.ts — スペシャル(⭐)をNASの special/<folder>/<id>.md へ書き出し、消えたものを削除する
+- `src/lib/fileio/deviceSettings.test.ts` — deviceSettings.test.ts — 端末ローカル設定のローカルファイル持ち出し/取り込みの単体テスト。
+- `src/lib/fileio/deviceSettings.ts` — deviceSettings.ts — 「端末ローカル設定」(IndexedDB側)をローカルファイルへ持ち出す/戻すための集約
 - `src/lib/fileio/exportImport.test.ts` — exportImport.test.ts — exportImport.ts(JSON書き出し/取り込み)の単体テスト
 - `src/lib/fileio/exportImport.ts` — exportImport.ts — 全データ(ブックマーク・設定・ノート・TODO・スペシャル)のJSON書き出し/
 - `src/lib/fileio/fileSystem.test.ts` — fileSystem.test.ts — fileSystem.ts(ローカルファイル読み込み)の単体テスト
@@ -303,6 +305,7 @@
 - `src/newtab/components/notes/HistoryPanel.tsx` — HistoryPanel.tsx — 履歴一覧・プレビュー・diff比較・復元(SPEC.md §4.3)
 - `src/newtab/components/notes/MarkdownPreview.test.tsx` — MarkdownPreview.test.tsx — Markdownプレビュー(KaTeX数式 + sanitize)の単体テスト
 - `src/newtab/components/notes/MarkdownPreview.tsx` — MarkdownPreview.tsx — Markdown→HTML変換+sanitizeのプレビュー表示(SPEC.md §4.2)
+- `src/newtab/components/notes/NoteEditorPane.test.tsx` — @vitest-environment jsdom
 - `src/newtab/components/notes/NoteEditorPane.tsx` — NoteEditorPane.tsx — ノート編集エリア1件分(SPEC.md §4.2)
 - `src/newtab/components/notes/NoteImageStrip.test.tsx` — NoteImageStrip.test.tsx — ノート下部の添付画像サムネイル帯の単体テスト
 - `src/newtab/components/notes/NoteImageStrip.tsx` — NoteImageStrip.tsx — ノート下部に並べる添付画像のサムネイル帯(ユーザー指示・2026-07-23)
@@ -319,6 +322,7 @@
 - `src/newtab/components/shell/ThemeToggle.tsx` — ThemeToggle.tsx — テーマ(light/dark/auto)切替(SPEC.md §4.8)
 - `src/newtab/components/shell/TodoList.tsx` — TodoList.tsx — 単体TODOリスト(TodoMVC相当のUI。ノート本文からは独立)
 - `src/newtab/main.tsx` — main.tsx — 新しいタブページのエントリポイント
+- `src/newtab/noteHeightEstimate.ts` — noteHeightEstimate.ts — 未測定ノートの高さを本文から見積もる(masonryの列割当用)
 - `src/newtab/styles/components.css`
 - `src/newtab/styles/layout.css`
 - `src/newtab/styles/tokens.css`
@@ -736,6 +740,7 @@
 - function resetDriveSyncState
 
 ### `src/lib/drive/googleAuth.ts`
+- function isRefreshTokenFlowConfigured
 - function getOAuthClientId
 - function getAuthToken
 - function getAuthTokenWithError
@@ -810,6 +815,7 @@
 - function normalizeFolder
 - function toggleNoteSpecial
 - function freezeNoteToSpecial
+- function restoreSpecialItemToNote
 - function upsertSpecialItem
 - function removeSpecialItem
 - function setSpecialItemFolder
@@ -909,6 +915,12 @@
 - type SpecialNasDeps
 - function pushSpecialToNas
 
+### `src/lib/fileio/deviceSettings.ts`
+- type DeviceSettings
+- function readDeviceSettings
+- function applyDeviceSettings
+- function parseDeviceSettings
+
 ### `src/lib/fileio/exportImport.ts`
 - const EXPORT_VERSION
 - type ExportPayload
@@ -918,10 +930,13 @@
 
 ### `src/lib/fileio/fileSystem.ts`
 - function pickAndReadTextFile
+- function pickAndReadJsonFile
+- function saveTextFile
 
 ### `src/lib/fileio/settingsBackup.ts`
 - const SETTINGS_BACKUP_VERSION
 - type SettingsBackupPayload
+- type SettingsFilePayload
 - function buildSettingsBackupPayload
 - function serializeSettingsBackup
 - function parseSettingsBackupPayload
@@ -1220,6 +1235,10 @@
 
 ### `src/newtab/components/shell/TodoList.tsx`
 - function TodoList
+
+### `src/newtab/noteHeightEstimate.ts`
+- const MIN_ESTIMATED_HEIGHT_PX
+- function estimateNoteHeight
 
 ### `src/newtab/useForegroundSync.ts`
 - function useForegroundSync

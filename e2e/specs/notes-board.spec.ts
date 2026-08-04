@@ -1,8 +1,13 @@
 // notes-board.spec.ts — ノートボード(実測masonry)の回帰(2026-07-13にユーザー選択「最密」へ変更)
 // ノートは全件を1枚のボードで常時表示し、App.tsxが各ペインの実高さを測って order(優先度)順に
-// 「その時点で一番低い列」へ入れて縦積みする(最密詰め)。旧「i%列数で列固定」から変更。
-// 検証の重心: ①列は横に並び重ならない②列内はgap詰めで縦に重ならない③列高さがほぼ揃う(最密の証拠)
-// ④ピンで左上へ⑤一つ上へ⑥ドラッグ交換⑦末尾に常に空3つ。
+// 「その時点で一番低い列。同高なら左」へ入れて縦積みする(最密詰め)。旧「i%列数で列固定」から変更。
+// 2026-07-30: 列割当を「高い順に最短列(LPT法)+スティッキー」から「order順の貪欲法(見積もり
+// 高さのみ使用)」へ変更(App.tsx noteLayout参照)。これにより先頭ノート(linear-index=0)は
+// 必ず列0の先頭=実ピクセル上も左上に来ることが不変条件になった(ユーザー報告「ノートを上下する
+// システムと実際の配置がずれてる。左上が一番上にしてほしい」への対応)。
+// 検証の重心: ①列は横に並び重ならない②列内はgap詰めで縦に重ならない③列高さの差は最大の単一
+// ノート高さ以下(order順貪欲法の理論保証)④先頭ノートは実ピクセル上も左上⑤列内・列間でlinear
+// indexがorder順と整合⑥ピンで左上へ⑦一つ上へ⑧ドラッグ交換⑨末尾に常に空3つ。
 import { expect, test } from "../fixtures";
 
 // ノートタブは撤去済み。ノート名はペイン先頭の枠なし見出し(.note-pane-title-input の value)で持つ。
@@ -27,6 +32,25 @@ const panes = (page: import("@playwright/test").Page) =>
 // セルの data-column-index で拾う。DOM順はorder順なので .first() は「その列の一番上」。
 const columnPanes = (page: import("@playwright/test").Page, col: number) =>
   page.locator(`.note-cell[data-column-index="${col}"] [data-testid^="note-editor-area-"]`);
+
+// 不変条件①(先頭ノートは実ピクセル上も左上)の実測ヘルパー: 全セルの中でtopが最小の集合を取り、
+// その中でleftが最小のセルを「左上」と定義する(同率tieは許容——同じtopの他列があってよいが、
+// それらよりleftが小さいことだけを保証する)。CLAUDE.mdの指示によりgetBoundingClientRect()の
+// 実測で判定し、スクリーンショット目視には頼らない。
+const topLeftCell = async (
+  page: import("@playwright/test").Page,
+): Promise<{ linear: string; column: string }> =>
+  page.locator(".note-cell[data-column-index][data-linear-index]").evaluateAll((cells) => {
+    const rects = cells.map((c) => ({
+      linear: c.getAttribute("data-linear-index") ?? "",
+      column: c.getAttribute("data-column-index") ?? "",
+      rect: c.getBoundingClientRect(),
+    }));
+    const minTop = Math.min(...rects.map((r) => r.rect.top));
+    const topmost = rects.filter((r) => r.rect.top <= minTop + 1);
+    topmost.sort((a, b) => a.rect.left - b.rect.left);
+    return { linear: topmost[0].linear, column: topmost[0].column };
+  });
 
 test("実測masonry: 列は重ならず・列内はgap詰め・列高さがほぼ揃う(最密)", async ({
   context,
@@ -88,6 +112,193 @@ test("実測masonry: 列は重ならず・列内はgap詰め・列高さがほ�
       return bad;
     });
   await expect.poll(violations).toEqual([]);
+});
+
+test("長文ノートが途中にあっても、先頭ノートが実ピクセル上の左上を保ち、列の先頭はorder順に並ぶ(2026-07-30の回帰)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 盤面を**読み込み直した直後**(＝全ノートが未割当の状態から一度に列を決める)が旧実装の
+  // 症状が出る条件。旧「高い順に最短列(LPT法)」では、まだ空の列0を**最長ノート**が取るため、
+  // order先頭のノートが左上から押し出されていた(ユーザー報告「ノートを上下するシステムと
+  // 実際の配置がずれてる」)。order順の貪欲法なら、全列が高さ0の状態から先頭ノートが最初に
+  // 置かれる=必ず列0の先頭になる。
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+
+  // 5番目(index=4)だけ数千行の長文。他は短文。入力ではなくfixture投入にするのは、
+  // 「未割当の全件をまとめて割り当てる」経路を通すため(入力で作ると1件ずつ割り当たる)。
+  const notes = Array.from({ length: 9 }, (_, i) => ({
+    id: `topleft-note-${i}`,
+    title: `ノート${i}`,
+    content: Array.from({ length: i === 4 ? 2000 : 10 }, (_, l) => `${l}: 本文の一行です。`).join(
+      "\n",
+    ),
+    pinned: false,
+    order: i,
+    createdAt: i,
+    updatedAt: i,
+  }));
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 }); // 3列に十分な幅
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+
+  // 実測(CLAUDE.md): 先頭ノート(linear-index=0)が列0かつ実ピクセル上の左上にある。
+  await expect.poll(() => topLeftCell(page)).toEqual({ linear: "0", column: "0" });
+
+  // 列ごとのlinear index(DOM順=常にorder順)。①列内は単調増加②各列の先頭は列0<列1<列2
+  // (order順貪欲+同高tie左により、最初の3件が左から順に各列の先頭を取る)。
+  const cols = await page
+    .locator(".note-cell[data-column-index][data-linear-index]")
+    .evaluateAll((cells) => {
+      const byCol = new Map<string, number[]>();
+      for (const c of cells) {
+        const col = c.getAttribute("data-column-index") ?? "?";
+        const arr = byCol.get(col) ?? [];
+        arr.push(Number(c.getAttribute("data-linear-index")));
+        byCol.set(col, arr);
+      }
+      return [...byCol.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, arr]) => arr);
+    });
+  expect(cols.length).toBe(3);
+  for (const arr of cols) {
+    for (let i = 1; i < arr.length; i++) expect(arr[i]).toBeGreaterThan(arr[i - 1]);
+  }
+  expect(cols[0][0]).toBeLessThan(cols[1][0]);
+  expect(cols[1][0]).toBeLessThan(cols[2][0]);
+});
+
+/** 決定的な疑似乱数(シード固定。AGENTS.md §8 test-nondeterminism)。 */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("長さが極端に違うノートでも列の高さが揃う(片側だけ数万px余る=真っ黒の回帰・2026-07-29)", async ({
+  context,
+  newTabUrl,
+}) => {
+  // 28件を一度マウントし切るまでスクロールするため既定の30秒では足りない。
+  test.slow();
+  const worker = context.serviceWorkers()[0];
+  const page = context.pages()[0];
+  if (!page) throw new Error("E2E fixtureのblankページが見つかりません");
+
+  // 実機の盤面に寄せる: 3割が数千行の長文、残りは短文。
+  const rand = mulberry32(20260729);
+  const notes = Array.from({ length: 28 }, (_, i) => {
+    const lineCount =
+      rand() < 0.3 ? 1500 + Math.floor(rand() * 2500) : 20 + Math.floor(rand() * 200);
+    return {
+      id: `balance-note-${i}`,
+      title: `ノート${i}`,
+      content: Array.from(
+        { length: lineCount },
+        (_, l) => `${l}: これは日本語の本文の一行です。`,
+      ).join("\n"),
+      pinned: false,
+      order: i,
+      createdAt: i,
+      updatedAt: i,
+    };
+  });
+  await worker.evaluate(
+    async ({ notes }) => {
+      // NO-LOG: 隔離E2Eプロファイルへ決定的なfixtureを投入するだけで、本番I/Oではない。
+      await chrome.storage.local.set({
+        localData: { notes, todos: [] },
+        syncData: {
+          bookmarks: [],
+          appLaunches: [],
+          settings: {
+            openIn: "same",
+            theme: "dark",
+            searchEngine: "https://www.google.com/search?q=%s",
+          },
+        },
+      });
+    },
+    { notes },
+  );
+
+  await page.setViewportSize({ width: 1900, height: 1000 });
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.locator(".cm-editor").count()).toBeGreaterThan(0);
+  await page.waitForTimeout(1000);
+
+  // 全ノートを一度マウントさせて実測高さを行き渡らせる(窓化のため下まで読む必要がある)。
+  for (let i = 0; i < 120; i++) {
+    await page.mouse.wheel(0, 1200);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(r)));
+  }
+  await page.waitForTimeout(2000);
+
+  const balance = await page.evaluate(() => {
+    const byColumn = new Map<string, number>();
+    let tallestNote = 0;
+    for (const cell of document.querySelectorAll<HTMLElement>(".note-cell[data-note-id]")) {
+      const col = cell.dataset.columnIndex ?? "0";
+      const height = cell.getBoundingClientRect().height;
+      tallestNote = Math.max(tallestNote, height);
+      const bottom = parseFloat(cell.style.top || "0") + height;
+      byColumn.set(col, Math.max(byColumn.get(col) ?? 0, bottom));
+    }
+    const bottoms = [...byColumn.values()];
+    const board = Math.max(...bottoms);
+    return {
+      imbalance: Math.max(...bottoms) - Math.min(...bottoms),
+      board,
+      columns: bottoms.length,
+      tallestNote,
+    };
+  });
+
+  expect(balance.columns).toBe(3);
+  // order順貪欲法(2026-07-30〜)の理論保証: 最終的に最大列になった列は、その最後のノートを
+  // 積む直前の時点でその時点の最小列だった(さもなくば別の列に積まれたはず)ため、最大列と他列の
+  // 差はその最後のノート1件の見積もり高さを超えない(list schedulingの標準的性質。処理順が
+  // order順=到着順であってもLPT法と同様に成り立つ)。旧「board*0.15」(盤面全体への割合)は、
+  // 1件が盤面の大半を占める偏った構成(本テストのように数千行のノートが混ざる場合)では新
+  // アルゴリズムの正当な出力でも超えうる——「新アルゴリズムではboard*0.15は保証できない」——
+  // ため、理論保証に沿った「最大の単一ノート高さ+余裕」へ緩めた。
+  // 旧「一律520pxの見積もり」の退行(実測: 偏り62,825px/盤面147,102px、当時の最大ノート高さ
+  // 69,852px)は、素朴な「偏り<最大ノート高さ」ではまさに通ってしまっていた(62,825<69,852。
+  // これがboard*0.15を採用した理由そのもの)。つまり当時の実測値そのものをこの新条件で
+  // ピンポイント再現しても検出できるとは限らない——ただし当時の破綻は「見積もりが実測と
+  // 無関係(一律520px)」という割当と実測が無相関の病的ケースに限って起きたもので、
+  // estimateNoteHeightが実測と相関する(較正比1.04〜1.07)本実装で同程度に壊れれば偏りは
+  // もっと悪化するはずであり、その規模なら本条件でも検知できる。理論的に正しい条件へ寄せた
+  // トレードオフとして「62,825px」という特定の数値そのものの再検出保証は失っていることを
+  // 明記しておく。
+  const GAP_ALLOWANCE = 16 * 4; // --space-3(GAP)4つぶん。較正誤差・端数の余裕。
+  expect(balance.imbalance).toBeLessThan(balance.tallestNote + GAP_ALLOWANCE);
 });
 
 test("空ノートの2番目に入力しても、そのノートは動かず打鍵が失われない(2026-07-23の回帰)", async ({
@@ -343,6 +554,8 @@ test("ピン留めしたノートは最優先で左上(順序列の先頭)に来
 
   // 順序列の先頭 = col0の先頭ペイン。そこが今ピンしたノート(旧末尾)になる。
   await expect.poll(async () => (await noteTitlesLinear(page))[0]).toBe(lastTitle);
+  // 実測(CLAUDE.md): 論理的な先頭だけでなく、実ピクセル上も列0の左上へ来ている(不変条件①)。
+  await expect.poll(() => topLeftCell(page)).toEqual({ linear: "0", column: "0" });
 });
 
 test("「上へ」で順序列の1つ前のノートと入れ替わる", async ({ context, newTabUrl }) => {
@@ -360,6 +573,9 @@ test("「上へ」で順序列の1つ前のノートと入れ替わる", async (
     .click();
 
   await expect.poll(async () => noteTitlesLinear(page)).toEqual([before[1], before[0], before[2]]);
+  // 実測(CLAUDE.md): 入れ替わった新しい先頭ノートは実ピクセル上も列0の左上へ来ている
+  // (不変条件①・orderに配置が追従することの実測)。
+  await expect.poll(() => topLeftCell(page)).toEqual({ linear: "0", column: "0" });
 });
 
 test("先頭ノートの「上へ」は無効(これ以上上がない)", async ({ context, newTabUrl }) => {
