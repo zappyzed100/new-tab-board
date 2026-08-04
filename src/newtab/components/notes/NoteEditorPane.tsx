@@ -184,6 +184,19 @@ export function NoteEditorPane({
   useEffect(() => {
     suppressContentChangeRef.current = false;
   }, [restoreCounter, replaceContentVersion]);
+  // ↑の抑止は「再マウントが完了するeffectまで」という**時間の窓**でしかなく、それより遅れて
+  // 届いた古いCM6の遅延イベントは素通りしていた(2026-08-04のCI再発: 初期化直後の本文が
+  // 空に戻らない)。Notepadは画面内に入るまでCM6を生成しないため、再マウント後にCM6が
+  // 生成されるまでの間にnote.contentが古い本文へ書き戻されると、**新しいインスタンスが
+  // その古い本文でCM6を作る**——画面上は初期化が効かなかったように見える。
+  // そこで時間ではなく**発火元の同一性**で弾く: Notepadのkeyと同じ材料で世代を作り、
+  // onContentChangeにその世代を閉じ込めて渡す。破棄された古いインスタンスは再レンダされない
+  // ので古い世代を持ち続け、いつ発火しても現在の世代と一致せず恒久的に無視される。
+  // 抑止フラグは引き続き必要——「クリック直後〜再マウントのレンダ前」は世代がまだ同じで、
+  // その窓は同一性では区別できないため(2つで前後半を分担する)。
+  const editorGeneration = `${restoreCounter}-${replaceContentVersion}`;
+  const editorGenerationRef = useRef(editorGeneration);
+  editorGenerationRef.current = editorGeneration;
   // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
   // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
@@ -739,6 +752,9 @@ export function NoteEditorPane({
               // 画像の貼り付け/ドロップはこのノートへの添付として扱う(保存先はNASのみ)。
               onAttachImage={onAttachImage ? (blob) => onAttachImage(note.id, blob) : undefined}
               onContentChange={(content) => {
+                // 別世代=既に破棄された古いCM6インスタンスからの遅延イベントは、どれだけ
+                // 遅れて届いても無視する(editorGenerationRef のヘッダー参照)。
+                if (editorGeneration !== editorGenerationRef.current) return;
                 // 意図的置換(初期化/履歴復元/取込/固定タグ追記)の直後は、破棄されるはずの
                 // 古いCM6インスタンスからの遅延イベントを無視する(suppressContentChangeRef
                 // のヘッダー参照——2026-07-27のCI再発: 初期化直後の本文が空でなく末尾が
