@@ -8,5 +8,12 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # 既定の件名は `chore(deps): bump ...` で、コミットメッセージ規約(ルート AGENTS.md §10 の
+    # `^(feat|fix|test|docs|refactor|chore): .+`)に一致せず、CIの commit-msg-history が
+    # HARD で落ちる(PR #20 が実際に落ちた)。prefix を明示するとスコープ `(deps)` が付かず
+    # `chore: bump ...` になり、規約どおりの件名になる。検査側(scripts/check_commit_msg.py)は
+    # guardrails-kit のベンダーコピーなので、こちらを規約へ合わせる(kitを書き換えない)。
+    commit-message:
+      prefix: "chore"
     ignore:
       - dependency-name: "upstream/ui-skills/emilkowalski-skills"
