@@ -17,12 +17,6 @@ __pycache__/
 # <<< guardrails-kit <<<
 
 # --- new-tab-board 固有(プロジェクト自由領域) ---
-# ビルド時に埋め込む秘密(VITE_GOOGLE_CLIENT_SECRET 等)。実値が入るため決して追跡しない——
-# 「gitignore対象」と各所のコメント/コミットメッセージが前提にしていたのに、実際には
-# 除外されていなかった(2026-08-04に `git add -A` で .env.local が staged になり、gitleaks と
-# check-structure の env-file-tracked がコミットを止めて発覚した)。
-.env.local
-.env.*.local
 node_modules/
 dist/
 playwright-report/
