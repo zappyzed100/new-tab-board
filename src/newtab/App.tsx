@@ -11,7 +11,6 @@ import {
 } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
-  AlertTriangle,
   Archive,
   ArrowDown,
   ArrowUp as ArrowUpIcon,
@@ -114,13 +113,10 @@ import {
   readDeviceSettings,
 } from "../lib/fileio/deviceSettings";
 import {
-  geminiUsageDateKey,
   getBatteryWebhookConfig,
   getDriveSharedFolderChosen,
-  getGeminiApiKey,
-  getGeminiUsageCount,
+  getOpenRouterApiKey,
 } from "../lib/storage/db";
-import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildTagVocabulary } from "../lib/entities/tags";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
@@ -212,8 +208,6 @@ export function App() {
   const [showDataPanel, setShowDataPanel] = useState(false);
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [showTagSearchPanel, setShowTagSearchPanel] = useState(false);
-  // 本日のGemini使用回数(450到達でGPT-OSS 120Bへの乗り換え警告を出す——ユーザー指示)。
-  const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
   // 「ショートカット一覧」ボタンと同じflexコンテナに並ぶwidth:100%のメッセージが
   // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
@@ -224,14 +218,14 @@ export function App() {
   // かった(googleAuth.tsのヘッダー参照)。**折りたたみ式のDataPanel内に置くと、開くまで警告が
   // 出ず早期警告にならない**ため、Appが持ってヘッダー(常時表示)へ出す。
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
-  // 保管庫フォルダ/Gemini APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
+  // 保管庫フォルダ/OpenRouter APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
   // 出さない)。ユーザー指示「各機能未接続状態が見えるようにしよう」——これらはDataPanel内の
   // ローカル state だけで持っていたため、パネルを開くまで未設定に気づけなかった(Driveの
   // 上のコメントと同じ理由でAppへ引き上げる)。いずれもchrome.storage/IndexedDBのローカル読み
   // だけで、OAuthポップアップ等の対話を伴わないため起動時に毎回確認してよい(Driveのトークン
   // 確認とは違い非対話性を気にする必要が無い)。
   const [nasConfigured, setNasConfigured] = useState<boolean | null>(null);
-  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [openRouterConfigured, setOpenRouterConfigured] = useState<boolean | null>(null);
   const [batteryConfigured, setBatteryConfigured] = useState<boolean | null>(null);
   // 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。上の3つと同じ理由・
   // 同じ形でAppへ引き上げる(ユーザー指示)。自動作成フォルダでもDrive同期自体は機能するため
@@ -242,7 +236,7 @@ export function App() {
   const [deviceSettingsReloadSignal, setDeviceSettingsReloadSignal] = useState(0);
   useEffect(() => {
     void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
-    void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
+    void getOpenRouterApiKey().then((key) => setOpenRouterConfigured(Boolean(key)));
     void getBatteryWebhookConfig().then((config) => setBatteryConfigured(Boolean(config)));
     void getDriveSharedFolderChosen().then(setDriveSharedFolderChosen);
   }, []);
@@ -497,7 +491,7 @@ export function App() {
   // reconcileActiveNotesOnNasが削除する(いずれもユーザー指示: 無駄な再保存を避ける/古い
   // ファイルを消す)。
   async function pushNasActiveNow(): Promise<void> {
-    // 書き込み前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: NASへの
+    // 書き込み前に、空でない全ノートへOpenRouterをかけてタグを最新化する(ユーザー指示: NASへの
     // 書き込みが実行される前にタグ付けを済ませてほしい)。tagAllNotesがupdateNotesで
     // notesRefを更新済みなので、直後のnotesRef.current読み取りは新しいタグを反映する。
     await tagAllNotes();
@@ -675,16 +669,6 @@ export function App() {
         if (local.driveConnected !== undefined) setDriveConnected(local.driveConnected);
       });
     }, 30_000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // 本日のGemini使用回数を読み、しきい値(450)到達で警告バナーを出す。自動タグ付け等で
-  // 回数が増えるため、起動時と30秒ごとに読み直す(日跨ぎはgeminiUsageDateKeyで数え直される)。
-  const refreshGeminiUsage = () =>
-    void getGeminiUsageCount(geminiUsageDateKey(clockNow())).then(setGeminiUsageToday);
-  useEffect(() => {
-    refreshGeminiUsage();
-    const interval = setInterval(refreshGeminiUsage, 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1269,17 +1253,17 @@ export function App() {
     }
   }
 
-  // 空でない全ノートの中で再タグ付けが必要なもの(needsRetag)にGeminiでタグを付ける共通処理。
+  // 空でない全ノートの中で再タグ付けが必要なもの(needsRetag)にOpenRouterでタグを付ける共通処理。
   // 「🏷️ タグをふる」ボタン(handleTagAll)だけでなく、NAS書き込み(pushNasActiveNow)・
   // Drive退避(handleBackupToDrive)の先頭からも呼ぶ(ユーザー指示: 書き込み/退避が実行される
-  // 前に、まず空でない全ノートにGeminiをかけてから書き込み・退避を行ってほしい)。
+  // 前に、まず空でない全ノートにOpenRouterをかけてから書き込み・退避を行ってほしい)。
   // APIキー未設定/対象無しなら静かに何もしない(明示的な案内は handleTagAll 側だけが出す——
   // 書き込み/退避のたびに毎回警告を出すと日常操作で煩わしいため)。件数を返す。
   async function tagAllNotes(): Promise<{ targetCount: number; done: number; junkCount: number }> {
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) return { targetCount: 0, done: 0, junkCount: 0 };
     const all = notesRef.current ?? [];
-    // 「この端末のみ(noSync)」は Gemini(=Googleのサーバー)へ本文を送らない。
+    // 「この端末のみ(noSync)」はOpenRouterへ本文を送らない。
     const targets = all.filter((n) => needsRetag(n) && !n.noSync);
     if (targets.length === 0) return { targetCount: 0, done: 0, junkCount: 0 };
     // タグ候補＋既存ノートの頻出タグ(最大200)を語彙として渡し、タグの統一を促す(ユーザー指示)。
@@ -1304,15 +1288,16 @@ export function App() {
         if (junk) junkCount += 1;
       }
     }
-    if (done > 0) refreshGeminiUsage(); // 大量のGemini呼び出し直後は使用量を即時に反映する(警告の出遅れ防止)。
     return { targetCount: targets.length, done, junkCount };
   }
 
   // 「🏷️ タグをふる」ボタン: tagAllNotesを実行し、進捗/結果メッセージを表示する。
   async function handleTagAll() {
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) {
-      setDataPanelMessage("Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)");
+      setDataPanelMessage(
+        "OpenRouter APIキーを設定してください(データ管理の「OpenRouter APIキー」ボタン)",
+      );
       return;
     }
     const all = notesRef.current ?? [];
@@ -1322,7 +1307,7 @@ export function App() {
       return;
     }
     setTagging(true);
-    setDataPanelMessage(`${targetCount}件のノートにGeminiでタグ付け中…`);
+    setDataPanelMessage(`${targetCount}件のノートにOpenRouterでタグ付け中…`);
     const { done, junkCount } = await tagAllNotes();
     setTagging(false);
     setDataPanelMessage(
@@ -1347,7 +1332,7 @@ export function App() {
   // ハッシュで保存済みか判定して変わったノートだけ送り(pushNasActiveNowと同じ発想。ユーザー指示:
   // 変更が無いノートを送るな)、消えたノートはreconcileDriveActiveが削除する。
   async function pushDriveActiveNow(token: string): Promise<void> {
-    // 書き込み前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: Driveへの
+    // 書き込み前に、空でない全ノートへOpenRouterをかけてタグを最新化する(ユーザー指示: Driveへの
     // 書き込みが実行される前にタグ付けを済ませてほしい)。pushNasActiveNowと同じ理由。
     await tagAllNotes();
     const now = clockNow();
@@ -1373,7 +1358,7 @@ export function App() {
 
   async function handleBackupToDrive() {
     if (!backupJson) return; // 準備ができているか(sync/notesがまだ無ければ何もしない)のゲート
-    // 退避前に、空でない全ノートへGeminiをかけてタグを最新化する(ユーザー指示: 書き込み/退避が
+    // 退避前に、空でない全ノートへOpenRouterをかけてタグを最新化する(ユーザー指示: 書き込み/退避が
     // 実行される前にタグ付けを済ませてほしい)。tagAllNotesはupdateNotes経由でReact stateを
     // 更新するため、クロージャに閉じ込められたbackupJson(useMemo)はタグ付け前のスナップショット
     // のまま古くなる——refsから読み直して最新のタグを含んだJSONを組み直す。
@@ -1458,7 +1443,7 @@ export function App() {
   // 設定をローカルファイルへ書き出す/読み込む。保管庫やDriveを使わない/使えない環境でも
   // 設定を持ち運べるようにするためのユーザー指示。ノートは対象外(NAS/Driveのactive・日付
   // フォルダが別途担う)——NAS復元と同じ境界にする。
-  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(Gemini APIキー・GAS連携・
+  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(OpenRouter APIキー・GAS連携・
   // 保管庫パス・Driveフォルダ設定)も含める**(ユーザー指示・2026-07-29)。経路ごとの
   // 扱いの違いとその理由はsrc/lib/fileio/deviceSettings.tsのヘッダーが正本。
   async function handleExportSettingsFile() {
@@ -1527,7 +1512,9 @@ export function App() {
       setDeviceSettingsReloadSignal((n) => n + 1);
       // 未設定バッジ(ヘッダー常時表示)は各stateから描いているため、取り込んだ内容で更新する。
       if (device.nasFolderPath !== undefined) setNasConfigured(device.nasFolderPath.trim() !== "");
-      if (device.geminiApiKey !== undefined) setGeminiConfigured(device.geminiApiKey.trim() !== "");
+      if (device.openrouterApiKey !== undefined) {
+        setOpenRouterConfigured(device.openrouterApiKey.trim() !== "");
+      }
       if (device.batteryWebhookConfig !== undefined) setBatteryConfigured(true);
       if (device.driveSharedFolderChosen === true) setDriveSharedFolderChosen(true);
     }
@@ -1536,7 +1523,7 @@ export function App() {
     );
   }
 
-  // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
+  // OpenRouterのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
     const appended: Todo[] = texts.map((text, i) => ({
@@ -1639,18 +1626,6 @@ export function App() {
       <Box p={{ initial: "3", sm: "5" }}>
         <Flex asChild direction="column" gap="4">
           <main data-testid="app-root">
-            {geminiUsageToday >= GEMINI_DAILY_WARN_THRESHOLD ? (
-              <Card data-testid="gemini-usage-warning" className="callout callout-warning">
-                <Text size="3" weight="medium" color="orange">
-                  <Flex align="center" gap="2" as="span">
-                    <AlertTriangle size={16} aria-hidden="true" />
-                    本日のGemini使用が{geminiUsageToday}回に達しました(しきい値
-                    {GEMINI_DAILY_WARN_THRESHOLD})。無料枠を使い切る前に、GPT-OSS 120Bへの乗り換えを
-                    検討してください。
-                  </Flex>
-                </Text>
-              </Card>
-            ) : null}
             {countdown.kind === "upcoming" ? (
               <Card
                 data-testid="next-event-countdown"
@@ -1757,7 +1732,7 @@ export function App() {
                         Drive未接続
                       </Button>
                     ) : null}
-                    {/* 保管庫/Gemini/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
+                    {/* 保管庫/AIキー/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
                         「各機能未接続状態が見えるようにしよう」)。Driveの警告(壊れた/orange)とは
                         性質が違う——これらは任意機能で「使わない」選択もありうるため、常時警告色
                         にはせず控えめなgray/softにする。押すとDataPanelが開き該当欄へ誘導する。
@@ -1776,18 +1751,18 @@ export function App() {
                         保管庫未設定
                       </Button>
                     ) : null}
-                    {geminiConfigured === false ? (
+                    {openRouterConfigured === false ? (
                       <Button
                         type="button"
                         variant="soft"
                         color="gray"
                         size="2"
-                        data-testid="gemini-unconfigured-badge"
-                        title="Gemini APIキーが未設定です。タグ付け/要約/TODO抽出が使えません。押すとデータ操作パネルが開くので「Gemini APIキーを設定」から設定してください"
+                        data-testid="openrouter-unconfigured-badge"
+                        title="OpenRouter APIキーが未設定です。タグ付け・要約・TODO抽出が使えません。押すとデータ操作パネルが開くので「OpenRouter APIキーを設定」から設定してください"
                         onClick={() => setShowDataPanel(true)}
                       >
                         <KeyRound size={14} aria-hidden="true" />
-                        Gemini未設定
+                        OpenRouter未設定
                       </Button>
                     ) : null}
                     {batteryConfigured === false ? (
@@ -1853,7 +1828,7 @@ export function App() {
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}
                 onNasConfiguredChange={setNasConfigured}
-                onGeminiConfiguredChange={setGeminiConfigured}
+                onOpenRouterConfiguredChange={setOpenRouterConfigured}
                 onBatteryConfiguredChange={setBatteryConfigured}
                 onDriveSharedFolderChosenChange={setDriveSharedFolderChosen}
               />
@@ -1966,7 +1941,7 @@ export function App() {
                       variant="soft"
                       size="1"
                       data-testid="tag-all-notes"
-                      title="全ノートにまとめてGeminiでタグを付ける(前回タグ付け以降に変更のないノートはスキップ)"
+                      title="全ノートにまとめてOpenRouterでタグを付ける(前回タグ付け以降に変更のないノートはスキップ)"
                       disabled={tagging}
                       onClick={() => void handleTagAll()}
                     >

@@ -6,7 +6,7 @@
 自分専用のChrome新しいタブページ拡張機能(Manifest V3)。ノート・ブックマーク・TODO・
 次の予定のカウントダウン・タグ検索を1画面に集約し、NAS(ローカルファイルサーバー)と
 Google Driveへ自動的にバックアップ・同期する。バックエンドサーバーは持たない——
-`chrome.storage`/IndexedDBのみでローカル完結し、外部連携(NAS・Drive・Gemini・GAS)は
+`chrome.storage`/IndexedDBのみでローカル完結し、外部連携(NAS・Drive・OpenRouter・GAS)は
 すべて任意設定(未設定でも新しいタブ本体の機能は動く)。
 
 ## アーキテクチャ
@@ -82,7 +82,7 @@ Native Messaging・HTTPを介して疎結合に連携する。
 - [x] 複数タブの全体スナップショット相互書き戻しを廃止し、排他差分コミットへ再設計する
 - [x] 固定タグモード（プリセットを選ぶと盤面を絞り、編集を終えたノートへ固定タグを付ける）
 - [x] ノート本文の折り返し（幅固定）をボタン一つで切り替える（CM6 Compartmentで再構成）
-- [x] 保管庫/Gemini/バッテリー中継の「未設定」を常時可視化するバッジを追加する
+- [x] 保管庫/OpenRouter/バッテリー中継の「未設定」を常時可視化するバッジを追加する
 - [x] Drive接続(interactive:true)でも`User interaction required`が出る件にprompt=select_accountで対処
 - [x] Driveの共有フォルダ選択/GAS連携も同じ形で常時可視化バッジに追加する
 - [x] 「Driveへ退避」を「今すぐDriveへバックアップ」へ改称する(意味合いの変化に合わせる)
@@ -111,31 +111,31 @@ onContentChangeで上書きされる経路は塞げていなかった。CI(Linux
 
 ### 各機能の「未接続/未設定」を常時可視化する(2026-07-27)
 
-ユーザー指示「各機能未接続状態が見えるようにしよう」。保管庫フォルダ/Gemini APIキー/
+ユーザー指示「各機能未接続状態が見えるようにしよう」。保管庫フォルダ/OpenRouter APIキー/
 バッテリー中継の設定有無は、以前はDataPanel(既定で折りたたみ)内のローカルstateだけで
 持っていたため、パネルを開くまで未設定に気づけなかった——Driveの`driveConnected`(App.tsxの
 ヘッダー参照。2026-07-18〜20の丸2日間停止に誰も気づけなかった実害)と同じ穴が3つ残っていた。
 
-3つとも起動時にApp.tsx側で一度だけ確認する(`chrome.storage`/IndexedDBのローカル読みのみで
+4つとも起動時にApp.tsx側で一度だけ確認する(`chrome.storage`/IndexedDBのローカル読みのみで
 OAuth等の対話を伴わないため、Driveのトークン確認と違い非対話性を気にせず毎回実行してよい)。
 DataPanelでの保存操作は`onXxxConfiguredChange`でAppへ即時反映する(`onDriveConnectionChange`と
 同じ形)——パネルは開いている間しか存在しないため、ここだけでstateを持つと閉じるまでバッジが
 古いままになる。
 
-**Driveの警告(orange/solid)とは色を変えた**——保管庫/Gemini/バッテリーは任意機能で「使わない」
+**Driveの警告(orange/solid)とは色を変えた**——保管庫/OpenRouter/バッテリーは任意機能で「使わない」
 選択も正当なため、常時警告色にすると誤解を招く。gray/softの控えめな表示にし、未設定の間だけ
 出す(平常時に雑音を足さない、というDrive警告の既存方針を踏襲)。
 
 ### 共有フォルダ選択/GAS連携も同じ形の常時可視化バッジにする(2026-07-27)
 
-ユーザー指示「共有フォルダを選択、GAS連携も可視化してほしい」。上の3つ(保管庫/Gemini/
+ユーザー指示「共有フォルダを選択、GAS連携も可視化してほしい」。上の3つ(保管庫/OpenRouter/
 バッテリー)と同じ形で2つ追加した:
 
 - **共有フォルダ未選択**: `driveFolderIds["app"]`(フォルダIDの永続キャッシュ)は自動作成
   (`getOrCreateFolder`)でも埋まるため、それだけでは「ユーザーが明示的に共有フォルダを
   選んだか」を区別できない。専用の旗(`driveSharedFolderChosen`・db.ts)を新設し、
   `handlePickSharedFolder`成功時にだけ立てる。自動作成フォルダでもDrive同期自体は
-  機能する(壊れてはいない)ため、Driveの警告(orange)ではなく他の3つと同じgray/softの
+機能する(壊れてはいない)ため、Driveの警告(orange)ではなく他の4つと同じgray/softの
   情報表示にする。
 - **GAS連携未設定**: 前回追加した「バッテリー通知未設定」バッジと実体は同じ(GAS Web App
   中継の設定有無)。ユーザーは「設定の有無だけでよい(疎通確認は不要)」を選んだため、
@@ -209,13 +209,13 @@ setDataPanelMessageの案内文)を変更し、コード側の識別子(`onBacku
 ### 手動タグは「本文の `#タグ名`」を正本にする(専用フィールドを作らない・2026-07-23)
 
 ユーザー指示「`#タグ名` と書いたらタグとして認識する仕組みにしよう」。`Note` に手動タグ用の
-フィールドは**足さない**——Geminiの自動タグ(`note.tags`)は `analyzeNote` の結果で毎回**全置換**
+フィールドは**足さない**——OpenRouterの自動タグ(`note.tags`)は `analyzeNote` の結果で毎回**全置換**
 されるため、同じ配列へ混ぜると自動タグ付けのたびに手動分が消える。本文を正本にすれば構造的に
 消えようがない(手動タグを消すのは本文からその語を消したときだけ)。
 
 合流点は `src/lib/entities/tags.ts` の `resolveNoteTags(note)` 一本(本文の手動タグ→自動タグの順で
 重複除去)。表示(`NoteEditorPane`)・タグ検索(`search/tagSearch.ts`)・NAS/Driveのfront matter
-(`externalIO/nasArchive.ts` の `noteToMarkdown`)・⭐スペシャル(`entities/special.ts`)・Geminiへ渡す
+(`externalIO/nasArchive.ts` の `noteToMarkdown`)・⭐スペシャル(`entities/special.ts`)・OpenRouterへ渡す
 語彙(`buildTagVocabulary`)はすべてこれを通す。front matter へ出すのは、SQLite索引
 (`native-host/build_index.py`)が front matter しか読まないため——ここで合流させないと外部の
 タグ検索から手動タグが見えない。
@@ -265,7 +265,7 @@ UIは二段クリック(押す→赤い確認ボタン)にした(`window.confirm
 
 **タグの持ち方は本文の `#タグ`**(上の「手動タグは本文を正本にする」に従う)。`Note` へ
 `fixedTags` のような専用フィールドを足す案は捨てた——NAS往復(`markdownToNote`)で front matter の
-`tags` へ潰れ、次のGemini自動タグ付けの全置換で消えるため。
+`tags` へ潰れ、次のOpenRouter自動タグ付けの全置換で消えるため。
 
 **付与のタイミングは blur(編集終了)だけ**。CM6は `content` をマウント時にしか読まないので、
 入力中に本文へ差し込んでも画面には入らず次の打鍵で上書きされて消える。書き込むには履歴復元と
@@ -346,7 +346,7 @@ NAS上で辿れた方がよいので、**ファイル名の先頭に貼り付け
 
 新規ディレクトリ `src/lib/images/` の根拠: 「NAS上の画像実体 ↔ 本文のテキスト参照 ↔ 揮発キャッシュ」
 という独立した関心事で、`externalIO/`(NASの生I/O)にも `entities/`(I/Oを持たない純粋ロジック)にも
-収まらない(`drive/`・`gemini/` と同じ「特定の連携単位で1ディレクトリ」の流儀)。内訳は参照記法の
+収まらない(`drive/`・`openrouter/` と同じ「特定の連携単位で1ディレクトリ」の流儀)。内訳は参照記法の
 純粋ロジック(`noteImages.ts`)・NAS入出力(`nasImageStore.ts`)・Reactの揮発キャッシュ
 (`useNoteImages.ts`)。native-host 側は `write-binary`/`read-binary`/`list-images` を追加した
 (契約は `docs/nas-native-messaging-protocol.md`)。
@@ -412,14 +412,13 @@ E2Eテストが拡張機能IDを解決するには service worker の存在が�
 ためだけに最小限のno-opに近いservice worker(`background.ts`)を追加した
 (インストール時に`logOp`で1行ログを出す以外は何もしない)。
 
-### src/lib/gemini/ (Gemini連携の土台・2026-07-12)
-ノートの自動タグ付け・要約・TODO抽出(ユーザー要望)は、いずれもGoogle Gemini APIの
-`generateContent`を呼ぶ共通の土台を必要とする。drive/(Google Drive)と同じく「特定の
-外部サービス連携」という独立した関心事なので、`src/lib/`直下に専用ディレクトリ
-`src/lib/gemini/`を新設した(seamは`gemini.ts`の`callGemini`一本。fetchを依存注入で
-差し替えテスト可能)。APIキーは秘匿情報のため、syncにもDriveの全データJSONバックアップにも
-乗らないIndexedDBの設定ストア(db.tsの`getGeminiApiKey`/`setGeminiApiKey`)へ保存する。
-無料枠に収まりやすいflashモデル(gemini-2.0-flash)を既定にする。
+### src/lib/openrouter/ (OpenRouterによるAI機能全般・2026-08-18)
+自動タグ付けだけでなく、ノート要約・TODO抽出もGoogle GeminiからOpenRouterへ統一した。
+`openrouter/free`ルーターを使うため、無料モデルの入れ替えで拡張機能を更新せずに済む。
+APIキーはIndexedDBの端末ローカル設定へ保存し、sync/Drive自動バックアップへは載せない。
+`openrouter.ts`をHTTP呼び出しの唯一の入口とし、fetchを依存注入できるseamとしてテストする。
+既存の`src/lib/gemini/`配下にあったタグ付け・ノート補助のプロンプト層は、段階移行中の
+既存importを維持しつつ、このOpenRouterの入口を利用する。
 
 ### タグ検索: Markdown+front matter正本 + SQLite再生成インデックス (2026-07-12)
 ユーザー設計を採用。正本はNAS上の「1ノート=1つの .md + YAML front matter」
@@ -517,7 +516,7 @@ before/afterから抽出したupsert・削除tombstoneだけを最新永続状�
 (`gas/battery-webhook.gs`。doPost=スマホ側自動化アプリからの残量報告、doGet=拡張機能からの
 読み取り。共有トークンで簡易認証)。既存の予定前アラーム(`background.ts`のfireAlarm/stopAlarm・
 オフスクリーンのループ音声)を再利用する。
-接続設定(URL+共有トークン)はDataPanelからGemini APIキーと同じ「秘匿情報として画面に
+接続設定(URL+共有トークン)はDataPanelからOpenRouter APIキーと同じ「秘匿情報として画面に
 出さない」パターンで保存。
 
 **設計改定(2026-07-18・ユーザー指摘)**: 当初は「10/20/50%の閾値を新たに下回った時だけ発火・
@@ -557,11 +556,11 @@ before/afterから抽出したupsert・削除tombstoneだけを最新永続状�
 ファイル名正規表現が新拡張子のみ一致するため、次回の突合で自然に「保持対象なし」判定され
 削除される(既存の類似移行と同じ設計)。
 
-### NAS書き込み/Drive退避の前に全ノートへGeminiをかける(2026-07-16)
+### NAS書き込み/Drive退避の前に全ノートへOpenRouterをかける(2026-08-18)
 
 ユーザー指示: 「NASへの書き込み」ボタン(`pushNasActiveNow`)・「Driveへ退避」ボタン
 (`handleBackupToDrive`→内部で`pushDriveActiveNow`)が実行される前に、まず空でない全ノート
-へGeminiでタグ付けしてから書き込み・退避を行ってほしい(タグ未確定のまま保存されるのを
+へOpenRouterでタグ付けしてから書き込み・退避を行ってほしい(タグ未確定のまま保存されるのを
 避けたい、という意図)。共通処理`tagAllNotes()`(App.tsx)を新設し、既存の`needsRetag`
 フィルタ+`analyzeNote`ループ(元々「🏷️ タグをふる」ボタン=`handleTagAll`が持っていた
 ロジック)をそこへ集約。`pushNasActiveNow`・`pushDriveActiveNow`はどちらも先頭で

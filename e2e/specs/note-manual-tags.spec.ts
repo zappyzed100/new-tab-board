@@ -13,7 +13,7 @@ async function typeIntoFirstNote(page: Page, text: string): Promise<string> {
   return paneTestId.replace("note-editor-area-", "");
 }
 
-test("本文の #タグ がタグとして表示され、Geminiの自動タグ枠とは別物として残る", async ({
+test("本文の #タグ がタグとして表示され、OpenRouterの自動タグ枠とは別物として残る", async ({
   context,
   newTabUrl,
 }) => {
@@ -27,7 +27,7 @@ test("本文の #タグ がタグとして表示され、Geminiの自動タグ�
   await expect(tags).toBeVisible();
   await expect(tags.getByText("#数学")).toBeVisible();
   await expect(tags.getByText("#線形代数")).toBeVisible();
-  // 手動タグは本文由来であることが区別できる(Geminiの自動タグは data-tag-origin="ai")
+  // 手動タグは本文由来であることが区別できる(OpenRouterの自動タグは data-tag-origin="ai")
   await expect(tags.locator('[data-tag-origin="manual"]')).toHaveCount(2);
   await expect(tags.locator('[data-tag-origin="ai"]')).toHaveCount(0);
 

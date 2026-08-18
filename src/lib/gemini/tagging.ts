@@ -1,6 +1,6 @@
-// tagging.ts — Geminiによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
-// 実API通信はgemini.tsのcallGeminiへ委譲(fetchは依存注入)。この層は純粋ロジック中心でテスト可能。
-import { callGemini, type GeminiDeps } from "./gemini";
+// tagging.ts — OpenRouterによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
+// 実API通信はopenrouter.tsのcallOpenRouterへ委譲(fetchは依存注入)。この層は純粋ロジック中心でテスト可能。
+import { callOpenRouter, type OpenRouterDeps } from "../openrouter/openrouter";
 
 /** 1ノートに付けるタグの最大数。 */
 export const MAX_TAGS = 5;
@@ -33,7 +33,7 @@ export function exceedsAutoTagChangeThreshold(
   return Math.abs(currentContent.length - lastContent.length) >= AUTO_TAG_CHANGE_THRESHOLD_CHARS;
 }
 
-/** Geminiのカンマ/読点/改行区切り応答からタグ配列にする(#・記号を外し、最大MAX_TAGS件・重複除去)。 */
+/** OpenRouterのカンマ/読点/改行区切り応答からタグ配列にする(#・記号を外し、最大MAX_TAGS件・重複除去)。 */
 export function parseTags(text: string): string[] {
   const seen = new Set<string>();
   const tags: string[] = [];
@@ -63,7 +63,7 @@ function candidatesClause(tagCandidates: string[]): string {
 export async function tagNote(
   content: string,
   apiKey: string,
-  deps: GeminiDeps = {},
+  deps: OpenRouterDeps = {},
   tagCandidates: string[] = [],
 ): Promise<string[]> {
   if (content.trim() === "") return [];
@@ -73,7 +73,7 @@ export async function tagNote(
     candidatesClause(tagCandidates) +
     "\n---\n" +
     content;
-  const text = await callGemini(prompt, apiKey, deps);
+  const text = await callOpenRouter(prompt, apiKey, deps);
   return text ? parseTags(text) : [];
 }
 
@@ -89,7 +89,7 @@ export function parseTitle(text: string): string {
   return cleaned.length > 40 ? cleaned.slice(0, 40) : cleaned;
 }
 
-/** Geminiの応答から `JUDGE:` 行を探し、JUNKと明示されていればゴミと判定する。
+/** OpenRouterの応答から `JUDGE:` 行を探し、JUNKと明示されていればゴミと判定する。
  * 判定行が無い・曖昧な場合はfalse(=NASに残す。データを誤って捨てないための安全側)。 */
 export function parseJunkFlag(text: string): boolean {
   const judge = /JUDGE:\s*(.*)/i.exec(text)?.[1] ?? "";
@@ -101,7 +101,7 @@ export function parseJunkFlag(text: string): boolean {
 export async function analyzeNote(
   content: string,
   apiKey: string,
-  deps: GeminiDeps = {},
+  deps: OpenRouterDeps = {},
   tagCandidates: string[] = [],
 ): Promise<NoteAnalysis> {
   if (content.trim() === "") return { tags: [], junk: false, title: "" };
@@ -113,7 +113,7 @@ export async function analyzeNote(
     "JUDGE: メモとして意味のある内容なら OK、テストの落書き・無意味・ゴミなら JUNK\n\n" +
     "例:\nTAGS: 買い物, 牛乳\nTITLE: 買い物リスト\nJUDGE: OK\n\n---\n" +
     content;
-  const text = await callGemini(prompt, apiKey, deps);
+  const text = await callOpenRouter(prompt, apiKey, deps);
   if (!text) return { tags: [], junk: false, title: "" };
   // TAGS行があればそこから、無ければ全文からタグを拾う(フォーマット逸脱への保険)。
   const tagsLine = /TAGS:\s*(.*)/i.exec(text)?.[1];

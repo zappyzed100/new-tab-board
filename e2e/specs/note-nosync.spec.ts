@@ -1,5 +1,5 @@
 // note-nosync.spec.ts — 「この端末のみ・同期しない」トグルの回帰(ユーザー指示: パスワード等を貼る用)
-// トグルONのノートは NAS/Drive/Gemini/バックアップへ本文を出さない(除外の実体は各lib/Appの
+// トグルONのノートは NAS/Drive/外部AI/バックアップへ本文を出さない(除外の実体は各lib/Appの
 // egressチョークポイントで、そちらは単体テストで検証)。ここではUIの契約を実測する:
 // ①トグルで note.noSync が chrome.storage.local へ立つ ②AIボタン(要約/TODO/タグ)が無効化される
 // ③「暗号化ではない」と明示するバッジが出る ④もう一度押すと解除される。
@@ -53,7 +53,7 @@ test("同期しないトグル: noSyncフラグ・AIボタン無効化・注意�
 
   // ① storage に noSync=true が立つ。
   await expect.poll(() => storedNoSync(page, id)).toBe(true);
-  // ② AIボタン(要約/TODO抽出/タグ)が無効化される(本文を Gemini へ送らないため)。
+  // ② AIボタン(要約/TODO抽出/タグ)が無効化される(本文を外部AIへ送らないため)。
   await expect(summarize).toBeDisabled();
   await expect(extractTodos).toBeDisabled();
   await expect(tag).toBeDisabled();

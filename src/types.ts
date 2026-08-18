@@ -43,7 +43,7 @@ export type Settings = {
  * 選択中はこの `tags` を全て満たすノートだけを盤面に出し、編集を終えたノート(空でないもの)の
  * 本文末尾へ不足分の `#タグ` を追記する。タグはすべて本文の `#タグ` として持つ——手動タグの
  * 正本が本文だから(entities/tags.ts のヘッダー参照。専用フィールドはNAS往復で note.tags へ
- * 潰れ、Geminiの自動タグ全置換で消える)。 */
+ * 潰れ、OpenRouterの自動タグ全置換で消える)。 */
 export type FixedTagPreset = {
   id: string;
   name: string;
@@ -64,12 +64,12 @@ export type Note = {
   order: number;
   driveFileId?: string;
   lastSyncedAt?: number;
-  /** Geminiが付けたタグ(自動タグ付け機能)。 */
+  /** OpenRouterが付けたタグ(自動タグ付け機能)。 */
   tags?: string[];
   /** 最後にタグを付けた時点の本文のハッシュ。現在の本文のハッシュと一致すれば
    * 「タグ付け以降に変更なし」なので再タグ付けをスキップする(ユーザー指示)。 */
   taggedHash?: string;
-  /** Geminiがタグ付け時に「ゴミ(無意味・落書き)」と判定したノート。NASアーカイブから除外する
+  /** OpenRouterがタグ付け時に「ゴミ(無意味・落書き)」と判定したノート。NASアーカイブから除外する
    * (ユーザー指示)。判定が曖昧な場合はfalse(=NASに残す。データを誤って捨てない)。 */
   junk?: boolean;
   /** 作成時刻(epoch ms)。NASの.md front matterのcreated_atに出す。既存ノートはundefined。 */
@@ -78,7 +78,7 @@ export type Note = {
   updatedAt?: number;
   /** AI要約ノートの場合の元ノートID(front matterのsource_note_id)。 */
   sourceNoteId?: string;
-  /** AI生成ノートの生成元(front matterのgenerated_by。例: "gemini")。 */
+  /** AI生成ノートの生成元(front matterのgenerated_by。例: "openrouter")。 */
   generatedBy?: string;
   /** 「対応済み」チェック(ユーザー指示。名称なしのcheckボタンでノートを済み扱いにする)。
    * 済みのノートはボード上で淡色表示になる(削除はしない——見返せるよう残す)。 */
@@ -90,7 +90,7 @@ export type Note = {
   specialFolder?: string;
   /** 「この端末のみ・同期しない」フラグ(ユーザー指示: パスワード等を貼るノート用)。true のノートは
    * 本文が端末外へ一切出ない——NAS/Drive の全ミラー・履歴スナップショットのNASフラッシュ・全データ
-   * JSONバックアップ・Gemini(要約/タイトル/タグ/TODO抽出)から除外する。**暗号化ではない**:
+   * JSONバックアップ・外部AI(要約/タイトル/タグ/TODO抽出)から除外する。**暗号化ではない**:
    * chrome.storage.local には平文で残るため「端末外へ出さない」だけを保証する(端末固有フラグ・
    * 他端末へは運ばれない)。除外の合流点は excludeNoSyncNotes(entities/notes.ts)。 */
   noSync?: boolean;

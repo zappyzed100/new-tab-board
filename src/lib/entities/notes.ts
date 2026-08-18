@@ -2,7 +2,7 @@
 import type { Note } from "../../types";
 
 /** 「この端末のみ・同期しない」ノートか(Note.noSync)。本文を端末外へ出す全経路の除外判定に使う
- * 単一の述語(NAS/Drive/Gemini/JSONバックアップ/履歴フラッシュ)。ここを唯一の意味の出所にして、
+ * 単一の述語(NAS/Drive/OpenRouter/JSONバックアップ/履歴フラッシュ)。ここを唯一の意味の出所にして、
  * 各出口が `!isNoSyncNote(n)` / `excludeNoSyncNotes(...)` を通す。 */
 export function isNoSyncNote(note: { noSync?: boolean }): boolean {
   return note.noSync === true;

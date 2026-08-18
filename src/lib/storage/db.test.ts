@@ -2,25 +2,24 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   deleteSnapshot,
-  geminiUsageDateKey,
   getAlarmEnabled,
   getAllIndexEntries,
   getAllSnapshots,
   getBatteryWebhookConfig,
   getDriveSharedFolderChosen,
-  getGeminiUsageCount,
   getIndexEntry,
   getNasFolderPath,
+  getOpenRouterApiKey,
   getSnapshot,
   getSnapshotsByNote,
   markSnapshotArchived,
   putIndexEntry,
   putSnapshot,
-  recordGeminiUsage,
   setAlarmEnabled,
   setBatteryWebhookConfig,
   setDriveSharedFolderChosen,
   setNasFolderPath,
+  setOpenRouterApiKey,
 } from "./db";
 
 describe("snapshots", () => {
@@ -148,29 +147,14 @@ describe("この端末でアラームを鳴らすか(端末ローカル設定)",
   });
 });
 
-describe("Gemini使用量カウント", () => {
-  it("recordGeminiUsageは今日の回数を1ずつ増やして返す", async () => {
-    const day = "2026-07-13";
-    expect(await getGeminiUsageCount(day)).toBe(0);
-    expect(await recordGeminiUsage(day)).toBe(1);
-    expect(await recordGeminiUsage(day)).toBe(2);
-    expect(await getGeminiUsageCount(day)).toBe(2);
+describe("OpenRouter APIキー", () => {
+  it("未設定ならundefinedを返す", async () => {
+    expect(await getOpenRouterApiKey()).toBeUndefined();
   });
 
-  it("日付が変わると0から数え直す(前日分は今日の集計に混ざらない)", async () => {
-    const d1 = "2026-08-01";
-    const d2 = "2026-08-02";
-    await recordGeminiUsage(d1);
-    await recordGeminiUsage(d1); // d1 = 2回
-    expect(await getGeminiUsageCount(d2)).toBe(0); // 別日は0
-    expect(await recordGeminiUsage(d2)).toBe(1); // d2で1から数え直し
-    expect(await getGeminiUsageCount(d1)).toBe(0); // 記録がd2へ置き換わり、d1問い合わせは0
-  });
-
-  it("geminiUsageDateKeyはローカル日付のYYYY-MM-DDを返す", () => {
-    // 月はローカル成分で構築し、同じローカル成分で読むためタイムゾーンに依らず一致する。
-    expect(geminiUsageDateKey(new Date(2026, 6, 13, 10, 30).getTime())).toBe("2026-07-13");
-    expect(geminiUsageDateKey(new Date(2026, 0, 5, 0, 0).getTime())).toBe("2026-01-05");
+  it("put/getで往復できる", async () => {
+    await setOpenRouterApiKey("sk-or-v1-test");
+    expect(await getOpenRouterApiKey()).toBe("sk-or-v1-test");
   });
 });
 

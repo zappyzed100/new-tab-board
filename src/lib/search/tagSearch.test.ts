@@ -59,7 +59,7 @@ describe("relatedTags", () => {
 });
 
 describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () => {
-  // タグの正本は resolveNoteTags(本文の手動タグ + Geminiの自動タグ)であって note.tags だけではない。
+  // タグの正本は resolveNoteTags(本文の手動タグ + OpenRouterの自動タグ)であって note.tags だけではない。
   const manual = [
     { id: "m1", content: "微分の復習 #数学", tags: ["復習"] },
     { id: "m2", content: "英単語 #英語", tags: [] },
@@ -86,7 +86,7 @@ describe("本文の#タグ(手動タグ)もタグ検索の対象になる", () =
     expect(filterNotesByTags(manual, ["数学"], "and").map((n) => n.id)).toEqual(["m1", "m3"]);
   });
 
-  it("手動タグとGeminiタグのANDが効く(両者は同じ1つの集合として扱う)", () => {
+  it("手動タグとOpenRouterタグのANDが効く(両者は同じ1つの集合として扱う)", () => {
     expect(filterNotesByTags(manual, ["数学", "復習"], "and").map((n) => n.id)).toEqual([
       "m1",
       "m3",
@@ -123,7 +123,7 @@ describe("filterNotesByFixedTags(固定タグモードの盤面フィルタ)", (
     expect(filterNotesByFixedTags(board, [], none)).toBe(board);
   });
 
-  it("Geminiの自動タグ(note.tags)でも条件を満たせる(正本は手動+自動の合流)", () => {
+  it("OpenRouterの自動タグ(note.tags)でも条件を満たせる(正本は手動+自動の合流)", () => {
     const auto = [{ id: "x", content: "本文だけ", tags: ["仕事", "2026"] }];
     expect(filterNotesByFixedTags(auto, ["仕事", "2026"], none).map((n) => n.id)).toEqual(["x"]);
   });

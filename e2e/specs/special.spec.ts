@@ -186,7 +186,7 @@ test("タグの出現回数降順チップ・自由入力の両方でスペシ�
     { id1, id2 },
   );
 
-  // タグ付けはGemini経由のみ(E2E環境にAPIキー無し)のため、chrome.storage.localへ
+  // タグ付けはOpenRouter経由のみ(E2E環境にAPIキー無し)のため、chrome.storage.localへ
   // 直接タグを注入してテストデータを用意する(タグ絞り込みUI自体の検証が目的)。
   await page.evaluate(
     ({ id1, id2 }) =>

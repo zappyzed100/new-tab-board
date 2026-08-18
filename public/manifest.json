@@ -13,7 +13,7 @@
   },
   "icons": { "128": "icon128.png" },
   "permissions": ["storage", "identity", "alarms", "notifications", "offscreen", "nativeMessaging"],
-  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
+  "host_permissions": ["https://openrouter.ai/*"],
   "oauth2": {
     "client_id": "872015431238-8ul2vrsn7crorkdqsh1s6f47hffejdnb.apps.googleusercontent.com",
     "scopes": [
