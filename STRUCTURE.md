@@ -235,8 +235,8 @@
 - `src/lib/gemini/gemini.ts` — gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
 - `src/lib/gemini/noteAi.test.ts` — noteAi.test.ts — 要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
 - `src/lib/gemini/noteAi.ts` — noteAi.ts — Geminiを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
-- `src/lib/gemini/tagging.test.ts` — tagging.test.ts — 自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
-- `src/lib/gemini/tagging.ts` — tagging.ts — Geminiによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
+- `src/lib/gemini/tagging.test.ts` — tagging.test.ts — OpenRouterによる自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
+- `src/lib/gemini/tagging.ts` — tagging.ts — OpenRouterによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
 - `src/lib/gemini/useAutoTagScheduler.ts` — useAutoTagScheduler.ts — 自動タグ付け/タイトル付けの起動条件(編集終了から5分 or 400文字変更)を
 - `src/lib/history/gzip.test.ts` — gzip.test.ts — gzip.ts(圧縮/展開)の単体テスト
 - `src/lib/history/gzip.ts` — gzip.ts — gzip圧縮/展開(Chrome標準のCompressionStream/DecompressionStream。追加依存なし)
@@ -262,6 +262,8 @@
 - `src/lib/nextEvent/nextEventCountdown.ts` — nextEventCountdown.ts — 次の予定までのカウントダウン表示ロジック(純関数。SPEC.md §4.9)
 - `src/lib/nextEvent/preEventAlarm.test.ts` — preEventAlarm.test.ts — preEventAlarm.ts(予定前アラームのスケジュール計算)の単体テスト
 - `src/lib/nextEvent/preEventAlarm.ts` — preEventAlarm.ts — 予定前アラームのスケジュール計算(純関数。SPEC.md §4.11)
+- `src/lib/openrouter/openrouter.test.ts` — openrouter.test.ts — openrouter.ts(OpenRouter API呼び出し)の単体テスト。実APIは叩かない。
+- `src/lib/openrouter/openrouter.ts` — openrouter.ts — OpenRouter chat completions API呼び出しの唯一の入出口
 - `src/lib/runtime/clock.test.ts` — clock.test.ts — clock.ts(時刻シーム)の単体テスト
 - `src/lib/runtime/clock.ts` — clock.ts — 時刻の唯一の入出口(GUARDRAILS.md §12.2)。テストや他ファイルから直接Date.now()を叩かない
 - `src/lib/runtime/log.test.ts` — log.test.ts — logOp(ログ単一出口)の単体テスト
@@ -1043,6 +1045,12 @@
 ### `src/lib/nextEvent/preEventAlarm.ts`
 - function resolveAlarmTime
 
+### `src/lib/openrouter/openrouter.ts`
+- const DEFAULT_OPENROUTER_MODEL
+- function resetOpenRouterRateLimitForTests
+- type OpenRouterDeps
+- function callOpenRouter
+
 ### `src/lib/runtime/clock.ts`
 - function now
 - function msUntilNextInterval
@@ -1115,6 +1123,8 @@
 - function setNasFolderPath
 - function getGeminiApiKey
 - function setGeminiApiKey
+- function getOpenRouterApiKey
+- function setOpenRouterApiKey
 - type BatteryWebhookConfig
 - function getBatteryWebhookConfig
 - function setBatteryWebhookConfig

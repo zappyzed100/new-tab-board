@@ -187,21 +187,30 @@ Driveアプリ経由で最新ノートを閲覧できる(擬似的な持ち出�
 どちらもDriveアプリがインストールされていればDriveアプリ内でフォルダが開く
 (環境によってはSafari/ブラウザが開くこともあるが、同じフォルダへ辿り着く)。
 
-### 2. Gemini APIキー(タグ付け/要約/TODO抽出)
+### 2. Gemini APIキー(要約/TODO抽出)
 
 1. [Google AI Studio](https://aistudio.google.com/apikey)で無料のAPIキーを発行する
    (`AIza...`から始まる文字列)
 2. 拡張機能の「データ管理」→「Gemini APIキー」ボタンを押し、キーを貼り付けて保存する
-   (キーは`chrome.storage`の設定ストアに保存され、Drive同期や全データバックアップには
+   (キーは端末ローカルのIndexedDB設定ストアに保存され、Drive同期や全データバックアップには
    乗らない——秘匿情報として画面にも再表示されない)
-3. 保存後は自動で有効になる。ノート保存時の自動タグ付け・要約・TODO抽出のいずれかを
+3. 保存後は自動で有効になる。要約・TODO抽出のいずれかを
    使うと呼び出される([src/lib/gemini/gemini.ts](src/lib/gemini/gemini.ts))
 - 既定モデルは無料枠に収まりやすい軽量モデル(`DEFAULT_GEMINI_MODEL`。実際のAPIで
   404になる場合はこの定数だけを実在するモデルIDへ書き換える)
 - 1日450回に達すると画面上部に乗り換え警告バナーが出る(無料枠の枯渇を事前に知らせる)
 - 429(レート制限)を受けると1分間は自動でリクエストを止める(手動対応不要)
 
-### 3. スマホのバッテリー低下警告(Google Apps Script中継)
+### 3. OpenRouter APIキー(自動タグ付け)
+
+1. [OpenRouter](https://openrouter.ai/keys)でAPIキーを発行する
+2. 拡張機能の「データ管理」→「OpenRouter APIキー」ボタンを押し、キーを貼り付けて保存する
+   (キーは端末ローカルの設定ストアに保存され、Drive同期や全データバックアップには乗らない)
+3. 保存後は「まとめてタグをふる」またはノートのタグボタンで使える。自動タグ付けも
+   OpenRouterへ送信される。無料モデルルーター(`openrouter/free`)が利用可能なモデルを選ぶ。
+4. OpenRouterの無料枠にはレート制限があるため、429を受けると1分間は自動でリクエストを止める。
+
+### 4. スマホのバッテリー低下警告(Google Apps Script中継)
 
 スマホと拡張機能は別デバイスなので、間を橋渡しするサーバーとしてGoogle Apps Script(GAS)の
 無料Web Appを使う。**この節がこのセットアップの中で一番手数が多い**——手順は
@@ -239,7 +248,7 @@ Driveアプリ経由で最新ノートを閲覧できる(擬似的な持ち出�
 このGASコード自体は`npm`/`vitest`/CIのビルド・テスト対象外(Googleのクラウド上で動く
 別ランタイムのコードのため)。中身を変更したら、上記手順2の貼り付けをやり直す必要がある。
 
-### 4. SSD→NASアーカイブ(Native Messaging host)
+### 5. SSD→NASアーカイブ(Native Messaging host)
 
 ノート履歴をNASへ書き出すには、PC側に常駐する小さなPythonプログラム
 (`native-host/nas_bridge.py`)をOSへ登録する必要がある(ブラウザの
@@ -273,7 +282,7 @@ python build_index.py "Z:\NAS\backup"
 ```
 詳細・SQLクエリ例は[native-host/README.md](native-host/README.md)を参照。
 
-### 5. Flow Launcher連携
+### 6. Flow Launcher連携
 
 host本体(別リポジトリ)を[docs/native-messaging-protocol.md](docs/native-messaging-protocol.md)の
 契約に沿って実装し、OSへnative messaging hostとして登録する必要がある。このリポジトリ側は

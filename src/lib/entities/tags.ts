@@ -1,7 +1,7 @@
 // tags.ts — 本文から `#hoge` 形式のインラインタグを抽出する純粋関数(SPEC.md §4.2)
 //
 // 手動タグの正本は「本文に書かれた `#タグ名`」(ユーザー指示・2026-07-23)。Note に手動タグ用の
-// フィールドは持たない——Geminiの自動タグ(`note.tags`)は analyzeNote の結果で毎回**全置換**される
+// フィールドは持たない——OpenRouterの自動タグ(`note.tags`)は analyzeNote の結果で毎回**全置換**される
 // ため、同じ配列へ混ぜると自動タグ付けのたびに手動分が消える。本文が正本なら消えようがない。
 // 表示・検索・NAS/Driveのfront matter書き出しは、すべて resolveNoteTags で両者を合流させる。
 
@@ -29,7 +29,7 @@ export function extractTags(content: string): string[] {
   return [...tags];
 }
 
-/** そのノートに付いているタグの正本: 本文の手動タグ(先) + Geminiの自動タグ(後)を重複除去して返す。
+/** そのノートに付いているタグの正本: 本文の手動タグ(先) + OpenRouterの自動タグ(後)を重複除去して返す。
  * 表示・タグ検索・front matter書き出しはすべてこれを通す(片方だけを見ると手動タグが機能しない)。 */
 export function resolveNoteTags(note: { content?: string; tags?: string[] }): string[] {
   const seen = new Set<string>();
@@ -55,7 +55,7 @@ export function normalizeTagName(raw: string): string {
  * - **空ノートには付けない**(ユーザー指示)——本文が空白のみならそのまま返す。末尾の空
  *   プレースホルダ3つが固定タグで汚れると、盤面の「常に空が3つ」の述語
  *   (isGeneratedEmptyPlaceholder)からも外れて補充が暴れる。
- * - 既に本文にあるタグは足さない(resolveNoteTags ではなく extractTags で見る——Geminiの
+ * - 既に本文にあるタグは足さない(resolveNoteTags ではなく extractTags で見る——OpenRouterの
  *   自動タグ `note.tags` は再タグ付けで全置換されるため、それを根拠に「もう付いている」と
  *   判断すると次のタグ付けで固定タグが消える)。
  * - 追記位置は**末尾**。先頭へ入れると、既存ノートの見出し行より前に出て読み味が変わる。 */
@@ -67,7 +67,7 @@ export function applyFixedTags(content: string, fixedTags: string[]): string {
   return `${content.replace(/\s+$/, "")}\n\n${missing.map((t) => `#${t}`).join(" ")}`;
 }
 
-/** Geminiのタグ付けへ渡す「タグ語彙」を作る(ユーザー指示: タグをある程度統一する)。
+/** OpenRouterのタグ付けへ渡す「タグ語彙」を作る(ユーザー指示: タグをある程度統一する)。
  * 並びの優先: ①ユーザーが並べたタグ候補(最優先) → ②既存ノートで頻出のタグ(頻度降順。
  * 既存タグを再利用させて表記ゆれ/乱立を抑える)。重複を除き最大 limit 個(既定200)に切る。
  * ②には本文の手動タグも含める(resolveNoteTags)——手で使っている語彙こそ統一の軸になるため。 */

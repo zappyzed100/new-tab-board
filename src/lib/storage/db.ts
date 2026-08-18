@@ -4,10 +4,11 @@ import type { IndexEntry, Snapshot } from "../../types";
 import { logOp } from "../runtime/log";
 
 const NAS_FOLDER_PATH_KEY = "nasFolderPath";
-// Gemini APIキーは秘匿情報。この設定ストア(IndexedDB)はchrome.storage.syncにも
+// AI APIキーは秘匿情報。この設定ストア(IndexedDB)はchrome.storage.syncにも
 // Driveの全データJSONバックアップ(buildExportPayloadはsync+notesのみ)にも乗らないため、
 // キーが同期・バックアップ経由で外部へ漏れない(§7 秘匿)。
 const GEMINI_API_KEY_KEY = "geminiApiKey";
+const OPENROUTER_API_KEY_KEY = "openrouterApiKey";
 // スマホのバッテリー低下警告(GAS Web App中継)の接続設定。トークンは秘匿情報のため
 // GEMINI_API_KEY_KEYと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
 const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
@@ -170,6 +171,19 @@ export async function setGeminiApiKey(key: string): Promise<void> {
   await db.put("settings", key, GEMINI_API_KEY_KEY);
   // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
   logOp("db", "put", "settings/geminiApiKey");
+}
+
+/** OpenRouter APIキーを返す。未設定ならundefined。 */
+export async function getOpenRouterApiKey(): Promise<string | undefined> {
+  const db = await getDb();
+  return db.get("settings", OPENROUTER_API_KEY_KEY) as Promise<string | undefined>;
+}
+
+export async function setOpenRouterApiKey(key: string): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", key, OPENROUTER_API_KEY_KEY);
+  // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
+  logOp("db", "put", "settings/openrouterApiKey");
 }
 
 /** スマホのバッテリー低下警告のGAS Web App接続設定(url+共有トークン)。未設定ならundefined。 */

@@ -1,7 +1,7 @@
 // deviceSettings.ts — 「端末ローカル設定」(IndexedDB側)をローカルファイルへ持ち出す/戻すための集約
 //
 // 【なぜ settingsBackup.ts と分けるのか — 2026-07-29】
-// db.ts の端末ローカル設定(Gemini APIキー・GAS連携トークン・保管庫パス・Driveフォルダ設定)は、
+// db.ts の端末ローカル設定(Gemini/OpenRouter APIキー・GAS連携トークン・保管庫パス・Driveフォルダ設定)は、
 // 「同期・バックアップ経由で外部へ漏れない」ことを目的に **意図的に** chrome.storage.sync にも
 // 保管庫/Drive の設定バックアップにも載せていない(db.ts のヘッダー参照。§7 秘匿)。
 // 一方でユーザーからは「手動でローカルへ書き出すファイルにはこれらも入れてほしい」という
@@ -20,12 +20,14 @@ import {
   getDriveSharedFolderChosen,
   getGeminiApiKey,
   getNasFolderPath,
+  getOpenRouterApiKey,
   saveDriveFolderId,
   setAlarmEnabled,
   setBatteryWebhookConfig,
   setDriveSharedFolderChosen,
   setGeminiApiKey,
   setNasFolderPath,
+  setOpenRouterApiKey,
   type BatteryWebhookConfig,
 } from "../storage/db";
 
@@ -36,6 +38,8 @@ export type DeviceSettings = {
   nasFolderPath?: string;
   /** Gemini APIキー(秘匿)。 */
   geminiApiKey?: string;
+  /** OpenRouter APIキー(秘匿)。 */
+  openrouterApiKey?: string;
   /** GAS連携(バッテリー中継)のURL+トークン(秘匿)。 */
   batteryWebhookConfig?: BatteryWebhookConfig;
   /** この端末でアラーム音を鳴らすか。 */
@@ -51,6 +55,7 @@ export async function readDeviceSettings(): Promise<DeviceSettings> {
   const [
     nasFolderPath,
     geminiApiKey,
+    openrouterApiKey,
     batteryWebhookConfig,
     alarmEnabled,
     driveFolderIds,
@@ -58,6 +63,7 @@ export async function readDeviceSettings(): Promise<DeviceSettings> {
   ] = await Promise.all([
     getNasFolderPath(),
     getGeminiApiKey(),
+    getOpenRouterApiKey(),
     getBatteryWebhookConfig(),
     getAlarmEnabled(),
     getDriveFolderIds(),
@@ -66,6 +72,7 @@ export async function readDeviceSettings(): Promise<DeviceSettings> {
   const out: DeviceSettings = { alarmEnabled, driveSharedFolderChosen };
   if (nasFolderPath !== undefined) out.nasFolderPath = nasFolderPath;
   if (geminiApiKey !== undefined) out.geminiApiKey = geminiApiKey;
+  if (openrouterApiKey !== undefined) out.openrouterApiKey = openrouterApiKey;
   if (batteryWebhookConfig !== undefined) out.batteryWebhookConfig = batteryWebhookConfig;
   // 空オブジェクトは「1件も無い」なので書き出さない(取り込み側の判定を単純に保つ)。
   if (driveFolderIds && Object.keys(driveFolderIds).length > 0) {
@@ -80,6 +87,9 @@ export async function readDeviceSettings(): Promise<DeviceSettings> {
 export async function applyDeviceSettings(settings: DeviceSettings): Promise<void> {
   if (settings.nasFolderPath !== undefined) await setNasFolderPath(settings.nasFolderPath);
   if (settings.geminiApiKey !== undefined) await setGeminiApiKey(settings.geminiApiKey);
+  if (settings.openrouterApiKey !== undefined) {
+    await setOpenRouterApiKey(settings.openrouterApiKey);
+  }
   if (settings.batteryWebhookConfig !== undefined) {
     await setBatteryWebhookConfig(settings.batteryWebhookConfig);
   }
@@ -100,6 +110,7 @@ export function parseDeviceSettings(value: unknown): DeviceSettings | undefined 
   const out: DeviceSettings = {};
   if (typeof v.nasFolderPath === "string") out.nasFolderPath = v.nasFolderPath;
   if (typeof v.geminiApiKey === "string") out.geminiApiKey = v.geminiApiKey;
+  if (typeof v.openrouterApiKey === "string") out.openrouterApiKey = v.openrouterApiKey;
   if (typeof v.alarmEnabled === "boolean") out.alarmEnabled = v.alarmEnabled;
   if (typeof v.driveSharedFolderChosen === "boolean") {
     out.driveSharedFolderChosen = v.driveSharedFolderChosen;

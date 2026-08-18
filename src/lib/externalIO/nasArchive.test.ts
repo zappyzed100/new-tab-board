@@ -238,7 +238,7 @@ describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
     expect(md).toContain(`tagged_hash: ${tagged.taggedHash}`);
     const restored = markdownToNote(md);
     expect(restored.taggedHash).toBe(tagged.taggedHash);
-    // pull した端末側の再タグ付け判定: 同一内容なので false(=Geminiを回さない)。
+    // pull した端末側の再タグ付け判定: 同一内容なので false(=OpenRouterを回さない)。
     expect(needsRetag({ content: restored.content, taggedHash: restored.taggedHash })).toBe(false);
   });
 

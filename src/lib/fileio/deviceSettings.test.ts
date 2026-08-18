@@ -26,8 +26,12 @@ vi.mock("../storage/db", () => ({
     store.driveFolderIds = { ...((store.driveFolderIds ?? {}) as object), [path]: id };
   }),
   getDriveSharedFolderChosen: vi.fn(async () => Boolean(store.driveSharedFolderChosen)),
+  getOpenRouterApiKey: vi.fn(async () => store.openrouterApiKey as string | undefined),
   setDriveSharedFolderChosen: vi.fn(async () => {
     store.driveSharedFolderChosen = true;
+  }),
+  setOpenRouterApiKey: vi.fn(async (key: string) => {
+    store.openrouterApiKey = key;
   }),
 }));
 
@@ -40,9 +44,10 @@ beforeEach(() => {
 });
 
 describe("readDeviceSettings", () => {
-  it("ユーザー指定の5項目(保管庫パス/Geminiキー/GAS連携/Driveフォルダ/共有フォルダ選択済み)を読み出す", async () => {
+  it("端末ローカル設定(保管庫パス/AIキー/GAS連携/Driveフォルダ/共有フォルダ選択済み)を読み出す", async () => {
     store.nasFolderPath = "Z:\\保管庫";
     store.geminiApiKey = "AIza-テスト";
+    store.openrouterApiKey = "sk-or-v1-テスト";
     store.batteryWebhookConfig = { url: "https://script.google.com/x", token: "tok" };
     store.driveFolderIds = { app: "folder-1" };
     store.driveSharedFolderChosen = true;
@@ -50,6 +55,7 @@ describe("readDeviceSettings", () => {
     expect(await readDeviceSettings()).toEqual({
       nasFolderPath: "Z:\\保管庫",
       geminiApiKey: "AIza-テスト",
+      openrouterApiKey: "sk-or-v1-テスト",
       batteryWebhookConfig: { url: "https://script.google.com/x", token: "tok" },
       alarmEnabled: true,
       driveFolderIds: { app: "folder-1" },
@@ -73,6 +79,7 @@ describe("applyDeviceSettings", () => {
     await applyDeviceSettings({
       nasFolderPath: "Z:\\復元先",
       geminiApiKey: "AIza-復元",
+      openrouterApiKey: "sk-or-v1-復元",
       batteryWebhookConfig: { url: "https://script.google.com/y", token: "tok2" },
       alarmEnabled: false,
       driveFolderIds: { app: "f1", "app/New Tab Board": "f2" },
@@ -82,6 +89,7 @@ describe("applyDeviceSettings", () => {
     expect(await readDeviceSettings()).toEqual({
       nasFolderPath: "Z:\\復元先",
       geminiApiKey: "AIza-復元",
+      openrouterApiKey: "sk-or-v1-復元",
       batteryWebhookConfig: { url: "https://script.google.com/y", token: "tok2" },
       alarmEnabled: false,
       driveFolderIds: { app: "f1", "app/New Tab Board": "f2" },
@@ -113,11 +121,16 @@ describe("parseDeviceSettings", () => {
       parseDeviceSettings({
         nasFolderPath: 123,
         geminiApiKey: "ok",
+        openrouterApiKey: "sk-or-v1-ok",
         batteryWebhookConfig: { url: "https://x", token: 5 },
         driveFolderIds: { app: "id", bad: 7 },
         driveSharedFolderChosen: "true",
       }),
-    ).toEqual({ geminiApiKey: "ok", driveFolderIds: { app: "id" } });
+    ).toEqual({
+      geminiApiKey: "ok",
+      openrouterApiKey: "sk-or-v1-ok",
+      driveFolderIds: { app: "id" },
+    });
   });
 });
 
@@ -140,5 +153,6 @@ describe("秘匿情報の境界", () => {
     // ここにdeviceSettingsが混ざると、APIキーが自動同期でクラウドへ出てしまう。
     expect(payload).not.toHaveProperty("deviceSettings");
     expect(JSON.stringify(payload)).not.toContain("geminiApiKey");
+    expect(JSON.stringify(payload)).not.toContain("openrouterApiKey");
   });
 });

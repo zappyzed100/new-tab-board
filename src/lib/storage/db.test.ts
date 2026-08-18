@@ -11,6 +11,7 @@ import {
   getGeminiUsageCount,
   getIndexEntry,
   getNasFolderPath,
+  getOpenRouterApiKey,
   getSnapshot,
   getSnapshotsByNote,
   markSnapshotArchived,
@@ -21,6 +22,7 @@ import {
   setBatteryWebhookConfig,
   setDriveSharedFolderChosen,
   setNasFolderPath,
+  setOpenRouterApiKey,
 } from "./db";
 
 describe("snapshots", () => {
@@ -171,6 +173,17 @@ describe("Gemini使用量カウント", () => {
     // 月はローカル成分で構築し、同じローカル成分で読むためタイムゾーンに依らず一致する。
     expect(geminiUsageDateKey(new Date(2026, 6, 13, 10, 30).getTime())).toBe("2026-07-13");
     expect(geminiUsageDateKey(new Date(2026, 0, 5, 0, 0).getTime())).toBe("2026-01-05");
+  });
+});
+
+describe("OpenRouter APIキー", () => {
+  it("未設定ならundefinedを返す", async () => {
+    expect(await getOpenRouterApiKey()).toBeUndefined();
+  });
+
+  it("put/getで往復できる", async () => {
+    await setOpenRouterApiKey("sk-or-v1-test");
+    expect(await getOpenRouterApiKey()).toBe("sk-or-v1-test");
   });
 });
 

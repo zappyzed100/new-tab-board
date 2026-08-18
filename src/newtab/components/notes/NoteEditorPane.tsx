@@ -32,7 +32,7 @@ import { isDefaultNoteTitle, mergeDroppedContent, updateNote } from "../../../li
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
-import { getGeminiApiKey } from "../../../lib/storage/db";
+import { getGeminiApiKey, getOpenRouterApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
@@ -47,12 +47,14 @@ import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
 const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)";
-// 「この端末のみ(noSync)」ノートは本文を Gemini(=Googleのサーバー)へ送らない。手動AIボタンは
+const OPENROUTER_KEY_HINT =
+  "OpenRouter APIキーを設定してください(データ管理の「OpenRouter APIキー」ボタン)";
+// 「この端末のみ(noSync)」ノートは本文を外部AIサーバーへ送らない。手動AIボタンは
 // UIで無効化するが、二重の防御としてハンドラ先頭でもガードする(将来の呼び出し追加で漏れないよう)。
-const NOSYNC_AI_HINT = "「この端末のみ」ノートはGeminiへ送りません(トグルを解除すると使えます)";
+const NOSYNC_AI_HINT = "「この端末のみ」ノートは外部AIへ送りません(トグルを解除すると使えます)";
 
 // 保存時の自動タグ付けを全ペイン横断で1件ずつに直列化するガード。blurでは複数ペインの
-// スナップショットが同時に発火し、Geminiが429を返す前に複数fetchが飛んでクールダウンが
+// スナップショットが同時に発火し、OpenRouterが429を返す前に複数fetchが飛んでクールダウンが
 // 間に合わない問題を防ぐ(1件が終わるまで他の自動タグはスキップ——手動タグ/要約は対象外)。
 let autoTagInFlight = false;
 
@@ -78,7 +80,7 @@ const HistoryPanel = lazy(() =>
 type Props = {
   note: Note;
   notes: Note[];
-  /** タグ候補(ユーザーが並べた語彙)。Geminiのタグ推定へ「優先候補」として渡す。 */
+  /** タグ候補(ユーザーが並べた語彙)。OpenRouterのタグ推定へ「優先候補」として渡す。 */
   tagCandidates: string[];
   isActive: boolean;
   /** 順序列の先頭ノートか(「ひとつ上へ」を無効化するため)。 */
@@ -197,7 +199,7 @@ export function NoteEditorPane({
   const editorGeneration = `${restoreCounter}-${replaceContentVersion}`;
   const editorGenerationRef = useRef(editorGeneration);
   editorGenerationRef.current = editorGeneration;
-  // Gemini処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
+  // AI処理中の状態("summary"|"todo"|"tag"|null)。二重押しを防ぎラベルを切り替える。
   const [aiBusy, setAiBusy] = useState<"summary" | "todo" | "tag" | null>(null);
   // 編集シーム(ドラフトバッファ＋編集レジストリ)。未保存の打鍵はここに常時保持し、同期が
   // note.content を巻き戻す/再マウントを起こしても入力を失わない。フォーカス中は編集レジストリへ
@@ -238,9 +240,9 @@ export function NoteEditorPane({
       onMessage(NOSYNC_AI_HINT);
       return;
     }
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) {
-      onMessage(GEMINI_KEY_HINT);
+      onMessage(OPENROUTER_KEY_HINT);
       return;
     }
     if (note.content.trim() === "") {
@@ -248,12 +250,12 @@ export function NoteEditorPane({
       return;
     }
     setAiBusy("tag");
-    onMessage(`「${note.title}」にGeminiでタグ・タイトルを付与中…`);
+    onMessage(`「${note.title}」にOpenRouterでタグ・タイトルを付与中…`);
     const vocabulary = buildTagVocabulary(tagCandidates, notes);
     const { tags, junk, title } = await analyzeNote(note.content, apiKey, {}, vocabulary);
     setAiBusy(null);
     if (tags.length === 0 && !junk && !title) {
-      onMessage("タグ・タイトルを付けられませんでした(Gemini呼び出しに失敗した可能性)");
+      onMessage("タグ・タイトルを付けられませんでした(OpenRouter呼び出しに失敗した可能性)");
       return;
     }
     // 手動ボタン(タグ・タイトル)は明示操作なので、生成タイトルがあれば上書きする。
@@ -281,7 +283,7 @@ export function NoteEditorPane({
   async function runAutoTag(savedContent: string): Promise<NoteAnalysis | null> {
     logOp("autotag", "trigger", `note=${note.id} chars=${savedContent.length}`);
     if (note.noSync) {
-      logOp("autotag", "skip-nosync", `note=${note.id}`); // 「この端末のみ」は Gemini へ送らない
+      logOp("autotag", "skip-nosync", `note=${note.id}`); // 「この端末のみ」は外部AIへ送らない
       return null;
     }
     if (!needsRetag({ content: savedContent, taggedHash: note.taggedHash })) {
@@ -292,7 +294,7 @@ export function NoteEditorPane({
       logOp("autotag", "skip-in-flight", `note=${note.id}`); // 別ペインの自動タグ付けが進行中なら今回はスキップ(同時多発防止)
       return null;
     }
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) {
       logOp("autotag", "skip-no-api-key", `note=${note.id}`);
       return null;
@@ -519,7 +521,7 @@ export function NoteEditorPane({
             <Pin size={14} aria-hidden="true" fill={note.pinned ? "currentColor" : "none"} />
           </IconButton>
           {/* 「この端末のみ・同期しない」トグル(ユーザー指示: パスワード等を貼る用)。ONのノートは
-              本文を NAS/Drive/Gemini/バックアップへ一切出さない。**暗号化ではない**——chrome.storage.local
+              本文を NAS/Drive/外部AI/バックアップへ一切出さない。**暗号化ではない**——chrome.storage.local
               には平文で残る(トグルは「端末外へ出さない」だけを保証)。 */}
           <IconButton
             type="button"
@@ -529,7 +531,7 @@ export function NoteEditorPane({
             title={
               note.noSync
                 ? "この端末のみ:同期・AI送信しません(平文で端末には残ります)。クリックで同期を再開"
-                : "このノートを同期しない(保管庫/Drive/Geminiへ出さない。暗号化ではなく端末外へ出さないだけ)"
+                : "このノートを同期しない(保管庫/Drive/外部AIへ出さない。暗号化ではなく端末外へ出さないだけ)"
             }
             onClick={() =>
               onNotesChange((prev) => updateNote(prev, note.id, { noSync: !note.noSync }))
@@ -632,7 +634,7 @@ export function NoteEditorPane({
             size="1"
             variant="soft"
             data-testid={`tag-note-${note.id}`}
-            title="Geminiでこのノートにタグとタイトルを付ける"
+              title="OpenRouterでこのノートにタグとタイトルを付ける"
             disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleTagThisNote()}
           >
@@ -773,7 +775,7 @@ export function NoteEditorPane({
         {showPreview ? null : (
           <NoteImageStrip noteId={note.id} content={note.content} imageUrls={noteImageUrls} />
         )}
-        {/* 本文の `#タグ`(手動)とGeminiの自動タグを合流して表示する。手動タグは本文が正本なので
+        {/* 本文の `#タグ`(手動)とOpenRouterの自動タグを合流して表示する。手動タグは本文が正本なので
             自動タグ付けの全置換で消えない——区別が付くよう色を変える(手動=緑/自動=青)。 */}
         {resolvedTags.length > 0 ? (
           <Flex gap="1" wrap="wrap" data-testid={`note-tags-${note.id}`}>

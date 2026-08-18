@@ -32,11 +32,14 @@ vi.mock("./Notepad", () => ({
 }));
 const mountedIndexes = new Set<unknown>();
 
-// 重い外部依存(Drive同期/Gemini/IndexedDB/スナップショット常駐)はこのテストの対象外。
+// 重い外部依存(Drive同期/Gemini/OpenRouter/IndexedDB/スナップショット常駐)はこのテストの対象外。
 vi.mock("../../../lib/drive/useDriveSync", () => ({ useDriveSync: () => "idle" }));
 vi.mock("../../../lib/gemini/useAutoTagScheduler", () => ({ useAutoTagScheduler: () => {} }));
 vi.mock("./SnapshotScheduler", () => ({ SnapshotScheduler: () => null }));
-vi.mock("../../../lib/storage/db", () => ({ getGeminiApiKey: async () => null }));
+vi.mock("../../../lib/storage/db", () => ({
+  getGeminiApiKey: async () => null,
+  getOpenRouterApiKey: async () => null,
+}));
 vi.mock("../../../lib/history/useSnapshotScheduler", () => ({ forceSnapshot: async () => {} }));
 
 const { NoteEditorPane } = await import("./NoteEditorPane");

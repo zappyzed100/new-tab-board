@@ -386,13 +386,16 @@ test("要約ボタンはGemini APIキー未設定なら案内を出し、勝手�
   );
 });
 
-test("タグをふるボタンはGemini APIキー未設定なら案内を出す", async ({ context, newTabUrl }) => {
+test("タグをふるボタンはOpenRouter APIキー未設定なら案内を出す", async ({
+  context,
+  newTabUrl,
+}) => {
   const page = await context.newPage();
   await page.goto(newTabUrl);
   await expect(page.getByTestId("app-root")).toBeVisible();
   await page.getByTestId("tag-all-notes").click();
   await expect(page.getByTestId("data-panel-message")).toContainText(
-    "Gemini APIキーを設定してください",
+    "OpenRouter APIキーを設定してください",
   );
 });
 

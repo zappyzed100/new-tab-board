@@ -1,5 +1,5 @@
 // gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
-// タグ付け・要約・TODO抽出の各機能が共通で使う土台。APIキーはdb.tsの設定ストアに保存し
+// 要約・TODO抽出が使う土台。自動タグ付けはOpenRouterへ分離済み。APIキーはdb.tsの設定ストアに保存し
 // (Drive/syncへ乗らない)、呼び出し側が読み出してこの関数へ渡す。無料枠のflashモデルを既定にする。
 // ネットワークはfetchを依存注入で差し替え可能にし、テストは実APIを叩かずフェイクで検証する。
 import { logOp } from "../runtime/log";
@@ -25,7 +25,7 @@ function defaultRecordUsage(): void {
 }
 
 /** 429(レート制限)を食らった後、次の呼び出しまで待つクールダウン。
- * 保存のたびに自動タグ付けがGeminiを叩くため、枠を超えたら一定時間fetch自体を止めて
+ * 要約/TODO抽出が短時間に連続してGeminiを叩く場合、一定時間fetch自体を止めて
  * 429エラーの連発と無駄な消費を防ぐ(Geminiの分単位RPM制限はこの程度で回復する)。 */
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 let rateLimitedUntil = 0;

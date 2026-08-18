@@ -2,7 +2,7 @@
 // (ユーザー指示・2026-07-27「各機能未接続状態が見えるようにしよう」「共有フォルダを選択、
 // GAS連携も可視化してほしい」)。
 //
-// 保管庫フォルダ/Gemini APIキー/バッテリー低下警告(GAS連携)/Driveの共有フォルダ選択は、
+// 保管庫フォルダ/Gemini・OpenRouter APIキー/バッテリー低下警告(GAS連携)/Driveの共有フォルダ選択は、
 // 以前はDataPanel内のローカルstateだけで持っていたため、パネルを開いて初めて未設定に
 // 気づけた(Driveの既存の警告バッジと同じ問題——App.tsxのdriveConnectedのヘッダー参照)。
 // 起動時にローカル読み(chrome.storage/IndexedDB。OAuthを伴わないので毎回確認してよい)で
@@ -34,7 +34,7 @@ async function seedSetting(page: Page, key: string, value: unknown) {
   );
 }
 
-test("保管庫/Gemini/バッテリーが未設定なら、パネルを開く前からバッジが見える", async ({
+test("保管庫/AIキー/バッテリーが未設定なら、パネルを開く前からバッジが見える", async ({
   context,
   newTabUrl,
 }) => {
@@ -46,6 +46,7 @@ test("保管庫/Gemini/バッテリーが未設定なら、パネルを開く前
   await expect(page.getByTestId("data-panel")).toHaveCount(0);
   await expect(page.getByTestId("nas-unconfigured-badge")).toBeVisible();
   await expect(page.getByTestId("gemini-unconfigured-badge")).toBeVisible();
+  await expect(page.getByTestId("openrouter-unconfigured-badge")).toBeVisible();
   await expect(page.getByTestId("battery-unconfigured-badge")).toBeVisible();
   await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toBeVisible();
 
@@ -62,6 +63,7 @@ test("設定済みのものはバッジが出ない(平常時に雑音を足さ�
 
   await seedSetting(page, "nasFolderPath", "Z:\\保管庫\\backup");
   await seedSetting(page, "geminiApiKey", "dummy-key");
+  await seedSetting(page, "openrouterApiKey", "dummy-key");
   await seedSetting(page, "batteryWebhookConfig", { url: "https://example.com", token: "t" });
   await seedSetting(page, "driveSharedFolderChosen", true);
   await page.reload();
@@ -69,6 +71,7 @@ test("設定済みのものはバッジが出ない(平常時に雑音を足さ�
 
   await expect(page.getByTestId("nas-unconfigured-badge")).toHaveCount(0);
   await expect(page.getByTestId("gemini-unconfigured-badge")).toHaveCount(0);
+  await expect(page.getByTestId("openrouter-unconfigured-badge")).toHaveCount(0);
   await expect(page.getByTestId("battery-unconfigured-badge")).toHaveCount(0);
   await expect(page.getByTestId("drive-shared-folder-unchosen-badge")).toHaveCount(0);
 });
@@ -103,6 +106,54 @@ test("Gemini APIキーを保存すると、リロードなしでバッジが消�
   );
 
   await expect(page.getByTestId("gemini-unconfigured-badge")).toHaveCount(0);
+});
+
+test("OpenRouter APIキーを保存すると、リロードなしでバッジが消える", async ({
+  context,
+  newTabUrl,
+}) => {
+  const page = await context.newPage();
+  await page.goto(newTabUrl);
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.getByTestId("openrouter-unconfigured-badge")).toBeVisible();
+
+  await page.getByTestId("toggle-data-panel").click();
+  await page.getByTestId("data-set-openrouter-key").click();
+  const geometry = await page.evaluate(() => {
+    const rect = (testId: string) => {
+      const element = document.querySelector(`[data-testid="${testId}"]`);
+      if (!element) return null;
+      const value = element.getBoundingClientRect();
+      return { left: value.left, top: value.top, right: value.right, bottom: value.bottom };
+    };
+    const button = rect("data-set-openrouter-key");
+    const input = rect("data-openrouter-key-input");
+    const save = rect("data-save-openrouter-key");
+    const overlaps = (a: typeof button, b: typeof input) =>
+      a !== null &&
+      b !== null &&
+      a.left < b.right &&
+      a.right > b.left &&
+      a.top < b.bottom &&
+      a.bottom > b.top;
+    return {
+      controlsVisible: button !== null && input !== null && save !== null,
+      noButtonInputOverlap: !overlaps(button, input),
+      noInputSaveOverlap: !overlaps(input, save),
+    };
+  });
+  expect(geometry).toEqual({
+    controlsVisible: true,
+    noButtonInputOverlap: true,
+    noInputSaveOverlap: true,
+  });
+  await page.getByTestId("data-openrouter-key-input").fill("sk-or-v1-test");
+  await page.getByTestId("data-save-openrouter-key").click();
+  await expect(page.getByTestId("data-panel-message")).toContainText(
+    "OpenRouter APIキーを保存しました",
+  );
+
+  await expect(page.getByTestId("openrouter-unconfigured-badge")).toHaveCount(0);
 });
 
 test("バッテリー通知の接続設定を保存すると、リロードなしでバッジが消える", async ({

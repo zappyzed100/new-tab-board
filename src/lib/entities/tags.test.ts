@@ -61,14 +61,14 @@ describe("extractTags", () => {
 });
 
 describe("resolveNoteTags", () => {
-  it("本文の手動タグ(先)とGeminiの自動タグ(後)を重複除去して合流する", () => {
+  it("本文の手動タグ(先)とOpenRouterの自動タグ(後)を重複除去して合流する", () => {
     expect(resolveNoteTags({ content: "#線形代数 のノート", tags: ["数学", "線形代数"] })).toEqual([
       "線形代数",
       "数学",
     ]);
   });
 
-  it("Geminiのタグが全置換されても本文の手動タグは残る(本文が正本)", () => {
+  it("OpenRouterのタグが全置換されても本文の手動タグは残る(本文が正本)", () => {
     const note = { content: "#暗記 する内容", tags: ["別のタグ"] };
     // analyzeNote の結果で tags を丸ごと置き換えた状況を再現する
     expect(resolveNoteTags({ ...note, tags: ["まったく別"] })).toEqual(["暗記", "まったく別"]);
