@@ -32,7 +32,7 @@ import { isDefaultNoteTitle, mergeDroppedContent, updateNote } from "../../../li
 import { now as clockNow } from "../../../lib/runtime/clock";
 import { useDriveSync } from "../../../lib/drive/useDriveSync";
 import { forceSnapshot } from "../../../lib/history/useSnapshotScheduler";
-import { getGeminiApiKey, getOpenRouterApiKey } from "../../../lib/storage/db";
+import { getOpenRouterApiKey } from "../../../lib/storage/db";
 import { extractTodos, summarizeNote } from "../../../lib/gemini/noteAi";
 import { analyzeNote, contentHash, needsRetag } from "../../../lib/gemini/tagging";
 import { useAutoTagScheduler } from "../../../lib/gemini/useAutoTagScheduler";
@@ -46,7 +46,6 @@ import {
 import type { NoteAnalysis } from "../../../lib/gemini/tagging";
 import type { Note } from "../../../types";
 
-const GEMINI_KEY_HINT = "Gemini APIキーを設定してください(データ管理の「Gemini APIキー」ボタン)";
 const OPENROUTER_KEY_HINT =
   "OpenRouter APIキーを設定してください(データ管理の「OpenRouter APIキー」ボタン)";
 // 「この端末のみ(noSync)」ノートは本文を外部AIサーバーへ送らない。手動AIボタンは
@@ -337,22 +336,22 @@ export function NoteEditorPane({
       onMessage(NOSYNC_AI_HINT);
       return;
     }
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) {
-      onMessage(GEMINI_KEY_HINT);
+      onMessage(OPENROUTER_KEY_HINT);
       return;
     }
     setAiBusy("summary");
-    onMessage(`「${note.title}」をGeminiで要約中…`);
+    onMessage(`「${note.title}」をOpenRouterで要約中…`);
     const summary = await summarizeNote(note.content, apiKey);
     setAiBusy(null);
     if (!summary) {
-      onMessage("要約に失敗しました(本文が空か、Gemini呼び出しに失敗しました)");
+      onMessage("要約に失敗しました(本文が空か、OpenRouter呼び出しに失敗しました)");
       return;
     }
     onCreateNote(`${note.title}の要約`, summary, {
       sourceNoteId: note.id,
-      generatedBy: "gemini",
+      generatedBy: "openrouter",
     });
     onMessage(`「${note.title}の要約」を作成しました`);
   }
@@ -362,13 +361,13 @@ export function NoteEditorPane({
       onMessage(NOSYNC_AI_HINT);
       return;
     }
-    const apiKey = await getGeminiApiKey();
+    const apiKey = await getOpenRouterApiKey();
     if (!apiKey) {
-      onMessage(GEMINI_KEY_HINT);
+      onMessage(OPENROUTER_KEY_HINT);
       return;
     }
     setAiBusy("todo");
-    onMessage(`「${note.title}」からGeminiでTODOを抽出中…`);
+    onMessage(`「${note.title}」からOpenRouterでTODOを抽出中…`);
     const todos = await extractTodos(note.content, apiKey);
     setAiBusy(null);
     if (todos.length === 0) {
@@ -604,7 +603,7 @@ export function NoteEditorPane({
             size="1"
             variant="soft"
             data-testid={`summarize-${note.id}`}
-            title="Geminiでこのノートを要約し、「〇〇の要約」ノートを新規作成する"
+            title="OpenRouterでこのノートを要約し、「〇〇の要約」ノートを新規作成する"
             disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleSummarize()}
           >
@@ -619,7 +618,7 @@ export function NoteEditorPane({
             size="1"
             variant="soft"
             data-testid={`extract-todos-${note.id}`}
-            title="GeminiでこのノートからTODOを抽出し、TODOリストへ追加する"
+            title="OpenRouterでこのノートからTODOを抽出し、TODOリストへ追加する"
             disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleExtractTodos()}
           >
@@ -634,7 +633,7 @@ export function NoteEditorPane({
             size="1"
             variant="soft"
             data-testid={`tag-note-${note.id}`}
-              title="OpenRouterでこのノートにタグとタイトルを付ける"
+            title="OpenRouterでこのノートにタグとタイトルを付ける"
             disabled={aiBusy !== null || note.noSync}
             onClick={() => void handleTagThisNote()}
           >

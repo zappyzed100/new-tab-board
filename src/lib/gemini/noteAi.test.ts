@@ -1,18 +1,18 @@
-// noteAi.test.ts — 要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
+// noteAi.test.ts — OpenRouter要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
 import { describe, expect, it, vi } from "vitest";
 import { extractTodos, parseTodoLines, summarizeNote } from "./noteAi";
 
-function geminiReply(text: string) {
+function openRouterReply(text: string) {
   return vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
+    json: async () => ({ choices: [{ message: { content: text } }] }),
   } as Response);
 }
 
 describe("summarizeNote", () => {
-  it("Geminiの応答をトリムして返す", async () => {
-    const fetch = geminiReply("  これは要約です  ");
+  it("OpenRouterの応答をトリムして返す", async () => {
+    const fetch = openRouterReply("  これは要約です  ");
     expect(await summarizeNote("長い本文", "key", { fetch })).toBe("これは要約です");
   });
 
@@ -23,10 +23,10 @@ describe("summarizeNote", () => {
   });
 
   it("プロンプトに本文が含まれる", async () => {
-    const fetch = geminiReply("ok");
+    const fetch = openRouterReply("ok");
     await summarizeNote("秘伝のタレ", "key", { fetch });
     const body = JSON.parse(fetch.mock.calls[0][1].body);
-    expect(body.contents[0].parts[0].text).toContain("秘伝のタレ");
+    expect(body.messages[0].content).toContain("秘伝のタレ");
   });
 });
 
@@ -53,8 +53,8 @@ describe("parseTodoLines", () => {
 });
 
 describe("extractTodos", () => {
-  it("Geminiの箇条書き応答をTODO配列にする", async () => {
-    const fetch = geminiReply("- 資料を作る\n- レビュー依頼");
+  it("OpenRouterの箇条書き応答をTODO配列にする", async () => {
+    const fetch = openRouterReply("- 資料を作る\n- レビュー依頼");
     expect(await extractTodos("会議メモ", "key", { fetch })).toEqual([
       "資料を作る",
       "レビュー依頼",
@@ -68,7 +68,7 @@ describe("extractTodos", () => {
   });
 
   it("応答が空(TODO無し)なら空配列", async () => {
-    const fetch = geminiReply("");
+    const fetch = openRouterReply("");
     expect(await extractTodos("雑談メモ", "key", { fetch })).toEqual([]);
   });
 });

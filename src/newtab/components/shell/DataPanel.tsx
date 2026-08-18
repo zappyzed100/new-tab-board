@@ -29,14 +29,12 @@ import {
 import {
   getAlarmEnabled,
   getBatteryWebhookConfig,
-  getGeminiApiKey,
   getNasFolderPath,
   getOpenRouterApiKey,
   saveDriveFolderId,
   setAlarmEnabled,
   setBatteryWebhookConfig,
   setDriveSharedFolderChosen,
-  setGeminiApiKey,
   setNasFolderPath,
   setOpenRouterApiKey,
 } from "../../../lib/storage/db";
@@ -89,12 +87,11 @@ type Props = {
   driveConnected: boolean | null;
   /** 接続状態が判明/変化したときにAppへ知らせる(「GDrive設定」での再接続結果を即反映する)。 */
   onDriveConnectionChange: (connected: boolean) => void;
-  /** 保管庫フォルダ/Gemini・OpenRouter APIキー/バッテリー中継の設定が変わった時にAppへ知らせる。
+  /** 保管庫フォルダ/OpenRouter APIキー/バッテリー中継の設定が変わった時にAppへ知らせる。
    * Appはヘッダーの常時表示バッジ(未設定の間だけ出す)をこれで更新する——このパネルは
    * 開いている間しか存在せず、ここだけでstateを持つと閉じるまで/次に開くまでバッジが
    * 古いままになる(driveConnected/onDriveConnectionChangeと同じ理由)。 */
   onNasConfiguredChange: (configured: boolean) => void;
-  onGeminiConfiguredChange: (configured: boolean) => void;
   onOpenRouterConfiguredChange: (configured: boolean) => void;
   onBatteryConfiguredChange: (configured: boolean) => void;
   /** 「共有フォルダを選択」を実行済みかが変わった時にAppへ知らせる(同じ形の3つと同じ理由)。 */
@@ -115,7 +112,6 @@ export function DataPanel({
   driveConnected,
   onDriveConnectionChange,
   onNasConfiguredChange,
-  onGeminiConfiguredChange,
   onOpenRouterConfiguredChange,
   onBatteryConfiguredChange,
   onDriveSharedFolderChosenChange,
@@ -125,17 +121,13 @@ export function DataPanel({
   // 押した時だけその右に出す(ブックマーク/ノートの編集フォームと同じ「押したら
   // その場に出る」パターン)。
   const [showNasInput, setShowNasInput] = useState(false);
-  // Gemini APIキー入力(要約/TODO抽出で使う)。秘匿情報なので保存済みの値は
+  // OpenRouter APIキー入力(タグ付け・要約・TODO抽出で使う)。秘匿情報なので保存済みの値は
   // 画面に出さず、設定済みかどうかだけを示す(再入力で上書き)。
-  const [showGeminiInput, setShowGeminiInput] = useState(false);
-  const [geminiKeyInput, setGeminiKeyInput] = useState("");
-  const [geminiKeySet, setGeminiKeySet] = useState(false);
-  // OpenRouter APIキー入力(自動タグ付けで使う)。Geminiキーとは別に保存する。
   const [showOpenRouterInput, setShowOpenRouterInput] = useState(false);
   const [openRouterKeyInput, setOpenRouterKeyInput] = useState("");
   const [openRouterKeySet, setOpenRouterKeySet] = useState(false);
   // スマホのバッテリー低下警告(GAS Web App中継。gas/README.md参照)の接続設定。
-  // トークンは秘匿情報なのでGeminiキーと同じ扱い(保存済みの値は画面に出さない)。
+  // トークンは秘匿情報なのでAPIキーと同じ扱い(保存済みの値は画面に出さない)。
   const [showBatteryInput, setShowBatteryInput] = useState(false);
   const [batteryUrlInput, setBatteryUrlInput] = useState("");
   const [batteryTokenInput, setBatteryTokenInput] = useState("");
@@ -153,7 +145,6 @@ export function DataPanel({
     void getNasFolderPath().then((path) => {
       if (path) setNasPathInput(path);
     });
-    void getGeminiApiKey().then((key) => setGeminiKeySet(Boolean(key)));
     void getOpenRouterApiKey().then((key) => setOpenRouterKeySet(Boolean(key)));
     void getBatteryWebhookConfig().then((config) => {
       if (config) {
@@ -218,20 +209,6 @@ export function DataPanel({
         ? "この端末でアラーム(予定前・バッテリー)を鳴らします"
         : "この端末ではアラームを鳴らしません(音も通知も出しません。他PCには影響しません)",
     );
-  }
-
-  async function handleSaveGeminiKey() {
-    const key = geminiKeyInput.trim();
-    if (!key) {
-      onMessage("Gemini APIキーを入力してください(AI Studioで発行できます)");
-      return;
-    }
-    await setGeminiApiKey(key);
-    setGeminiKeyInput("");
-    setGeminiKeySet(true);
-    onGeminiConfiguredChange(true);
-    setShowGeminiInput(false);
-    onMessage("Gemini APIキーを保存しました");
   }
 
   async function handleSaveOpenRouterKey() {
@@ -420,7 +397,7 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-export-settings-file"
-          title="設定(テーマ/TODO/ブックマーク/お気に入り/タグ候補に加え、Gemini・OpenRouter APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も含む)をローカルのJSONファイルへ書き出す。APIキーは平文で入るため取り扱い注意。notesは対象外"
+          title="設定(テーマ/TODO/ブックマーク/お気に入り/タグ候補に加え、OpenRouter APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も含む)をローカルのJSONファイルへ書き出す。APIキーは平文で入るため取り扱い注意。notesは対象外"
           onClick={onExportSettingsFile}
         >
           <Download size={14} aria-hidden="true" />
@@ -430,7 +407,7 @@ export function DataPanel({
           type="button"
           variant="soft"
           data-testid="data-import-settings-file"
-          title="書き出した設定JSONファイルを選んで読み込む(設定・TODO・ブックマークに加え、Gemini・OpenRouter APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も反映する。notesは対象外)"
+          title="書き出した設定JSONファイルを選んで読み込む(設定・TODO・ブックマークに加え、OpenRouter APIキー・GAS連携・保管庫フォルダパス・GDrive/共有フォルダ設定も反映する。notesは対象外)"
           onClick={onImportSettingsFile}
         >
           <FileUp size={14} aria-hidden="true" />
@@ -521,44 +498,9 @@ export function DataPanel({
         </Button>
         <Button
           type="button"
-          variant={showGeminiInput ? "solid" : "soft"}
-          data-testid="data-set-gemini-key"
-          title="Gemini APIキーを設定する(要約/TODO抽出で使用。AI Studioで発行)"
-          onClick={() => setShowGeminiInput((v) => !v)}
-        >
-          <KeyRound size={14} aria-hidden="true" />
-          Gemini APIキー{geminiKeySet ? "(設定済み)" : ""}
-        </Button>
-        {showGeminiInput ? (
-          <>
-            <TextField.Root
-              aria-label="Gemini APIキー"
-              type="password"
-              placeholder={geminiKeySet ? "設定済み(再入力で上書き)" : "AIza... を貼り付け"}
-              data-testid="data-gemini-key-input"
-              autoFocus
-              value={geminiKeyInput}
-              onChange={(e) => setGeminiKeyInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleSaveGeminiKey();
-              }}
-            />
-            <Button
-              type="button"
-              variant="soft"
-              data-testid="data-save-gemini-key"
-              title="入力したAPIキーを保存する"
-              onClick={() => void handleSaveGeminiKey()}
-            >
-              保存
-            </Button>
-          </>
-        ) : null}
-        <Button
-          type="button"
           variant={showOpenRouterInput ? "solid" : "soft"}
           data-testid="data-set-openrouter-key"
-          title="OpenRouter APIキーを設定する(自動タグ付けで使用。無料モデルルーターを利用)"
+          title="OpenRouter APIキーを設定する(タグ付け・要約・TODO抽出で使用。無料モデルルーターを利用)"
           onClick={() => setShowOpenRouterInput((v) => !v)}
         >
           <KeyRound size={14} aria-hidden="true" />
@@ -569,7 +511,9 @@ export function DataPanel({
             <TextField.Root
               aria-label="OpenRouter APIキー"
               type="password"
-              placeholder={openRouterKeySet ? "設定済み(再入力で上書き)" : "sk-or-v1-... を貼り付け"}
+              placeholder={
+                openRouterKeySet ? "設定済み(再入力で上書き)" : "sk-or-v1-... を貼り付け"
+              }
               data-testid="data-openrouter-key-input"
               autoFocus
               value={openRouterKeyInput}

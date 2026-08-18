@@ -113,7 +113,7 @@ test("設定をファイルへ書き出し、読み込み直すと設定が復�
     .toBe(exportedFontSize);
 });
 
-test("端末ローカル設定(Gemini APIキー・保管庫パス等)もファイル経由で持ち運べる(2026-07-29)", async ({
+test("端末ローカル設定(OpenRouter APIキー・保管庫パス等)もファイル経由で持ち運べる(2026-07-29)", async ({
   context,
   newTabUrl,
 }) => {
@@ -123,14 +123,14 @@ test("端末ローカル設定(Gemini APIキー・保管庫パス等)もファ�
   await page.getByTestId("toggle-data-panel").click();
 
   // 実UIから設定する(IndexedDBを直接書くとUIとの配線ごと壊れても気づけないため)。
-  await page.getByTestId("data-set-gemini-key").click();
-  await page.getByTestId("data-gemini-key-input").fill("AIza-テスト用キー");
-  await page.getByTestId("data-save-gemini-key").click();
-  await expect(page.getByTestId("data-panel-message")).toContainText("Gemini");
+  await page.getByTestId("data-set-openrouter-key").click();
+  await page.getByTestId("data-openrouter-key-input").fill("sk-or-v1-テスト用キー");
+  await page.getByTestId("data-save-openrouter-key").click();
+  await expect(page.getByTestId("data-panel-message")).toContainText("OpenRouter");
 
   // 保管庫パスだけはUI経由で入れられない——保存前にnative host(nas_bridge.py)への到達確認が
   // 必須で、E2E環境にはhostが無いため必ず弾かれる。ここでは書き出し/取り込みの対象になることを
-  // 見たいので、保存済みの状態だけをIndexedDBへ直接作る(UI配線はGeminiキー側が実UIで担保する)。
+  // 見たいので、保存済みの状態だけをIndexedDBへ直接作る(UI配線はOpenRouterキー側が実UIで担保する)。
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
       const open = indexedDB.open("new-tab-board");
@@ -155,17 +155,17 @@ test("端末ローカル設定(Gemini APIキー・保管庫パス等)もファ�
   const exported = JSON.parse(readFileSync(downloadedPath, "utf-8")) as {
     deviceSettings?: Record<string, unknown>;
   };
-  expect(exported.deviceSettings?.geminiApiKey).toBe("AIza-テスト用キー");
+  expect(exported.deviceSettings?.openrouterApiKey).toBe("sk-or-v1-テスト用キー");
   expect(exported.deviceSettings?.nasFolderPath).toBe("Z:\\保管庫\\テスト");
 
   // 書き出した後に別の値へ変えておき、取り込みで書き出し時点へ戻ることを確かめる
   // (IndexedDBを消して「新しい端末」を模すのは、DBを開いたままの削除がblockedになり
   //  不安定だったため採らない——上書きで戻ることが確認できれば復元の検証としては足りる)。
   // 保存すると入力欄は閉じるので開き直す。
-  await page.getByTestId("data-set-gemini-key").click();
-  await page.getByTestId("data-gemini-key-input").fill("AIza-上書きした別のキー");
-  await page.getByTestId("data-save-gemini-key").click();
-  await expect.poll(async () => readStoredGeminiKey(page)).toBe("AIza-上書きした別のキー");
+  await page.getByTestId("data-set-openrouter-key").click();
+  await page.getByTestId("data-openrouter-key-input").fill("sk-or-v1-上書きした別のキー");
+  await page.getByTestId("data-save-openrouter-key").click();
+  await expect.poll(async () => readStoredOpenRouterKey(page)).toBe("sk-or-v1-上書きした別のキー");
 
   const importChooserPromise = page.waitForEvent("filechooser");
   await page.getByTestId("data-import-settings-file").click();
@@ -174,11 +174,11 @@ test("端末ローカル設定(Gemini APIキー・保管庫パス等)もファ�
   await expect(page.getByTestId("data-panel-message")).toContainText("設定をファイルから読み込み");
 
   // 秘匿情報(APIキー)と保管庫パスの両方が、書き出した時点の値へ戻っている。
-  await expect.poll(async () => readStoredGeminiKey(page)).toBe("AIza-テスト用キー");
+  await expect.poll(async () => readStoredOpenRouterKey(page)).toBe("sk-or-v1-テスト用キー");
   expect(await readStoredNasPath(page)).toBe("Z:\\保管庫\\テスト");
 
   // パネルを開いたまま取り込んでも「(設定済み)」表示が古いままにならない(2026-07-29)。
-  await expect(page.getByTestId("data-set-gemini-key")).toContainText("設定済み");
+  await expect(page.getByTestId("data-set-openrouter-key")).toContainText("設定済み");
 });
 
 /** IndexedDBのsettingsストアから1件読む(取り込み結果をUIの表示ではなく実データで確かめる)。 */
@@ -201,8 +201,8 @@ function readSetting(page: Page, key: string): Promise<unknown> {
   );
 }
 
-function readStoredGeminiKey(page: Page): Promise<unknown> {
-  return readSetting(page, "geminiApiKey");
+function readStoredOpenRouterKey(page: Page): Promise<unknown> {
+  return readSetting(page, "openrouterApiKey");
 }
 
 function readStoredNasPath(page: Page): Promise<unknown> {

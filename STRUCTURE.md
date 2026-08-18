@@ -231,10 +231,8 @@
 - `src/lib/fileio/fileSystem.ts` — fileSystem.ts — ローカルファイルの読み込みの唯一の入出口(SPEC.md §4.10-a)
 - `src/lib/fileio/settingsBackup.test.ts` — settingsBackup.test.ts — settingsBackup.ts(notes抜きの全体設定バックアップ)の単体テスト
 - `src/lib/fileio/settingsBackup.ts` — settingsBackup.ts — ノート本文を除く全体設定(テーマ/TODO/ブックマーク/ノート文字サイズ/
-- `src/lib/gemini/gemini.test.ts` — gemini.test.ts — gemini.ts(Gemini API呼び出し)の単体テスト。実APIは叩かずfetchをフェイクにする。
-- `src/lib/gemini/gemini.ts` — gemini.ts — Google Gemini API(generateContent)呼び出しの唯一の入出口
-- `src/lib/gemini/noteAi.test.ts` — noteAi.test.ts — 要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
-- `src/lib/gemini/noteAi.ts` — noteAi.ts — Geminiを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
+- `src/lib/gemini/noteAi.test.ts` — noteAi.test.ts — OpenRouter要約・TODO抽出の単体テスト。実APIは叩かずfetchをフェイクにする。
+- `src/lib/gemini/noteAi.ts` — noteAi.ts — OpenRouterを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
 - `src/lib/gemini/tagging.test.ts` — tagging.test.ts — OpenRouterによる自動タグ付けの単体テスト。実APIは叩かずfetchをフェイクにする。
 - `src/lib/gemini/tagging.ts` — tagging.ts — OpenRouterによるノートの自動タグ付け。プロンプト・応答パース・再タグ付け要否判定。
 - `src/lib/gemini/useAutoTagScheduler.ts` — useAutoTagScheduler.ts — 自動タグ付け/タイトル付けの起動条件(編集終了から5分 or 400文字変更)を
@@ -943,13 +941,6 @@
 - function serializeSettingsBackup
 - function parseSettingsBackupPayload
 
-### `src/lib/gemini/gemini.ts`
-- const DEFAULT_GEMINI_MODEL
-- const GEMINI_DAILY_WARN_THRESHOLD
-- function resetGeminiRateLimitForTests
-- type GeminiDeps
-- function callGemini
-
 ### `src/lib/gemini/noteAi.ts`
 - function summarizeNote
 - function parseTodoLines
@@ -1121,8 +1112,6 @@
 - function getAllIndexEntries
 - function getNasFolderPath
 - function setNasFolderPath
-- function getGeminiApiKey
-- function setGeminiApiKey
 - function getOpenRouterApiKey
 - function setOpenRouterApiKey
 - type BatteryWebhookConfig
@@ -1136,9 +1125,6 @@
 - function getDriveSharedFolderChosen
 - function setDriveSharedFolderChosen
 - function deleteDriveFolderId
-- function geminiUsageDateKey
-- function getGeminiUsageCount
-- function recordGeminiUsage
 
 ### `src/lib/storage/local-data-repository.ts`
 - function initializeLocalData

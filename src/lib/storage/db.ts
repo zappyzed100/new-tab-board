@@ -7,10 +7,9 @@ const NAS_FOLDER_PATH_KEY = "nasFolderPath";
 // AI APIキーは秘匿情報。この設定ストア(IndexedDB)はchrome.storage.syncにも
 // Driveの全データJSONバックアップ(buildExportPayloadはsync+notesのみ)にも乗らないため、
 // キーが同期・バックアップ経由で外部へ漏れない(§7 秘匿)。
-const GEMINI_API_KEY_KEY = "geminiApiKey";
 const OPENROUTER_API_KEY_KEY = "openrouterApiKey";
 // スマホのバッテリー低下警告(GAS Web App中継)の接続設定。トークンは秘匿情報のため
-// GEMINI_API_KEY_KEYと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
+// APIキーと同じ理由でchrome.storage.sync/Driveバックアップには乗らない。
 const BATTERY_WEBHOOK_CONFIG_KEY = "batteryWebhookConfig";
 // この端末でアラーム音を鳴らすか(ユーザー指示: 複数PCで同じアラームが同時に鳴るのを避けたい)。
 // **端末ローカル設定**なので settings backup/復元で他PCへ伝播しない db.ts に置く(Settings=syncData
@@ -160,19 +159,6 @@ export async function setNasFolderPath(path: string): Promise<void> {
   logOp("db", "put", "settings/nasFolderPath");
 }
 
-/** Gemini APIキーを返す。未設定ならundefined。 */
-export async function getGeminiApiKey(): Promise<string | undefined> {
-  const db = await getDb();
-  return db.get("settings", GEMINI_API_KEY_KEY) as Promise<string | undefined>;
-}
-
-export async function setGeminiApiKey(key: string): Promise<void> {
-  const db = await getDb();
-  await db.put("settings", key, GEMINI_API_KEY_KEY);
-  // NO-LOG: APIキーそのものはログに出さない(§7 秘匿)。設定された事実だけ記録する。
-  logOp("db", "put", "settings/geminiApiKey");
-}
-
 /** OpenRouter APIキーを返す。未設定ならundefined。 */
 export async function getOpenRouterApiKey(): Promise<string | undefined> {
   const db = await getDb();
@@ -199,7 +185,7 @@ export async function getBatteryWebhookConfig(): Promise<BatteryWebhookConfig | 
 export async function setBatteryWebhookConfig(config: BatteryWebhookConfig): Promise<void> {
   const db = await getDb();
   await db.put("settings", config, BATTERY_WEBHOOK_CONFIG_KEY);
-  // NO-LOG: 共有トークンそのものはログに出さない(§7 秘匿。geminiApiKeyと同じ扱い)。
+  // NO-LOG: 共有トークンそのものはログに出さない(§7 秘匿。APIキーと同じ扱い)。
   logOp("db", "put", "settings/batteryWebhookConfig");
 }
 
@@ -270,38 +256,6 @@ export async function deleteDriveFolderId(path: string): Promise<void> {
   await tx.store.put(current, DRIVE_FOLDER_IDS_KEY);
   await tx.done;
   logOp("db", "delete", `settings/driveFolderIds/${path}`);
-}
-
-// Gemini APIの1日あたり使用回数(ユーザー指示: 450回でGPT-OSS 120Bへの乗り換え警告を出す)。
-const GEMINI_USAGE_KEY = "geminiUsage";
-type GeminiUsageRecord = { date: string; count: number };
-
-/** epoch ms からローカル日付キー(YYYY-MM-DD)を作る(1日単位の使用量集計・日跨ぎ判定用)。 */
-export function geminiUsageDateKey(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** 今日(today=日付キー)のGemini使用回数を返す。記録が別日なら0(日跨ぎで数え直し)。 */
-export async function getGeminiUsageCount(today: string): Promise<number> {
-  const db = await getDb();
-  const rec = (await db.get("settings", GEMINI_USAGE_KEY)) as GeminiUsageRecord | undefined;
-  return rec && rec.date === today ? rec.count : 0;
-}
-
-/** Gemini APIを1回使ったことを記録し、今日の累計回数を返す(日付が変われば1から数え直す)。
- * 同時呼び出しで数え落とさないよう readwrite トランザクション内で read→+1→write する。 */
-export async function recordGeminiUsage(today: string): Promise<number> {
-  const db = await getDb();
-  const tx = db.transaction("settings", "readwrite");
-  const rec = (await tx.store.get(GEMINI_USAGE_KEY)) as GeminiUsageRecord | undefined;
-  const count = (rec && rec.date === today ? rec.count : 0) + 1;
-  await tx.store.put({ date: today, count }, GEMINI_USAGE_KEY);
-  await tx.done;
-  return count;
 }
 
 /** 貼り付け画像を1件保存する(ローカルのみ。NASには出さない——ユーザー指示)。 */

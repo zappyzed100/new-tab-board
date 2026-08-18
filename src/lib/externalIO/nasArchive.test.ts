@@ -225,9 +225,9 @@ describe("noteToMarkdown / writeNoteMarkdownToNas", () => {
   });
 
   it("要約ノートは source_note_id / generated_by を出す", () => {
-    const md = noteToMarkdown({ ...baseNote, sourceNoteId: "orig-1", generatedBy: "gemini" });
+    const md = noteToMarkdown({ ...baseNote, sourceNoteId: "orig-1", generatedBy: "openrouter" });
     expect(md).toContain("source_note_id: orig-1");
-    expect(md).toContain("generated_by: gemini");
+    expect(md).toContain("generated_by: openrouter");
   });
 
   it("taggedHash は往復保存され、pull後に同一内容の再タグ付けが走らない", () => {
@@ -276,7 +276,7 @@ describe("markdownToNote(世代pull: mdをNoteへ戻す)", () => {
       special: true,
       specialFolder: "仕事/2026",
       sourceNoteId: "orig",
-      generatedBy: "gemini",
+      generatedBy: "openrouter",
     };
     expect(markdownToNote(noteToMarkdown(note))).toMatchObject({
       id: "n1",
@@ -291,7 +291,7 @@ describe("markdownToNote(世代pull: mdをNoteへ戻す)", () => {
       special: true,
       specialFolder: "仕事/2026",
       sourceNoteId: "orig",
-      generatedBy: "gemini",
+      generatedBy: "openrouter",
     });
   });
 

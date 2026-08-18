@@ -78,7 +78,7 @@ export type Note = {
   updatedAt?: number;
   /** AI要約ノートの場合の元ノートID(front matterのsource_note_id)。 */
   sourceNoteId?: string;
-  /** AI生成ノートの生成元(front matterのgenerated_by。例: "gemini")。 */
+  /** AI生成ノートの生成元(front matterのgenerated_by。例: "openrouter")。 */
   generatedBy?: string;
   /** 「対応済み」チェック(ユーザー指示。名称なしのcheckボタンでノートを済み扱いにする)。
    * 済みのノートはボード上で淡色表示になる(削除はしない——見返せるよう残す)。 */

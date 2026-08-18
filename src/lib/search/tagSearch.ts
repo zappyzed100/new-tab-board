@@ -3,7 +3,7 @@
 import { resolveNoteTags } from "../entities/tags";
 
 // content を受けるのは本文中の `#タグ`(手動タグ)も検索対象にするため——タグの正本は
-// resolveNoteTags(手動 + Geminiの自動)であって note.tags だけではない。
+// resolveNoteTags(手動 + OpenRouterの自動)であって note.tags だけではない。
 type TaggedNote = { content?: string; tags?: string[]; junk?: boolean };
 
 export type TagCount = { tag: string; count: number };

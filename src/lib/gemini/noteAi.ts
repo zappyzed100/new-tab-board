@@ -1,24 +1,24 @@
-// noteAi.ts — Geminiを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
-// 実際のAPI通信はgemini.tsのcallGeminiに委譲し(fetchは依存注入で差し替え可能)、
+// noteAi.ts — OpenRouterを使ったノート補助機能(要約・TODO抽出)。プロンプト組み立てと応答解析。
+// 実際のAPI通信はopenrouter.tsのcallOpenRouterに委譲し(fetchは依存注入で差し替え可能)、
 // この層はプロンプトと結果パースだけを持つ(テストはfakeで実APIを叩かない)。
-import { callGemini, type GeminiDeps } from "./gemini";
+import { callOpenRouter, type OpenRouterDeps } from "../openrouter/openrouter";
 
 /** ノート本文を日本語で簡潔に要約する。空・失敗はnull。 */
 export async function summarizeNote(
   content: string,
   apiKey: string,
-  deps: GeminiDeps = {},
+  deps: OpenRouterDeps = {},
 ): Promise<string | null> {
   if (content.trim() === "") return null;
   const prompt =
     "次のノートの要点を日本語で簡潔に要約してください。" +
     "要約の本文だけを出力し、前置きや「要約:」などのラベル・記号は付けないでください。\n\n---\n" +
     content;
-  const text = await callGemini(prompt, apiKey, deps);
+  const text = await callOpenRouter(prompt, apiKey, deps);
   return text && text.trim() !== "" ? text.trim() : null;
 }
 
-/** Geminiの箇条書き応答から、行頭の「- 」「* 」「1. 」等を外してTODO文字列の配列にする(純粋関数)。 */
+/** OpenRouterの箇条書き応答から、行頭の「- 」「* 」「1. 」等を外してTODO文字列の配列にする(純粋関数)。 */
 export function parseTodoLines(text: string): string[] {
   // 行頭の箇条書きマーカー: -/*/・ または 1./2) 等の番号。中黒(・)はスペース無しが普通なので
   // マーカーの後の空白は任意にする。
@@ -35,7 +35,7 @@ export function parseTodoLines(text: string): string[] {
 export async function extractTodos(
   content: string,
   apiKey: string,
-  deps: GeminiDeps = {},
+  deps: OpenRouterDeps = {},
 ): Promise<string[]> {
   if (content.trim() === "") return [];
   const prompt =
@@ -43,6 +43,6 @@ export async function extractTodos(
     "各TODOを1行ずつ、行頭に「- 」を付けて出力し、TODO以外の説明・前置きは書かないでください。" +
     "TODOが無ければ何も出力しないでください。\n\n---\n" +
     content;
-  const text = await callGemini(prompt, apiKey, deps);
+  const text = await callOpenRouter(prompt, apiKey, deps);
   return text ? parseTodoLines(text) : [];
 }

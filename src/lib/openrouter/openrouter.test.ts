@@ -78,7 +78,16 @@ describe("callOpenRouter", () => {
       ok: true,
       status: 200,
       json: async () => ({
-        choices: [{ message: { content: [{ type: "text", text: "旅行" }, { type: "text", text: "計画" }] } }],
+        choices: [
+          {
+            message: {
+              content: [
+                { type: "text", text: "旅行" },
+                { type: "text", text: "計画" },
+              ],
+            },
+          },
+        ],
       }),
     } as Response);
     expect(await callOpenRouter("x", "sk-or-test", { fetch: fetchFake })).toBe("旅行計画");

@@ -11,7 +11,6 @@ import {
 } from "react";
 import { Box, Button, Card, Flex, Text, Theme } from "@radix-ui/themes";
 import {
-  AlertTriangle,
   Archive,
   ArrowDown,
   ArrowUp as ArrowUpIcon,
@@ -114,14 +113,10 @@ import {
   readDeviceSettings,
 } from "../lib/fileio/deviceSettings";
 import {
-  geminiUsageDateKey,
   getBatteryWebhookConfig,
   getDriveSharedFolderChosen,
-  getGeminiApiKey,
-  getGeminiUsageCount,
   getOpenRouterApiKey,
 } from "../lib/storage/db";
-import { GEMINI_DAILY_WARN_THRESHOLD } from "../lib/gemini/gemini";
 import { analyzeNote, contentHash, needsRetag } from "../lib/gemini/tagging";
 import { buildTagVocabulary } from "../lib/entities/tags";
 import { buildExportPayload, serializeExport } from "../lib/fileio/exportImport";
@@ -213,8 +208,6 @@ export function App() {
   const [showDataPanel, setShowDataPanel] = useState(false);
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [showTagSearchPanel, setShowTagSearchPanel] = useState(false);
-  // 本日のGemini使用回数(要約/TODO抽出用。タグ付けはOpenRouterへ分離)。
-  const [geminiUsageToday, setGeminiUsageToday] = useState(0);
   // DataPanelの結果メッセージはここで持つ(DataPanel内で持つと、隣接する
   // 「ショートカット一覧」ボタンと同じflexコンテナに並ぶwidth:100%のメッセージが
   // メッセージの有無でショートカットボタンの位置をガタつかせるため、ソースコード上も
@@ -225,14 +218,13 @@ export function App() {
   // かった(googleAuth.tsのヘッダー参照)。**折りたたみ式のDataPanel内に置くと、開くまで警告が
   // 出ず早期警告にならない**ため、Appが持ってヘッダー(常時表示)へ出す。
   const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
-  // 保管庫フォルダ/Gemini・OpenRouter APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
+  // 保管庫フォルダ/OpenRouter APIキー/バッテリー中継の「設定済みか」(null=未判定・確認前は
   // 出さない)。ユーザー指示「各機能未接続状態が見えるようにしよう」——これらはDataPanel内の
   // ローカル state だけで持っていたため、パネルを開くまで未設定に気づけなかった(Driveの
   // 上のコメントと同じ理由でAppへ引き上げる)。いずれもchrome.storage/IndexedDBのローカル読み
   // だけで、OAuthポップアップ等の対話を伴わないため起動時に毎回確認してよい(Driveのトークン
   // 確認とは違い非対話性を気にする必要が無い)。
   const [nasConfigured, setNasConfigured] = useState<boolean | null>(null);
-  const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
   const [openRouterConfigured, setOpenRouterConfigured] = useState<boolean | null>(null);
   const [batteryConfigured, setBatteryConfigured] = useState<boolean | null>(null);
   // 「共有フォルダを選択」を実行済みか(未実行=自動作成フォルダを使用中)。上の3つと同じ理由・
@@ -244,7 +236,6 @@ export function App() {
   const [deviceSettingsReloadSignal, setDeviceSettingsReloadSignal] = useState(0);
   useEffect(() => {
     void getNasFolderPath().then((path) => setNasConfigured(Boolean(path)));
-    void getGeminiApiKey().then((key) => setGeminiConfigured(Boolean(key)));
     void getOpenRouterApiKey().then((key) => setOpenRouterConfigured(Boolean(key)));
     void getBatteryWebhookConfig().then((config) => setBatteryConfigured(Boolean(config)));
     void getDriveSharedFolderChosen().then(setDriveSharedFolderChosen);
@@ -678,16 +669,6 @@ export function App() {
         if (local.driveConnected !== undefined) setDriveConnected(local.driveConnected);
       });
     }, 30_000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // 本日のGemini使用回数を読み、しきい値(450)到達で警告バナーを出す。要約/TODO抽出等で
-  // 回数が増えるため、起動時と30秒ごとに読み直す(日跨ぎはgeminiUsageDateKeyで数え直される)。
-  const refreshGeminiUsage = () =>
-    void getGeminiUsageCount(geminiUsageDateKey(clockNow())).then(setGeminiUsageToday);
-  useEffect(() => {
-    refreshGeminiUsage();
-    const interval = setInterval(refreshGeminiUsage, 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1462,7 +1443,7 @@ export function App() {
   // 設定をローカルファイルへ書き出す/読み込む。保管庫やDriveを使わない/使えない環境でも
   // 設定を持ち運べるようにするためのユーザー指示。ノートは対象外(NAS/Driveのactive・日付
   // フォルダが別途担う)——NAS復元と同じ境界にする。
-  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(Gemini/OpenRouter APIキー・GAS連携・
+  // **保管庫/Driveの自動バックアップと違い、端末ローカル設定(OpenRouter APIキー・GAS連携・
   // 保管庫パス・Driveフォルダ設定)も含める**(ユーザー指示・2026-07-29)。経路ごとの
   // 扱いの違いとその理由はsrc/lib/fileio/deviceSettings.tsのヘッダーが正本。
   async function handleExportSettingsFile() {
@@ -1531,7 +1512,6 @@ export function App() {
       setDeviceSettingsReloadSignal((n) => n + 1);
       // 未設定バッジ(ヘッダー常時表示)は各stateから描いているため、取り込んだ内容で更新する。
       if (device.nasFolderPath !== undefined) setNasConfigured(device.nasFolderPath.trim() !== "");
-      if (device.geminiApiKey !== undefined) setGeminiConfigured(device.geminiApiKey.trim() !== "");
       if (device.openrouterApiKey !== undefined) {
         setOpenRouterConfigured(device.openrouterApiKey.trim() !== "");
       }
@@ -1543,7 +1523,7 @@ export function App() {
     );
   }
 
-  // GeminiのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
+  // OpenRouterのTODO抽出結果をTODOリスト末尾へ追加する(order連番を振り直す)。
   function addTodos(texts: string[]) {
     const startOrder = todos.length;
     const appended: Todo[] = texts.map((text, i) => ({
@@ -1646,18 +1626,6 @@ export function App() {
       <Box p={{ initial: "3", sm: "5" }}>
         <Flex asChild direction="column" gap="4">
           <main data-testid="app-root">
-            {geminiUsageToday >= GEMINI_DAILY_WARN_THRESHOLD ? (
-              <Card data-testid="gemini-usage-warning" className="callout callout-warning">
-                <Text size="3" weight="medium" color="orange">
-                  <Flex align="center" gap="2" as="span">
-                    <AlertTriangle size={16} aria-hidden="true" />
-                    本日のGemini使用が{geminiUsageToday}回に達しました(しきい値
-                    {GEMINI_DAILY_WARN_THRESHOLD})。無料枠を使い切る前に、GPT-OSS 120Bへの乗り換えを
-                    検討してください。
-                  </Flex>
-                </Text>
-              </Card>
-            ) : null}
             {countdown.kind === "upcoming" ? (
               <Card
                 data-testid="next-event-countdown"
@@ -1764,7 +1732,7 @@ export function App() {
                         Drive未接続
                       </Button>
                     ) : null}
-                    {/* 保管庫/Gemini/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
+                    {/* 保管庫/AIキー/バッテリー中継の「未設定」も同じ場所に出す(ユーザー指示
                         「各機能未接続状態が見えるようにしよう」)。Driveの警告(壊れた/orange)とは
                         性質が違う——これらは任意機能で「使わない」選択もありうるため、常時警告色
                         にはせず控えめなgray/softにする。押すとDataPanelが開き該当欄へ誘導する。
@@ -1783,20 +1751,6 @@ export function App() {
                         保管庫未設定
                       </Button>
                     ) : null}
-                    {geminiConfigured === false ? (
-                      <Button
-                        type="button"
-                        variant="soft"
-                        color="gray"
-                        size="2"
-                        data-testid="gemini-unconfigured-badge"
-                        title="Gemini APIキーが未設定です。要約/TODO抽出が使えません。押すとデータ操作パネルが開くので「Gemini APIキーを設定」から設定してください"
-                        onClick={() => setShowDataPanel(true)}
-                      >
-                        <KeyRound size={14} aria-hidden="true" />
-                        Gemini未設定
-                      </Button>
-                    ) : null}
                     {openRouterConfigured === false ? (
                       <Button
                         type="button"
@@ -1804,7 +1758,7 @@ export function App() {
                         color="gray"
                         size="2"
                         data-testid="openrouter-unconfigured-badge"
-                        title="OpenRouter APIキーが未設定です。自動タグ付けが使えません。押すとデータ操作パネルが開くので「OpenRouter APIキーを設定」から設定してください"
+                        title="OpenRouter APIキーが未設定です。タグ付け・要約・TODO抽出が使えません。押すとデータ操作パネルが開くので「OpenRouter APIキーを設定」から設定してください"
                         onClick={() => setShowDataPanel(true)}
                       >
                         <KeyRound size={14} aria-hidden="true" />
@@ -1874,7 +1828,6 @@ export function App() {
                 driveConnected={driveConnected}
                 onDriveConnectionChange={setDriveConnected}
                 onNasConfiguredChange={setNasConfigured}
-                onGeminiConfiguredChange={setGeminiConfigured}
                 onOpenRouterConfiguredChange={setOpenRouterConfigured}
                 onBatteryConfiguredChange={setBatteryConfigured}
                 onDriveSharedFolderChosenChange={setDriveSharedFolderChosen}
